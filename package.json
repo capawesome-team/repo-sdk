@@ -58,6 +58,7 @@
   ],
   "scripts": {
     "build": "tsdown",
+    "prepare": "husky",
     "prepack": "npm run build",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
@@ -78,11 +79,16 @@
     "blume": "^1.0.4",
     "eslint": "^10.7.0",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8",
     "prettier": "^3.9.5",
     "tsdown": "^0.22.9",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.64.0",
     "unrun": "^0.3.1",
     "vitest": "^4.1.10"
+  },
+  "lint-staged": {
+    "**/*.{ts,js,json,md,yml,yaml}": "prettier --write"
   }
 }
