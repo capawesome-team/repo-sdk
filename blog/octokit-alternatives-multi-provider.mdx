@@ -1,13 +1,13 @@
 ---
 title: 'Octokit Alternatives for Multi-Provider Git Integrations'
-description: 'Comparing Octokit, per-provider SDKs, and a unified SDK when your integration has to support GitHub plus GitLab, Bitbucket, and Azure DevOps.'
+description: 'Comparing Octokit, per-provider SDKs, and a unified SDK when your integration has to support GitHub plus GitLab, Bitbucket, Azure DevOps, and Gitea.'
 type: blog
 date: 2026-07-16
 ---
 
-If you only integrate with GitHub, Octokit is the right tool and this article will not talk you out of it. The problem starts when the same product has to talk to GitLab, Bitbucket Cloud, or Azure DevOps too, and you discover Octokit only speaks GitHub. From there you either wire up one SDK per provider and maintain four different clients, or you reach for a unified layer that normalizes all four behind one API.
+If you only integrate with GitHub, Octokit is the right tool and this article will not talk you out of it. The problem starts when the same product has to talk to GitLab, Bitbucket Cloud, Azure DevOps, or a self-hosted Gitea too, and you discover Octokit only speaks GitHub. From there you either wire up one SDK per provider and maintain five different clients, or you reach for a unified layer that normalizes all five behind one API.
 
-This is an honest comparison of those paths: what Octokit does well, what the per-provider SDK landscape looks like, the real cost of running four SDKs side by side, and where a unified SDK helps versus where it gets in your way.
+This is an honest comparison of those paths: what Octokit does well, what the per-provider SDK landscape looks like, the real cost of running five SDKs side by side, and where a unified SDK helps versus where it gets in your way.
 
 ## What does Octokit do well?
 
@@ -22,23 +22,24 @@ Each provider has its own ecosystem, and the SDKs do not share a shape:
 - **GitLab** — the community standard is `@gitbeaker/rest`, a comprehensive client covering GitLab's large API surface.
 - **Bitbucket Cloud** — the `bitbucket` npm package wraps Bitbucket's REST API.
 - **Azure DevOps** — Microsoft's `azure-devops-node-api` exposes the Azure DevOps services.
+- **Gitea** — the community `gitea-js` client wraps Gitea's `/api/v1` surface.
 
-Each is a reasonable choice on its own. The difficulty is not any single library — it is that they were designed independently, so covering four providers means learning and maintaining four unrelated clients.
+Each is a reasonable choice on its own. The difficulty is not any single library — it is that they were designed independently, so covering five providers means learning and maintaining five unrelated clients.
 
-## What does maintaining four SDKs actually cost?
+## What does maintaining five SDKs actually cost?
 
-The line count of "install four packages" hides where the time goes. The cost is in the seams between them:
+The line count of "install five packages" hides where the time goes. The cost is in the seams between them:
 
-- **Four authentication models.** GitHub tokens and GitHub Apps, GitLab PATs and project/group tokens, Bitbucket email-plus-API-token, and Azure DevOps PATs or Entra ID all differ in shape. Every one needs its own config, its own refresh story, and its own place to leak.
-- **Four pagination styles.** Link headers, page numbers, cursors, and single-response endpoints each need bespoke loop code, and the bugs live in the edge cases.
-- **Four error shapes.** A 404 from one SDK is a thrown error, from another a response object, from another a rejected promise with a different property layout. Writing one retry or "resource missing" branch that works everywhere means normalizing all four by hand.
-- **Four mental models.** Every provider names things differently — repos, projects, workspaces, namespaces — and every SDK surfaces those names differently again.
+- **Five authentication models.** GitHub tokens and GitHub Apps, GitLab PATs and project/group tokens, Bitbucket email-plus-API-token, Azure DevOps PATs or Entra ID, and Gitea's `token` header scheme all differ in shape. Every one needs its own config, its own refresh story, and its own place to leak.
+- **Five pagination styles.** Link headers, page numbers, cursors, and single-response endpoints each need bespoke loop code, and the bugs live in the edge cases.
+- **Five error shapes.** A 404 from one SDK is a thrown error, from another a response object, from another a rejected promise with a different property layout. Writing one retry or "resource missing" branch that works everywhere means normalizing all five by hand.
+- **Five mental models.** Every provider names things differently — repos, projects, workspaces, namespaces — and every SDK surfaces those names differently again.
 
 That glue code is code you write, test, and own forever. It is also where multi-provider integrations quietly rot.
 
 ## Where does a unified SDK like repo-sdk fit?
 
-A unified SDK collapses that glue into one normalized contract. [repo-sdk](/docs/quickstart) is an open-source, zero-dependency TypeScript SDK that gives you a single API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps. You write your discovery, commit, tag, download, and webhook logic once, and switching providers means swapping one argument:
+A unified SDK collapses that glue into one normalized contract. [repo-sdk](/docs/quickstart) is an open-source, zero-dependency TypeScript SDK that gives you a single API over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea (including Forgejo). You write your discovery, commit, tag, download, and webhook logic once, and switching providers means swapping one argument:
 
 ```ts
 import { createClient } from 'repo-sdk';
@@ -65,7 +66,7 @@ const client = createClient({
 });
 ```
 
-The four cost centers above become one each. Authentication is one `auth` block per factory. Pagination is handled by `listAll` async iterators that follow cursors for you. Errors all throw a single [`RepoError`](/docs/concepts/errors) with a normalized `code` union — `unauthorized`, `not_found`, `rate_limited`, `unsupported`, and so on — so one switch statement covers every provider:
+The five cost centers above become one each. Authentication is one `auth` block per factory. Pagination is handled by `listAll` async iterators that follow cursors for you. Errors all throw a single [`RepoError`](/docs/concepts/errors) with a normalized `code` union — `unauthorized`, `not_found`, `rate_limited`, `unsupported`, and so on — so one switch statement covers every provider:
 
 ```ts
 import { RepoError } from 'repo-sdk';
@@ -85,15 +86,15 @@ try {
 
 |                   | Octokit          | Per-provider SDKs        | repo-sdk                                            |
 | ----------------- | ---------------- | ------------------------ | --------------------------------------------------- |
-| Providers covered | GitHub only      | One each (four packages) | GitHub, GitLab, Bitbucket Cloud, Azure DevOps       |
+| Providers covered | GitHub only      | One each (five packages) | GitHub, GitLab, Bitbucket Cloud, Azure DevOps, Gitea |
 | Dependencies      | Has dependencies | Varies per package       | Zero runtime dependencies                           |
 | Runtime support   | Node and edge    | Varies per package       | Node 20+, Cloudflare Workers, Web-standard runtimes |
-| Typed errors      | GitHub-shaped    | Four different shapes    | One `RepoError` with a normalized `code` union      |
+| Typed errors      | GitHub-shaped    | Five different shapes    | One `RepoError` with a normalized `code` union      |
 | Webhook helpers   | GitHub-specific  | Varies per package       | Verify and parse on each provider subpath           |
 
 ## When is Octokit or a dedicated SDK still the right choice?
 
-A unified layer normalizes to the common ground across four providers, and that normalization is exactly what you do not want in some cases. Reach for Octokit or a dedicated provider SDK when:
+A unified layer normalizes to the common ground across five providers, and that normalization is exactly what you do not want in some cases. Reach for Octokit or a dedicated provider SDK when:
 
 - **You need GraphQL.** repo-sdk normalizes REST operations; it does not wrap GitHub's GraphQL API.
 - **You need deep, provider-specific features.** GitHub Apps installation flows, GitLab merge-request internals, Azure DevOps work items, and similar depth live in the dedicated SDKs. A common-denominator API cannot expose all of it.
@@ -114,6 +115,6 @@ No, and it is not meant to. It replaces the multi-provider glue code — the sha
 
 Yes. It has zero runtime dependencies and is built on raw `fetch` and Web Crypto, so it runs on Node.js 20 and up, Cloudflare Workers, and other Web-standard runtimes.
 
-### How does repo-sdk handle errors differently from four separate SDKs?
+### How does repo-sdk handle errors differently from five separate SDKs?
 
-Every failure throws a single `RepoError` with a normalized `code` union, plus `retryable` and `retryAfter` hints and secret redaction. One error branch works across all four providers instead of four provider-specific ones. See [Errors](/docs/concepts/errors).
+Every failure throws a single `RepoError` with a normalized `code` union, plus `retryable` and `retryAfter` hints and secret redaction. One error branch works across all five providers instead of five provider-specific ones. See [Errors](/docs/concepts/errors).

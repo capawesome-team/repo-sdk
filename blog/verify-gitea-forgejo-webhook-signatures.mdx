@@ -1,0 +1,97 @@
+---
+title: 'How to Verify Gitea and Forgejo Webhook Signatures'
+description: 'Verify the X-Gitea-Signature HMAC-SHA256 webhook header from Gitea and Forgejo — the bare-hex gotcha, a Web Crypto implementation, and a one-line helper.'
+type: blog
+date: 2026-07-19
+---
+
+To verify a Gitea or Forgejo webhook, compute an HMAC-SHA256 over the raw request body using your webhook secret as the key, hex-encode the digest, and compare it in constant time to the `X-Gitea-Signature` header. The scheme is the same as GitHub's with one crucial difference: Gitea sends the digest as **bare hex**, without the `sha256=` prefix — which is exactly where verification code ported from GitHub silently breaks.
+
+## How does Gitea sign webhook deliveries?
+
+When you register a hook with a `secret`, Gitea signs every delivery and sends a set of headers alongside the JSON payload:
+
+| Header                 | Contents                                                        |
+| ---------------------- | --------------------------------------------------------------- |
+| `X-Gitea-Signature`    | HMAC-SHA256 of the raw body, hex-encoded, **no prefix**          |
+| `X-Gitea-Event`        | The event name, e.g. `push`, `create`, `delete`, `release`      |
+| `X-Gitea-Delivery`     | A UUID identifying this delivery — useful for de-duplication    |
+| `X-Hub-Signature-256`  | GitHub-compatible copy of the signature, prefixed `sha256=`     |
+
+Older Gitea versions also embedded the secret as a top-level `secret` field in the payload body. That mechanism is deprecated and gone from modern releases — never rely on it. Verify the HMAC header instead.
+
+## How is it different from GitHub's signature?
+
+GitHub sends `x-hub-signature-256: sha256=<hex>`. Gitea sends `x-gitea-signature: <hex>` — same algorithm, same hex encoding, no scheme prefix. If you reuse a GitHub verifier and compare against `` `sha256=${digest}` ``, every Gitea delivery fails verification even though the secret is correct.
+
+Gitea does also send the GitHub-style `X-Hub-Signature-256` header for compatibility, so pointing an unmodified GitHub verifier at it can work. But `X-Gitea-Signature` is the canonical header, it is what Forgejo guarantees too, and matching on it makes the provider explicit instead of accidental.
+
+## How do you verify with repo-sdk?
+
+`verifyWebhook` from `repo-sdk/gitea` knows the bare-hex encoding and compares in constant time. It is a standalone export — no client, no configuration beyond the secret — and takes a Web-standard `Request`, so it drops into Next.js route handlers, Hono, and Cloudflare Workers:
+
+```ts
+import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/gitea';
+
+export async function POST(request: Request): Promise<Response> {
+  const valid = await verifyWebhook({ request, secret: process.env.WEBHOOK_SECRET! });
+  if (!valid) return new Response('invalid signature', { status: 401 });
+
+  const event = await parseWebhookEvent(request);
+  if (event.type === 'push') {
+    console.log(`push to ${event.repo} @ ${event.ref}`, event.commits);
+  }
+  return new Response('ok');
+}
+```
+
+`verifyWebhook` returns `false` for a missing or mismatched signature rather than throwing, so the check stays a plain boolean branch. If your framework has already consumed the request body, pass `{ headers, body, secret }` with the raw body string instead of the `Request`.
+
+## How do you verify manually with Web Crypto?
+
+If you are not using an SDK, the whole verification fits in a few lines of runtime-agnostic Web Crypto — no Node-only `crypto` import needed:
+
+```ts
+async function verifyGiteaSignature(secret: string, body: string, signature: string) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(body));
+  const expected = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  // Compare `expected` to `signature` with a constant-time comparison.
+  return timingSafeEqual(signature, expected);
+}
+```
+
+Two rules keep this correct:
+
+- Verify against the **raw request body**, byte for byte. Re-serializing parsed JSON changes whitespace and key order, and the HMAC will not match.
+- Use a **constant-time comparison**. A naive `===` leaks how many leading bytes matched through timing.
+
+## Does the same code work for Forgejo?
+
+Yes. Forgejo signs deliveries identically and keeps sending the `X-Gitea-*` headers for compatibility, so one verifier covers Gitea and Forgejo instances — including Codeberg webhooks. The repo-sdk helper works unchanged for both.
+
+## What does the parsed event look like?
+
+After verification, `parseWebhookEvent` normalizes the payload: `type` is `push`, `tag_push` (covering both tag pushes and Gitea's `create`/`delete` tag events), `release`, or `unknown`; `repo`, `ref`, and `commits` come from the payload; `deliveryId` carries `X-Gitea-Delivery`; and a push that deletes its branch reports `headCommitSha: undefined` instead of the all-zero SHA. The untouched payload stays available on `raw`. See [receiving webhooks](/docs/guides/webhooks-receiving) for the full workflow.
+
+## FAQ
+
+### Why does my GitHub webhook verifier reject valid Gitea deliveries?
+
+Almost always the prefix: GitHub signatures are `sha256=<hex>`, Gitea's `X-Gitea-Signature` is bare `<hex>`. Compare against the digest without a prefix, or use a helper that knows the difference.
+
+### Should I use the payload's `secret` field instead of the header?
+
+No. The body-level `secret` field is deprecated and removed in modern Gitea releases. The `X-Gitea-Signature` HMAC is the supported mechanism.
+
+### Does signature verification protect against replays?
+
+No — a valid signature proves authenticity, not freshness. De-duplicate with the `X-Gitea-Delivery` UUID (surfaced as `deliveryId` by `parseWebhookEvent`) and ignore deliveries you have already processed.

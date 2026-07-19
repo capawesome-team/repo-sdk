@@ -1,13 +1,13 @@
 ---
 title: 'GitHub vs GitLab vs Bitbucket vs Azure DevOps: How Their REST APIs Differ'
-description: A developer's comparison of the GitHub, GitLab, Bitbucket, and Azure DevOps REST APIs — auth, pagination, rate limits, and webhooks.
+description: A developer's comparison of the GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea REST APIs — auth, pagination, rate limits, and webhooks.
 type: blog
 date: 2026-07-19
 ---
 
-GitHub, GitLab, Bitbucket Cloud, and Azure DevOps all expose REST APIs for repositories, commits, tags, and webhooks, but they disagree on nearly every detail: authentication headers, how you address a repository, how pagination works, and how webhook deliveries are verified. If you integrate more than one, you end up writing four subtly different clients for the same conceptual operations. This article walks through where the four APIs actually diverge, then shows how repo-sdk collapses those differences behind one interface.
+GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea all expose REST APIs for repositories, commits, tags, and webhooks, but they disagree on nearly every detail: authentication headers, how you address a repository, how pagination works, and how webhook deliveries are verified. If you integrate more than one, you end up writing five subtly different clients for the same conceptual operations. This article walks through where the five APIs actually diverge, then shows how repo-sdk collapses those differences behind one interface.
 
-## How does authentication differ across the four providers?
+## How does authentication differ across the five providers?
 
 Every provider wants a token, but the wire format and the token model are not the same.
 
@@ -15,6 +15,7 @@ Every provider wants a token, but the wire format and the token model are not th
 - **GitLab** has a single token shape on the wire. A personal, project, or group access token, or an OAuth token, all travel as a `Bearer` credential; scopes (`read_api`, `read_repository`) decide what you can do.
 - **Bitbucket Cloud** supports two distinct schemes: an Atlassian account email plus an API token combined into HTTP `Basic` auth, or a workspace/repo access token sent as `Bearer`. These are not interchangeable — some endpoints only accept one.
 - **Azure DevOps** encodes a Personal Access Token into HTTP `Basic` auth, or accepts an Entra ID bearer token from a callback you supply. It is also the only provider pinned to an `organization`.
+- **Gitea** wants its personal access tokens sent with the literal `token` scheme — `Authorization: token <pat>` — not `Bearer`, which it reserves for OAuth2-issued tokens. Forgejo behaves identically.
 
 The practical friction is that "add a token" means Basic auth here, Bearer there, and an occasional installation-token dance elsewhere. repo-sdk consumes tokens only — it never runs an OAuth flow — and handles the header encoding per provider. See [Authentication](/docs/authentication) for the full model.
 
@@ -41,9 +42,9 @@ const bb = createClient({
 
 ## Which pagination styles do they use?
 
-This is where multi-provider code gets ugly. GitHub returns a `Link` header with `rel="next"` URLs. GitLab supports both offset (`page`/`per_page`) and keyset pagination depending on the endpoint. Bitbucket returns a `next` field containing a full URL to the following page. Azure DevOps often returns everything in a single response, or uses a continuation-token header for large collections.
+This is where multi-provider code gets ugly. GitHub returns a `Link` header with `rel="next"` URLs. GitLab supports both offset (`page`/`per_page`) and keyset pagination depending on the endpoint. Bitbucket returns a `next` field containing a full URL to the following page. Azure DevOps often returns everything in a single response, or uses a continuation-token header for large collections. Gitea uses `page`/`limit` query params with a `Link` header — and self-hosted instances silently clamp `limit` to a server-configured maximum, so you cannot assume your page size was honored.
 
-So a naive integration has to parse `Link` headers for one provider, follow a `next` URL for another, increment a page counter for a third, and detect "there is no more" four different ways.
+So a naive integration has to parse `Link` headers for one provider, follow a `next` URL for another, increment a page counter for a third, and detect "there is no more" five different ways.
 
 repo-sdk normalizes all of them into a single opaque cursor. Every `list` call returns `{ data, cursor }`; when `cursor` is `undefined`, you have reached the end. You never parse a `Link` header or build a page URL yourself. The `listAll` async iterator follows cursors transparently.
 
@@ -64,9 +65,9 @@ The cursor is deliberately opaque — it may encode a URL, an offset, or a conti
 
 ## How do rate limits compare?
 
-Rate-limiting models differ, and none of them are identical. GitHub uses a per-hour quota communicated through `X-RateLimit-*` response headers, plus secondary limits for abuse protection. GitLab enforces per-minute request limits (configurable on self-managed instances) and returns `RateLimit-*` headers. Bitbucket Cloud applies per-hour limits scoped to the authenticated account. Azure DevOps meters usage in "throughput units" and responds with `Retry-After` when you exceed them.
+Rate-limiting models differ, and none of them are identical. GitHub uses a per-hour quota communicated through `X-RateLimit-*` response headers, plus secondary limits for abuse protection. GitLab enforces per-minute request limits (configurable on self-managed instances) and returns `RateLimit-*` headers. Bitbucket Cloud applies per-hour limits scoped to the authenticated account. Azure DevOps meters usage in "throughput units" and responds with `Retry-After` when you exceed them. Gitea is the outlier in the other direction: it has no built-in API rate limiter at all, so a `429` can only come from a reverse proxy in front of the instance.
 
-Because the exact numbers drift and vary by plan and self-hosting, the durable rule is: read the headers, respect `Retry-After`, and back off. repo-sdk surfaces exhaustion as a typed `RepoError` and retries transient failures rather than making you special-case four header formats.
+Because the exact numbers drift and vary by plan and self-hosting, the durable rule is: read the headers, respect `Retry-After`, and back off. repo-sdk surfaces exhaustion as a typed `RepoError` and retries transient failures rather than making you special-case five header formats.
 
 ## How do the repository, commit, and tag endpoints differ?
 
@@ -76,13 +77,14 @@ The biggest surprise for newcomers is that even addressing a repository is provi
 - **GitLab**: the full `group/.../project` path _or_ a numeric project id
 - **Bitbucket**: `workspace/repo_slug`
 - **Azure DevOps**: `project/repository`, with the organization set on the client, not in the path
+- **Gitea**: `owner/name`, GitHub-style
 
-Discovery differs too — GitHub discovers a user plus their orgs, GitLab discovers user and groups, Bitbucket discovers workspaces, and Azure DevOps discovers projects. Tags are another sharp edge: GitLab and Bitbucket return a date with each tag, while GitHub and Azure DevOps do not, so a tag date is simply unavailable there. Commit filtering (`since`, `until`, `author`) is server-side on most providers but applied client-side per page on Bitbucket. And archive downloads support `zip` and `tar.gz` on three providers but `zip` only on Azure DevOps.
+Discovery differs too — GitHub and Gitea discover a user plus their orgs, GitLab discovers user and groups, Bitbucket discovers workspaces, and Azure DevOps discovers projects. Tags are another sharp edge: GitLab and Bitbucket return a date with each tag, while GitHub, Azure DevOps, and Gitea do not, so a tag date is simply unavailable there. Commit filtering (`since`, `until`, `author`) is server-side on most providers but applied client-side per page on Bitbucket — and Gitea, which supports `since`/`until` but has no `author` filter. And archive downloads support `zip` and `tar.gz` on four providers but `zip` only on Azure DevOps.
 
 repo-sdk exposes one repo string per provider and one set of methods — `client.repos`, `client.commits`, `client.tags` — that return normalized shapes. Where a provider genuinely cannot do something, the client throws `unsupported` instead of silently returning wrong data. The full picture lives in the [capability matrix](/docs/reference/capability-matrix).
 
 ```ts
-// Same call, four providers — only the repo string format changes
+// Same call, five providers — only the repo string format changes
 const head = await client.commits.get({
   repo: 'capawesome-team/repo-sdk', // owner/name on GitHub
   ref: 'main',
@@ -92,9 +94,9 @@ console.log(head.sha, head.message);
 
 ## How do the webhook models differ?
 
-Webhooks diverge in both events and verification. GitHub and GitLab can emit push, tag-push, and release events; Bitbucket and Azure DevOps do not model releases at all. Azure DevOps goes further and delivers push and tag-push through a single `git.push` subscription, so you cannot subscribe to one without the other.
+Webhooks diverge in both events and verification. GitHub, GitLab, and Gitea can emit push, tag-push, and release events; Bitbucket and Azure DevOps do not model releases at all. Azure DevOps goes further and delivers push and tag-push through a single `git.push` subscription, so you cannot subscribe to one without the other.
 
-Verification is the part that bites in production. GitHub and Bitbucket sign deliveries with HMAC-SHA256. GitLab uses a shared secret token compared against a header. Azure DevOps uses HTTP Basic auth on the receiving endpoint. Four events models, three verification schemes.
+Verification is the part that bites in production. GitHub, Bitbucket, and Gitea sign deliveries with HMAC-SHA256 — though Gitea sends the digest as bare hex in `X-Gitea-Signature`, without GitHub's `sha256=` prefix. GitLab uses a shared secret token compared against a header. Azure DevOps uses HTTP Basic auth on the receiving endpoint. Five events models, three verification schemes, and at least two signature encodings.
 
 repo-sdk ships `verifyWebhook` and `parseWebhookEvent` per provider as standalone exports that take a Web-standard `Request`, so they drop into Next.js route handlers, Hono, and workers without a client.
 
@@ -115,15 +117,15 @@ export async function POST(request: Request): Promise<Response> {
 
 ## Summary table
 
-| Aspect               | GitHub                         | GitLab                           | Bitbucket Cloud                     | Azure DevOps                      |
-| -------------------- | ------------------------------ | -------------------------------- | ----------------------------------- | --------------------------------- |
-| Auth on the wire     | Bearer (PAT/OAuth), App tokens | Bearer (PAT/project/group/OAuth) | Basic (email + API token) or Bearer | Basic (PAT) or Bearer (Entra)     |
-| Repo address         | `owner/name`                   | `group/.../project` or id        | `workspace/repo_slug`               | `project/repository`              |
-| Pagination           | `Link` header                  | offset or keyset                 | `next` URL field                    | often single response             |
-| Tag dates            | No                             | Yes                              | Yes                                 | No                                |
-| Self-hosted          | Enterprise Server              | Self-managed                     | Cloud only                          | Server                            |
-| Webhook events       | push, tag_push, release        | push, tag_push, release          | push, tag_push                      | push, tag_push (one subscription) |
-| Webhook verification | HMAC-SHA256                    | shared token                     | HMAC-SHA256                         | basic auth                        |
+| Aspect               | GitHub                         | GitLab                           | Bitbucket Cloud                     | Azure DevOps                      | Gitea                    |
+| -------------------- | ------------------------------ | -------------------------------- | ----------------------------------- | --------------------------------- | ------------------------ |
+| Auth on the wire     | Bearer (PAT/OAuth), App tokens | Bearer (PAT/project/group/OAuth) | Basic (email + API token) or Bearer | Basic (PAT) or Bearer (Entra)     | `token` scheme (PAT)     |
+| Repo address         | `owner/name`                   | `group/.../project` or id        | `workspace/repo_slug`               | `project/repository`              | `owner/name`             |
+| Pagination           | `Link` header                  | offset or keyset                 | `next` URL field                    | often single response             | `page`/`limit` + `Link`  |
+| Tag dates            | No                             | Yes                              | Yes                                 | No                                | No                       |
+| Self-hosted          | Enterprise Server              | Self-managed                     | Cloud only                          | Server                            | Self-hosted / Forgejo    |
+| Webhook events       | push, tag_push, release        | push, tag_push, release          | push, tag_push                      | push, tag_push (one subscription) | push, tag_push, release  |
+| Webhook verification | HMAC-SHA256                    | shared token                     | HMAC-SHA256                         | basic auth                        | HMAC-SHA256 (bare hex)   |
 
 ## How does repo-sdk normalize all of this?
 
@@ -131,13 +133,13 @@ The pattern is: swap the provider factory, keep your code. Authentication header
 
 ```ts
 if (client.capabilities.webhookEvents.includes('release')) {
-  // Only GitHub and GitLab reach here
+  // Only GitHub, GitLab, and Gitea reach here
 }
 ```
 
 ## FAQ
 
-### Can I use one code path for all four providers?
+### Can I use one code path for all five providers?
 
 Mostly yes. With repo-sdk, discovery, commits, tags, pagination, and webhooks share one interface; the differences that remain — repo string format and genuinely unsupported features — are surfaced explicitly rather than hidden.
 

@@ -1,0 +1,132 @@
+---
+title: 'How to Use the Gitea API from TypeScript'
+description: 'Call the Gitea REST API from TypeScript — token auth, pagination, commits, tags, archives, and webhooks, on gitea.com, self-hosted instances, and Forgejo.'
+type: blog
+date: 2026-07-19
+---
+
+To use the Gitea API from TypeScript, send requests to your instance's `/api/v1` base URL with an `Authorization: token <pat>` header — note the literal `token` scheme, not `Bearer`. You can do that with raw `fetch`, or use repo-sdk's `gitea` provider to get typed responses, normalized pagination, and webhook helpers that also work unchanged against Forgejo.
+
+This guide covers creating a token, the auth header gotcha, the core read endpoints, how Gitea paginates, and how the unified client removes the glue code.
+
+## How do you authenticate with the Gitea API?
+
+Create a personal access token under **Settings → Applications → Manage Access Tokens** on your instance. Scopes are grouped per area: `read:repository` covers discovery, commits, tags, and archive downloads; `write:repository` is additionally required to manage webhooks; `read:organization` lets you list your orgs.
+
+The wire format is the part that trips people up. Gitea expects its PATs with the literal `token` scheme:
+
+```ts
+const response = await fetch('https://gitea.example.com/api/v1/repos/my-owner/my-repo', {
+  headers: { Authorization: `token ${process.env.GITEA_TOKEN}` },
+});
+```
+
+`Authorization: Bearer` is reserved for tokens issued by Gitea's own OAuth2 provider. If you send a PAT as `Bearer` on an older instance, you get a `401` that looks like a bad token rather than a bad scheme.
+
+## How do you call the Gitea API with repo-sdk?
+
+The `gitea` provider from `repo-sdk/gitea` handles the header encoding, response normalization, and error mapping. Pass the full API base URL including `/api/v1` — the default is `https://gitea.com/api/v1`:
+
+```ts
+import { createClient } from 'repo-sdk';
+import { gitea } from 'repo-sdk/gitea';
+
+const client = createClient({
+  provider: gitea({
+    auth: { token: process.env.GITEA_TOKEN! },
+    baseUrl: 'https://gitea.example.com/api/v1',
+  }),
+});
+
+const head = await client.commits.get({
+  repo: 'my-owner/my-repo',
+  ref: 'main',
+});
+console.log(head.sha, head.message);
+```
+
+The `repo` string is the GitHub-style `owner/name` path. Every returned object is a normalized shape (`Repository`, `Commit`, `Tag`, `Webhook`) with a `raw` field holding the untouched Gitea payload, so nothing the API returns is out of reach. See the [Gitea authentication guide](/docs/authentication/gitea) for the full setup.
+
+## How do you list repositories, commits, and tags?
+
+```ts
+// Repositories you can access, with server-side search
+const { data: repos } = await client.repos.list({ query: 'sdk' });
+
+// Commits on a branch, filtered by date
+const { data: commits } = await client.commits.list({
+  repo: 'my-owner/my-repo',
+  ref: 'main',
+  since: new Date('2026-01-01'),
+  limit: 50,
+});
+
+// Tags
+const { data: tags } = await client.tags.list({ repo: 'my-owner/my-repo' });
+```
+
+Three Gitea-specific details worth knowing:
+
+- Repository search goes through `/repos/search`, which wraps results in an `{ ok, data }` envelope — repo-sdk unwraps it for you.
+- Commit listing supports `since`/`until` server-side, but Gitea has **no `author` filter**; repo-sdk applies it client-side per page.
+- Tag listings carry no dates (`capabilities.tagDates` is `false`), so `Tag.date` is `undefined` — same as GitHub.
+
+## How does Gitea pagination work?
+
+Gitea paginates with `page` and `limit` query params and reports progress via `X-Total-Count` and an RFC 5988 `Link` header. The catch on self-hosted instances: the server clamps `limit` to its configured `MAX_RESPONSE_ITEMS` (50 by default), so requesting 100 items may silently return 50. Never assume your page size was honored — follow the `Link` header until there is no `rel="next"`.
+
+repo-sdk folds all of that into an opaque cursor, and `listAll` iterates every page lazily:
+
+```ts
+for await (const commit of client.commits.listAll({ repo: 'my-owner/my-repo', ref: 'main' })) {
+  console.log(commit.sha);
+}
+```
+
+## How do you download an archive or clone a repository?
+
+Archives are served directly at `/repos/{owner}/{repo}/archive/{ref}.{zip|tar.gz}` with the same token auth as the rest of the API. With repo-sdk, `downloadArchive` returns a Web-standard `ReadableStream`, and `getCloneUrl` returns an HTTPS clone URL with the token embedded as the basic-auth username — treat it as a secret:
+
+```ts
+const archive = await client.repos.downloadArchive({
+  repo: 'my-owner/my-repo',
+  ref: 'v1.0.0',
+  format: 'tar.gz',
+});
+
+const { url } = await client.repos.getCloneUrl({ repo: 'my-owner/my-repo' });
+// https://<token>@gitea.example.com/my-owner/my-repo.git
+```
+
+## How do you manage and receive webhooks?
+
+Webhook CRUD lives under `/repos/{owner}/{repo}/hooks` and needs `write:repository`. Gitea supports `push` and `release` events natively, and tag lifecycle events via `create`/`delete` — repo-sdk maps its normalized `tag_push` event onto those for you:
+
+```ts
+await client.webhooks.create({
+  repo: 'my-owner/my-repo',
+  url: 'https://example.com/webhook',
+  events: ['push', 'tag_push', 'release'],
+  secret: process.env.WEBHOOK_SECRET!,
+});
+```
+
+Deliveries are signed with HMAC-SHA256 in the `X-Gitea-Signature` header — as a bare hex digest, without GitHub's `sha256=` prefix. That difference deserves its own article: [How to Verify Gitea and Forgejo Webhook Signatures](/blog/verify-gitea-forgejo-webhook-signatures).
+
+## Does this work with Forgejo?
+
+Yes. Forgejo exposes the same `/api/v1` surface, accepts the same `token` scheme, and sends the same `X-Gitea-*` webhook headers for compatibility, so everything above — including the repo-sdk provider — works against a Forgejo instance unchanged. Point `baseUrl` at your Forgejo host and keep the rest.
+
+## FAQ
+
+### Does the Gitea API have rate limits?
+
+Not built in. Gitea ships no application-level API rate limiter, so a `429` can only come from a reverse proxy in front of the instance. Handle `429` and `Retry-After` defensively anyway — repo-sdk retries rate-limited requests for you when the wait is short.
+
+### Why do I get a 404 for a repository that exists?
+
+Gitea often returns `404` instead of `403` for private resources you lack permission on, to avoid leaking their existence. If a repo you know exists comes back `not_found`, check the token's scopes and the repo's visibility before assuming a wrong path.
+
+### Which Gitea versions are supported?
+
+repo-sdk targets Gitea 1.20 and later, plus Forgejo releases based on it. Every instance serves its exact API spec at `/swagger.v1.json` if you need to check a specific server.

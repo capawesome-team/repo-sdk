@@ -1,11 +1,11 @@
 ---
 title: 'How to Download a Repository Archive Programmatically'
-description: 'Download zip or tar.gz repository archives from GitHub, GitLab, Bitbucket, and Azure DevOps with one streaming API that runs on Node and edge.'
+description: 'Download zip or tar.gz repository archives from GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea with one streaming API that runs on Node and edge.'
 type: blog
 date: 2026-07-17
 ---
 
-To download a repository archive programmatically, request the provider's archive endpoint at a specific ref and stream the response to disk. Each provider exposes its own URL and format rules, but repo-sdk wraps them in a single `repos.downloadArchive` call that returns a Web-standard `ReadableStream`, so the same code works on GitHub, GitLab, Bitbucket, and Azure DevOps across Node and edge runtimes.
+To download a repository archive programmatically, request the provider's archive endpoint at a specific ref and stream the response to disk. Each provider exposes its own URL and format rules, but repo-sdk wraps them in a single `repos.downloadArchive` call that returns a Web-standard `ReadableStream`, so the same code works on GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea across Node and edge runtimes.
 
 This guide covers the per-provider archive formats, authentication for private repositories, the difference between streaming and buffering, and how the unified `downloadArchive` method removes the per-provider glue.
 
@@ -17,7 +17,7 @@ Every major host exposes an archive endpoint, but the URL shape, the accepted fo
 
 ## Which archive formats does each provider support?
 
-All four providers support `zip`. Three of them also support `tar.gz`. Azure DevOps is the exception: it only serves `zip`.
+All five providers support `zip`. Four of them also support `tar.gz`. Azure DevOps is the exception: it only serves `zip`.
 
 | Provider     | zip | tar.gz |
 | ------------ | --- | ------ |
@@ -25,6 +25,7 @@ All four providers support `zip`. Three of them also support `tar.gz`. Azure Dev
 | GitLab       | Yes | Yes    |
 | Bitbucket    | Yes | Yes    |
 | Azure DevOps | Yes | No     |
+| Gitea        | Yes | Yes    |
 
 These values come straight from the `archiveFormats` capability on each provider. Because capabilities are plain data, you can read them at runtime before offering a format in your UI. See the [capability matrix](/docs/reference/capability-matrix) for the full per-provider reference.
 
@@ -112,7 +113,7 @@ If you need a clone URL instead of an archive, for example to run `git clone` wi
 
 ## Why use a unified archive API?
 
-Writing four archive integrations by hand means four URL templates, four auth schemes, four format quirks, and four sets of header parsing to recover a filename. A unified API collapses that into one method with one shape. You branch on a single `archiveFormats` capability instead of memorizing which host serves `tar.gz`, and you get the same streaming `Archive` back regardless of provider. Because the SDK is zero-dependency and built on Web standards, that single code path runs unchanged from a Node build server to an edge function.
+Writing five archive integrations by hand means five URL templates, five auth schemes, five format quirks, and five sets of header parsing to recover a filename. A unified API collapses that into one method with one shape. You branch on a single `archiveFormats` capability instead of memorizing which host serves `tar.gz`, and you get the same streaming `Archive` back regardless of provider. Because the SDK is zero-dependency and built on Web standards, that single code path runs unchanged from a Node build server to an edge function.
 
 ## FAQ
 

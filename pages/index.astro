@@ -10,7 +10,7 @@ const features = [
   {
     icon: 'layers',
     title: 'One unified API',
-    description: 'Discovery, commits, tags, downloads, and webhooks over four providers — one interface.',
+    description: 'Discovery, commits, tags, downloads, and webhooks over five providers — one interface.',
   },
   {
     icon: 'feather',
@@ -122,6 +122,24 @@ const head = await client.commits.get({
   ref: 'main',
 });`,
   },
+  {
+    id: 'gitea',
+    label: 'Gitea',
+    code: `import { createClient } from 'repo-sdk';
+import { gitea } from 'repo-sdk/gitea';
+
+const client = createClient({
+  provider: gitea({
+    auth: { token: process.env.GITEA_TOKEN! },
+    baseUrl: 'https://gitea.example.com/api/v1',
+  }),
+});
+
+const head = await client.commits.get({
+  repo: 'my-owner/my-repo',
+  ref: 'main',
+});`,
+  },
 ];
 
 const webhookCode = `import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
@@ -138,10 +156,10 @@ export async function POST(request: Request): Promise<Response> {
 }`;
 
 const capabilityRows = [
-  { label: 'Repository search', values: [true, true, true, false] },
-  { label: 'Tag dates', values: [false, true, true, false] },
-  { label: 'Release webhooks', values: [true, true, false, false] },
-  { label: 'tar.gz archives', values: [true, true, true, false] },
+  { label: 'Repository search', values: [true, true, true, false, true] },
+  { label: 'Tag dates', values: [false, true, true, false, false] },
+  { label: 'Release webhooks', values: [true, true, false, false, true] },
+  { label: 'tar.gz archives', values: [true, true, true, false, true] },
 ];
 
 const docCards = [
@@ -187,7 +205,7 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
   searchEnabled={config.search.enabled}
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
-  page={{ title: 'repo-sdk — one unified API over four git providers', description: config.description }}
+  page={{ title: 'repo-sdk — one unified API over five git providers', description: config.description }}
 >
   <main class="mx-auto w-full max-w-6xl px-6">
     <!-- Hero -->
@@ -198,11 +216,11 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
           Zero dependencies · Edge-compatible
         </span>
         <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-          One git API.<br />Four providers.
+          One git API.<br />Five providers.
         </h1>
         <p class="mt-5 max-w-xl text-lg text-muted-foreground lg:pr-6">
-          A unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
-          Write your discovery, commit, tag, download, and webhook logic once — not four times.
+          A unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and
+          Gitea. Write your discovery, commit, tag, download, and webhook logic once — not five times.
         </p>
 
         <div class="mt-8 flex max-w-md items-center lg:max-w-none">

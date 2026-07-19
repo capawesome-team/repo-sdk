@@ -1,11 +1,11 @@
 ---
 title: 'How to Verify Webhook Signatures from GitHub, GitLab, Bitbucket, and Azure DevOps'
-description: A practical guide to verifying webhook signatures from GitHub, GitLab, Bitbucket, and Azure DevOps with one unified helper.
+description: A practical guide to verifying webhook signatures from GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea with one unified helper.
 type: blog
 date: 2026-07-18
 ---
 
-To verify a webhook, recompute the provider's signature over the raw request body using your shared secret and compare it, in constant time, to the value the provider sent in the request headers. Each of the four major Git hosts does this differently: GitHub and Bitbucket use HMAC-SHA256, GitLab sends a shared token, and Azure DevOps uses HTTP Basic auth. With repo-sdk you call one helper, `verifyWebhook`, and it applies the correct scheme for whichever provider sent the delivery.
+To verify a webhook, recompute the provider's signature over the raw request body using your shared secret and compare it, in constant time, to the value the provider sent in the request headers. Each of the five major Git hosts does this differently: GitHub, Bitbucket, and Gitea use HMAC-SHA256 (with different header encodings), GitLab sends a shared token, and Azure DevOps uses HTTP Basic auth. With repo-sdk you call one helper, `verifyWebhook`, and it applies the correct scheme for whichever provider sent the delivery.
 
 ## Why verify webhook deliveries?
 
@@ -20,7 +20,7 @@ Two rules make verification correct regardless of provider:
 
 ## How does each provider sign webhooks?
 
-The four providers agree on the goal and disagree on the mechanism. Here is the full comparison.
+The five providers agree on the goal and disagree on the mechanism. Here is the full comparison.
 
 | Provider     | Method       | Header                               | How it verifies                                                  |
 | ------------ | ------------ | ------------------------------------ | ---------------------------------------------------------------- |
@@ -28,8 +28,9 @@ The four providers agree on the goal and disagree on the mechanism. Here is the 
 | GitLab       | shared token | `x-gitlab-token`                     | The header value is compared directly to the configured secret   |
 | Bitbucket    | HMAC-SHA256  | `x-hub-signature` (no `-256` suffix) | HMAC-SHA256 of the raw body, same scheme as GitHub               |
 | Azure DevOps | basic auth   | `Authorization: Basic`               | The hook is registered with the secret as HTTP Basic credentials |
+| Gitea        | HMAC-SHA256  | `x-gitea-signature`                  | HMAC-SHA256 of the raw body as a bare hex digest, no prefix      |
 
-GitHub computes an HMAC-SHA256 over the exact bytes of the request body using your secret as the key, then sends it as `sha256=<hex>` in `x-hub-signature-256`. Bitbucket uses the same HMAC scheme but with the older `x-hub-signature` header and no `-256` suffix. GitLab takes a simpler path: it echoes your shared secret back verbatim in the `x-gitlab-token` header, so verification is a direct comparison rather than a hash. Azure DevOps does not sign the body at all; instead you register the hook with a username and password, and it sends them on every delivery in the standard `Authorization: Basic` header.
+GitHub computes an HMAC-SHA256 over the exact bytes of the request body using your secret as the key, then sends it as `sha256=<hex>` in `x-hub-signature-256`. Bitbucket uses the same HMAC scheme but with the older `x-hub-signature` header and no `-256` suffix. Gitea also signs with HMAC-SHA256, but sends the digest as **bare hex** in `x-gitea-signature` — no `sha256=` prefix — which trips up verification code ported from GitHub; Forgejo sends the same header, so one implementation covers both. GitLab takes a simpler path: it echoes your shared secret back verbatim in the `x-gitlab-token` header, so verification is a direct comparison rather than a hash. Azure DevOps does not sign the body at all; instead you register the hook with a username and password, and it sends them on every delivery in the standard `Authorization: Basic` header.
 
 You can read each provider's declared verification method at runtime from `client.capabilities.webhookVerification`, which is `hmac-sha256`, `shared-token`, or `basic-auth`. See the [capability matrix](/docs/reference/capability-matrix) for the full per-provider table.
 
@@ -39,7 +40,7 @@ You can read each provider's declared verification method at runtime from `clien
 
 ```ts
 import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
-// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops'
+// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops' | 'repo-sdk/gitea'
 ```
 
 Both helpers accept a Web-standard `Request`, so a single handler works across Next.js route handlers, Hono, and Cloudflare Workers:
@@ -71,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
 
 `verifyWebhook` returns `false` on a missing or mismatched signature. It never throws for a bad signature, so the verification branch stays a plain boolean check. Comparisons are constant-time internally, so you do not have to implement timing-safe equality yourself. The only thing you provide is the same `secret` value you used when you created the hook.
 
-Switching providers means changing the import, nothing else. The call shape is identical for GitHub, GitLab, Bitbucket, and Azure DevOps, even though the underlying scheme differs. That is the point of a unified API: your handler does not branch on provider quirks.
+Switching providers means changing the import, nothing else. The call shape is identical for GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea, even though the underlying scheme differs. That is the point of a unified API: your handler does not branch on provider quirks.
 
 ### Verify before you parse
 
