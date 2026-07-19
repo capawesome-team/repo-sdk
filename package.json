@@ -1,6 +1,6 @@
 {
   "name": "repo-sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps, Gitea",
   "license": "MIT",
   "author": "Robin Genz <mail@robingenz.dev>",
