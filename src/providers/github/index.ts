@@ -151,6 +151,12 @@ interface GitHubUser {
   avatar_url?: string;
 }
 
+interface GitHubEmail {
+  email: string;
+  primary?: boolean;
+  verified?: boolean;
+}
+
 interface GitHubOrg {
   id: number;
   login: string;
@@ -386,6 +392,16 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     retryUnauthorized: 'tokenProvider' in options.auth,
   });
 
+  async function fetchPrimaryEmail(signal?: AbortSignal): Promise<string | undefined> {
+    try {
+      const { data } = await http.json<GitHubEmail[]>('/user/emails', { signal });
+      return data.find((entry) => entry.primary && entry.verified)?.email;
+    } catch (error) {
+      if (error instanceof RepoError && error.code === 'forbidden') return undefined;
+      throw error;
+    }
+  }
+
   let cachedLogin: string | undefined;
   async function getLogin(signal?: AbortSignal): Promise<string> {
     if (tokenSource.kind === 'app') {
@@ -442,11 +458,18 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         );
       }
       const { data } = await http.json<GitHubUser>('/user', { signal: params.signal });
+      let email = data.email ?? undefined;
+      // `/user` hides the email for private-email accounts; `includeEmail`
+      // resolves it via `/user/emails` (user:email scope) with the missing
+      // scope leaving the email unset rather than failing the whole call.
+      if (email === undefined && params.includeEmail) {
+        email = await fetchPrimaryEmail(params.signal);
+      }
       return {
         id: String(data.id),
         username: data.login,
         name: data.name ?? undefined,
-        email: data.email ?? undefined,
+        email,
         avatarUrl: data.avatar_url,
         raw: data,
       };

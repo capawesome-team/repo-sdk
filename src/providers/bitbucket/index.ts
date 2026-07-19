@@ -80,6 +80,12 @@ interface BitbucketUser {
   links?: { avatar?: { href?: string } };
 }
 
+interface BitbucketEmail {
+  email?: string;
+  is_primary?: boolean;
+  is_confirmed?: boolean;
+}
+
 interface BitbucketWorkspace {
   uuid: string;
   slug: string;
@@ -320,6 +326,16 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     retryUnauthorized: 'tokenProvider' in auth,
   });
 
+  async function fetchPrimaryEmail(signal?: AbortSignal): Promise<string | undefined> {
+    try {
+      const { data } = await http.json<BitbucketList<BitbucketEmail>>('/user/emails', { signal });
+      return (data.values ?? []).find((entry) => entry.is_primary && entry.is_confirmed)?.email;
+    } catch (error) {
+      if (error instanceof RepoError && error.code === 'forbidden') return undefined;
+      throw error;
+    }
+  }
+
   function repoPath(repo: string): string {
     return `/repositories/${repo}`;
   }
@@ -332,13 +348,15 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     name: 'bitbucket',
     capabilities: CAPABILITIES,
 
-    // `email` stays unset: Bitbucket exposes it only via /user/emails with an extra scope.
+    // The profile call never carries an email; `includeEmail` resolves it via
+    // /user/emails (email scope), with a missing scope leaving it unset.
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
       const { data } = await http.json<BitbucketUser>('/user', { signal: params.signal });
       return {
         id: data.uuid,
         username: data.username ?? data.nickname ?? '',
         name: data.display_name,
+        email: params.includeEmail ? await fetchPrimaryEmail(params.signal) : undefined,
         avatarUrl: data.links?.avatar?.href,
         raw: data,
       };

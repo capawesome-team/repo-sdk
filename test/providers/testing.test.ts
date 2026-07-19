@@ -368,6 +368,12 @@ describe('createInMemoryProvider through createClient', () => {
       });
     });
 
+    it('accepts includeEmail as a no-op', async () => {
+      const { client } = setup({ ...seed, user: { email: 'robin@example.com' } });
+      const user = await client.users.me({ includeEmail: true });
+      expect(user.email).toBe('robin@example.com');
+    });
+
     it('is gated by a userProfile capability override', async () => {
       const provider = createInMemoryProvider(seed, { capabilities: { userProfile: false } });
       const client = createClient({ provider });

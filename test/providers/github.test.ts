@@ -224,6 +224,58 @@ describe('getAuthenticatedUser', () => {
     expect(user.name).toBeUndefined();
     expect(user.email).toBeUndefined();
   });
+
+  describe('includeEmail', () => {
+    const privateEmailProfile = { id: 7, login: 'octocat', email: null };
+
+    function emailSetup(emails: () => { status?: number; json: unknown }) {
+      return setup((request) => {
+        const url = new URL(request.url);
+        if (url.pathname === '/user/emails') return emails();
+        return { json: privateEmailProfile };
+      });
+    }
+
+    it('resolves the primary verified email when the profile hides it', async () => {
+      const { provider, stub } = emailSetup(() => ({
+        json: [
+          { email: 'secondary@example.com', primary: false, verified: true },
+          { email: 'unverified@example.com', primary: true, verified: false },
+          { email: 'primary@example.com', primary: true, verified: true },
+        ],
+      }));
+      const user = await provider.getAuthenticatedUser({ includeEmail: true });
+      expect(user.email).toBe('primary@example.com');
+      expect(stub.requests.map((r) => new URL(r.url).pathname)).toEqual(['/user', '/user/emails']);
+    });
+
+    it('skips the emails call when the profile already carries an email', async () => {
+      const { provider, stub } = setup(() => ({
+        json: { id: 7, login: 'octocat', email: 'public@example.com' },
+      }));
+      const user = await provider.getAuthenticatedUser({ includeEmail: true });
+      expect(user.email).toBe('public@example.com');
+      expect(stub.requests).toHaveLength(1);
+    });
+
+    it('leaves email unset when the emails call is forbidden (missing user:email scope)', async () => {
+      const { provider } = emailSetup(() => ({
+        status: 403,
+        json: { message: 'Resource not accessible' },
+      }));
+      const user = await provider.getAuthenticatedUser({ includeEmail: true });
+      expect(user.username).toBe('octocat');
+      expect(user.email).toBeUndefined();
+    });
+
+    it('propagates non-scope failures from the emails call', async () => {
+      const { provider } = emailSetup(() => ({ status: 500, json: { message: 'oops' } }));
+      await expectRepoError(
+        provider.getAuthenticatedUser({ includeEmail: true }),
+        'provider_error',
+      );
+    });
+  });
 });
 
 describe('listCommits', () => {

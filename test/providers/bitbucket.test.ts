@@ -688,6 +688,42 @@ describe('getAuthenticatedUser', () => {
     expect(user.email).toBeUndefined();
     expect(new URL(stub.requests[0]!.url).pathname).toBe('/2.0/user');
   });
+
+  describe('includeEmail', () => {
+    it('resolves the primary confirmed email via /user/emails', async () => {
+      const { provider, stub } = setup((request) => {
+        const url = new URL(request.url);
+        if (url.pathname === '/2.0/user/emails') {
+          return {
+            json: {
+              values: [
+                { email: 'secondary@example.com', is_primary: false, is_confirmed: true },
+                { email: 'primary@example.com', is_primary: true, is_confirmed: true },
+              ],
+            },
+          };
+        }
+        return { json: { uuid: '{user-uuid-1}', username: 'robin' } };
+      });
+      const user = await provider.getAuthenticatedUser({ includeEmail: true });
+      expect(user.email).toBe('primary@example.com');
+      expect(stub.requests.map((r) => new URL(r.url).pathname)).toEqual([
+        '/2.0/user',
+        '/2.0/user/emails',
+      ]);
+    });
+
+    it('leaves email unset when the emails call is forbidden (missing email scope)', async () => {
+      const { provider } = setup((request) =>
+        new URL(request.url).pathname === '/2.0/user/emails'
+          ? { status: 403, json: {} }
+          : { json: { uuid: '{user-uuid-1}', username: 'robin' } },
+      );
+      const user = await provider.getAuthenticatedUser({ includeEmail: true });
+      expect(user.username).toBe('robin');
+      expect(user.email).toBeUndefined();
+    });
+  });
 });
 
 describe('tokenProvider auth', () => {

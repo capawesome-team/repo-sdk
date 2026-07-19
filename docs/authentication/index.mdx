@@ -90,6 +90,26 @@ It is gated by the `userProfile` capability: credentials without a user identity
 installation tokens — throw `unsupported`. Branch on `client.capabilities.userProfile` before calling
 it when the token type isn't known up front.
 
+### Resolving a hidden email
+
+Two providers omit the email from the profile endpoint: GitHub hides it for private-email accounts
+(the default for new accounts), and Bitbucket never returns one there. Pass `includeEmail: true` to
+have those two make **at most one extra request** (`/user/emails`) and return the primary verified
+address:
+
+```ts
+const me = await client.users.me({ includeEmail: true });
+```
+
+- **Scopes:** GitHub needs `user:email` (classic PATs / OAuth) or the "Email addresses" read
+  permission (fine-grained PATs); Bitbucket needs the `email` scope.
+- **A missing scope does not throw.** The emails call's `forbidden` error is swallowed and `email`
+  stays unset — the email is enrichment, not a precondition. Any other failure (rate limit, network
+  error) propagates as usual.
+- GitLab, Azure DevOps, and Gitea already return the email on the profile call, so the flag is a
+  documented no-op there. On GitHub the extra request is also skipped when the profile already
+  carries a public email.
+
 ## Self-hosted and enterprise instances
 
 Four of the five providers accept a `baseUrl` so you can target a self-managed deployment. Point it at

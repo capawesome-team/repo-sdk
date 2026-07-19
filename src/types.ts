@@ -148,7 +148,15 @@ interface BaseParams {
   signal?: AbortSignal;
 }
 
-export type GetAuthenticatedUserParams = BaseParams;
+export interface GetAuthenticatedUserParams extends BaseParams {
+  /**
+   * Also resolve the primary verified email when the profile endpoint omits it
+   * (GitHub private emails, Bitbucket) — at most one extra request. A missing
+   * email scope leaves `email` unset instead of throwing. No-op on providers
+   * whose profile call already carries the email.
+   */
+  includeEmail?: boolean;
+}
 
 export interface ListNamespacesParams extends BaseParams {
   cursor?: string;
