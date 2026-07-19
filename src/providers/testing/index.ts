@@ -3,6 +3,7 @@ import { decodeCursor, encodeCursor } from '../../pagination.ts';
 import type {
   Archive,
   ArchiveFormat,
+  ProviderName,
   Branch,
   CloneUrl,
   Commit,
@@ -123,6 +124,13 @@ export interface InMemorySeed {
   webhooks?: Record<string, InMemoryWebhookSeed[]>;
 }
 
+export interface InMemoryProviderOptions {
+  /** Provider identity to report; defaults to `github`. */
+  name?: ProviderName;
+  /** Capability overrides merged over the full-featured defaults. */
+  capabilities?: Partial<RepoCapabilities>;
+}
+
 export interface InMemoryState {
   namespaces: Namespace[];
   repositories: Map<string, Repository>;
@@ -130,10 +138,6 @@ export interface InMemoryState {
   tags: Map<string, Tag[]>;
   branches: Map<string, Branch[]>;
   webhooks: Map<string, Webhook[]>;
-}
-
-function notFound(message: string): RepoError {
-  return new RepoError(message, { code: 'not_found', provider: 'github' });
 }
 
 function toActor(actor: InMemoryActorSeed | undefined) {
@@ -204,15 +208,6 @@ function normalizeBranch(seed: InMemoryBranchSeed): Branch {
   };
 }
 
-function paginate<T>(items: T[], cursor: string | undefined): Page<T> {
-  const offset = cursor ? decodeCursor<{ offset: number }>('github', cursor).offset : 0;
-  const nextOffset = offset + PAGE_SIZE;
-  return {
-    data: items.slice(offset, nextOffset),
-    cursor: nextOffset < items.length ? encodeCursor('github', { offset: nextOffset }) : undefined,
-  };
-}
-
 function commitRefs(commit: Commit): string[] | undefined {
   return (commit.raw as InMemoryCommitSeed).refs;
 }
@@ -239,9 +234,26 @@ function archiveMeta(format: ArchiveFormat): { contentType: string; extension: s
 
 export function createInMemoryProvider(
   seed: InMemorySeed = {},
+  options: InMemoryProviderOptions = {},
 ): RepoProvider & { state: InMemoryState } {
+  const name = options.name ?? 'github';
+  const capabilities: RepoCapabilities = { ...CAPABILITIES, ...options.capabilities };
+
   let hookCounter = 0;
   const nextHookId = (): string => `hook-${++hookCounter}`;
+
+  function notFound(message: string): RepoError {
+    return new RepoError(message, { code: 'not_found', provider: name });
+  }
+
+  function paginate<T>(items: T[], cursor: string | undefined): Page<T> {
+    const offset = cursor ? decodeCursor<{ offset: number }>(name, cursor).offset : 0;
+    const nextOffset = offset + PAGE_SIZE;
+    return {
+      data: items.slice(offset, nextOffset),
+      cursor: nextOffset < items.length ? encodeCursor(name, { offset: nextOffset }) : undefined,
+    };
+  }
 
   const state: InMemoryState = {
     namespaces: (seed.namespaces ?? []).map(normalizeNamespace),
@@ -289,9 +301,8 @@ export function createInMemoryProvider(
   }
 
   return {
-    // ProviderName is a closed union; the in-memory double reports itself as 'github'.
-    name: 'github',
-    capabilities: CAPABILITIES,
+    name,
+    capabilities,
 
     listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       return Promise.resolve(paginate(state.namespaces, params.cursor));

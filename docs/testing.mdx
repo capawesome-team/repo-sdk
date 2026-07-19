@@ -35,6 +35,27 @@ const { data } = await client.repos.list({ namespace: 'acme' });
 
 The seed is optional — `createInMemoryProvider()` starts empty.
 
+## Simulating a provider and its capabilities
+
+By default the in-memory provider reports itself as `github` with every capability enabled. A second
+options argument lets you simulate a specific provider and its capability gaps, so code that branches
+on `client.capabilities` before offering a feature is testable:
+
+```ts
+const provider = createInMemoryProvider(seed, {
+  name: 'azure-devops',
+  capabilities: { repoSearch: false },
+});
+const client = createClient({ provider });
+
+client.providerName; // 'azure-devops'
+await client.repos.list({ query: 'app' }); // throws RepoError with code 'unsupported'
+```
+
+`capabilities` is a `Partial<RepoCapabilities>` merged over the full-featured defaults — override only
+what your test needs. Check the [capability matrix](/docs/reference/capability-matrix) for what each
+real provider supports.
+
 ## The seed shape
 
 `namespaces` is an **array**; `repositories`, `commits`, `tags`, and `webhooks` are **records keyed by

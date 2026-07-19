@@ -346,4 +346,41 @@ describe('createInMemoryProvider through createClient', () => {
       );
     });
   });
+
+  describe('provider options', () => {
+    it('reports a configured provider name, including in errors and cursors', async () => {
+      const provider = createInMemoryProvider(seed, { name: 'azure-devops' });
+      const client = createClient({ provider });
+      expect(client.providerName).toBe('azure-devops');
+
+      const namespaces = await collect(client.namespaces.listAll());
+      expect(namespaces).toHaveLength(3);
+
+      try {
+        await client.repos.get({ repo: 'acme/missing' });
+        expect.unreachable('expected RepoError');
+      } catch (error) {
+        expect((error as RepoError).provider).toBe('azure-devops');
+      }
+    });
+
+    it('merges capability overrides over the full-featured defaults', async () => {
+      const provider = createInMemoryProvider(seed, {
+        name: 'azure-devops',
+        capabilities: { repoSearch: false, refSearch: false },
+      });
+      const client = createClient({ provider });
+      expect(client.capabilities.repoSearch).toBe(false);
+      expect(client.capabilities.ownedRepoFilter).toBe(true);
+
+      try {
+        await client.repos.list({ query: 'serv' });
+        expect.unreachable('expected RepoError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(RepoError);
+        expect((error as RepoError).code).toBe('unsupported');
+        expect((error as RepoError).message).toContain('azure-devops');
+      }
+    });
+  });
 });

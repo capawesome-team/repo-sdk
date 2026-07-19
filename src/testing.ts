@@ -4,6 +4,7 @@ export type {
   InMemoryBranchSeed,
   InMemoryCommitSeed,
   InMemoryNamespaceSeed,
+  InMemoryProviderOptions,
   InMemoryRepositorySeed,
   InMemorySeed,
   InMemoryState,
