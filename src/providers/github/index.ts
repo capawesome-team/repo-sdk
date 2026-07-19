@@ -12,12 +12,14 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -77,7 +79,7 @@ export interface GitHubRepoProvider extends RepoProvider {
   getInstallationToken(): Promise<GitHubInstallationToken>;
 }
 
-const CAPABILITIES: RepoCapabilities = {
+const CAPABILITIES: Omit<RepoCapabilities, 'userProfile'> = {
   tagDates: false,
   repoSearch: true,
   ownedRepoFilter: true,
@@ -121,6 +123,8 @@ function createTokenSource(
 interface GitHubUser {
   id: number;
   login: string;
+  name?: string | null;
+  email?: string | null;
   avatar_url?: string;
 }
 
@@ -403,7 +407,26 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
 
   return {
     name: 'github',
-    capabilities: CAPABILITIES,
+    // Installation tokens have no user identity, so `/user` 403s under App auth.
+    capabilities: { ...CAPABILITIES, userProfile: tokenSource.kind === 'token' },
+
+    async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
+      if (tokenSource.kind === 'app') {
+        throw new RepoError(
+          'Resolving the authenticated user is not supported under GitHub App authentication',
+          { code: 'unsupported', provider: 'github' },
+        );
+      }
+      const { data } = await http.json<GitHubUser>('/user', { signal: params.signal });
+      return {
+        id: String(data.id),
+        username: data.login,
+        name: data.name ?? undefined,
+        email: data.email ?? undefined,
+        avatarUrl: data.avatar_url,
+        raw: data,
+      };
+    },
 
     getInstallationToken(): Promise<GitHubInstallationToken> {
       if (!(tokenSource instanceof AppTokenSource)) {

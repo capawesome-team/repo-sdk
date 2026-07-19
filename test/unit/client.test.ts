@@ -21,6 +21,7 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
   return {
     name: 'github',
     capabilities: {
+      userProfile: true,
       tagDates: false,
       repoSearch: true,
       ownedRepoFilter: true,
@@ -30,6 +31,7 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
       webhookVerification: 'hmac-sha256',
       archiveFormats: ['zip', 'tar.gz'],
     },
+    getAuthenticatedUser: notImplemented,
     listNamespaces: notImplemented,
     listRepositories: notImplemented,
     getRepository: notImplemented,
@@ -60,6 +62,13 @@ async function expectRepoError(promise: Promise<unknown>, code: string): Promise
 }
 
 describe('capability gating', () => {
+  it('rejects users.me when the user profile cannot be resolved', async () => {
+    const provider = fakeProvider();
+    provider.capabilities.userProfile = false;
+    const client = createClient({ provider });
+    await expectRepoError(client.users.me(), 'unsupported');
+  });
+
   it('rejects free-text search when unsupported', async () => {
     const provider = fakeProvider({ listRepositories: notImplemented });
     provider.capabilities.repoSearch = false;

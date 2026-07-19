@@ -347,6 +347,34 @@ describe('createInMemoryProvider through createClient', () => {
     });
   });
 
+  describe('users.me', () => {
+    it('returns a default user when none is seeded', async () => {
+      const { client } = setup();
+      const user = await client.users.me();
+      expect(user).toMatchObject({ id: 'user-1', username: 'in-memory-user' });
+    });
+
+    it('returns the seeded user', async () => {
+      const { client } = setup({
+        ...seed,
+        user: { id: 'u-9', username: 'robin', name: 'Robin', email: 'robin@example.com' },
+      });
+      const user = await client.users.me();
+      expect(user).toMatchObject({
+        id: 'u-9',
+        username: 'robin',
+        name: 'Robin',
+        email: 'robin@example.com',
+      });
+    });
+
+    it('is gated by a userProfile capability override', async () => {
+      const provider = createInMemoryProvider(seed, { capabilities: { userProfile: false } });
+      const client = createClient({ provider });
+      await expectRepoError(client.users.me(), 'unsupported');
+    });
+  });
+
   describe('provider options', () => {
     it('reports a configured provider name, including in errors and cursors', async () => {
       const provider = createInMemoryProvider(seed, { name: 'azure-devops' });

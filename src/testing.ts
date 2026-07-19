@@ -9,5 +9,6 @@ export type {
   InMemorySeed,
   InMemoryState,
   InMemoryTagSeed,
+  InMemoryUserSeed,
   InMemoryWebhookSeed,
 } from './providers/testing/index.ts';

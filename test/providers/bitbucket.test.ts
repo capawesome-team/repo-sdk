@@ -667,3 +667,25 @@ describe('commitWebUrl', () => {
     );
   });
 });
+
+describe('getAuthenticatedUser', () => {
+  it('maps the /user payload without an email', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        uuid: '{user-uuid-1}',
+        username: 'robin',
+        display_name: 'Robin',
+        links: { avatar: { href: 'https://bitbucket.example/avatar.png' } },
+      },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user).toMatchObject({
+      id: '{user-uuid-1}',
+      username: 'robin',
+      name: 'Robin',
+      avatarUrl: 'https://bitbucket.example/avatar.png',
+    });
+    expect(user.email).toBeUndefined();
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/2.0/user');
+  });
+});

@@ -40,6 +40,24 @@ try {
 instead. See [Error codes](/docs/reference/error-codes) for the full mapping.
 :::
 
+## Who is this token?
+
+`users.me()` resolves the account behind the configured credentials — a stable provider user id for
+storing the connection, plus display fields for a "connected as" UI:
+
+```ts
+const me = await client.users.me();
+me.id; // stable provider user id
+me.username; // login / handle
+me.name; // display name, when the provider exposes one
+me.email; // when the provider exposes one (Bitbucket never does here)
+me.avatarUrl;
+```
+
+It is gated by the `userProfile` capability: credentials without a user identity — e.g. GitHub App
+installation tokens — throw `unsupported`. Branch on `client.capabilities.userProfile` before calling
+it when the token type isn't known up front.
+
 ## Self-hosted and enterprise instances
 
 Four of the five providers accept a `baseUrl` so you can target a self-managed deployment. Point it at

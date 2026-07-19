@@ -63,6 +63,7 @@ repository path** (e.g. `acme/app`).
 
 <TypeTable
   type={{
+    user: { type: 'InMemoryUserSeed', required: false, description: 'The authenticated user returned by users.me. Defaults to id user-1 / username in-memory-user.' },
     namespaces: { type: 'InMemoryNamespaceSeed[]', required: false, description: 'Namespaces, as an array of { id, slug, name, kind, parent? }.' },
     repositories: { type: 'Record<string, InMemoryRepositorySeed>', required: false, description: 'Repositories keyed by path. Fields default sensibly (e.g. defaultBranch → main).' },
     commits: { type: 'Record<string, InMemoryCommitSeed[]>', required: false, description: 'Commits keyed by repo path, newest first.' },

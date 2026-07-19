@@ -645,3 +645,34 @@ describe('commitWebUrl', () => {
     );
   });
 });
+
+describe('getAuthenticatedUser', () => {
+  it('maps the /user payload', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        id: 5,
+        username: 'robin',
+        name: 'Robin',
+        email: 'robin@example.com',
+        avatar_url: 'https://gitlab.example/avatar.png',
+      },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user).toMatchObject({
+      id: '5',
+      username: 'robin',
+      name: 'Robin',
+      email: 'robin@example.com',
+      avatarUrl: 'https://gitlab.example/avatar.png',
+    });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v4/user');
+  });
+
+  it('falls back to public_email when email is absent', async () => {
+    const { provider } = setup(() => ({
+      json: { id: 5, username: 'robin', public_email: 'public@example.com' },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.email).toBe('public@example.com');
+  });
+});

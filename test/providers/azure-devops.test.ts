@@ -880,3 +880,36 @@ describe('commitWebUrl', () => {
     );
   });
 });
+
+describe('getAuthenticatedUser', () => {
+  it('maps connectionData to the authenticated user', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        authenticatedUser: {
+          id: 'user-guid-1',
+          providerDisplayName: 'Robin Genz',
+          properties: { Account: { $value: 'robin@contoso.com' } },
+        },
+      },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user).toMatchObject({
+      id: 'user-guid-1',
+      username: 'robin@contoso.com',
+      name: 'Robin Genz',
+      email: 'robin@contoso.com',
+    });
+    const request = new URL(stub.requests[0]!.url);
+    expect(request.pathname).toBe('/contoso/_apis/connectionData');
+    expect(request.searchParams.get('api-version')).toBe('7.1');
+  });
+
+  it('falls back to the display name when no account property is present', async () => {
+    const { provider } = setup(() => ({
+      json: { authenticatedUser: { id: 'user-guid-1', providerDisplayName: 'Robin Genz' } },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.username).toBe('Robin Genz');
+    expect(user.email).toBeUndefined();
+  });
+});

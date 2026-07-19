@@ -3,12 +3,14 @@ import { HttpClient, type HttpRequestOptions, type ProviderErrorInfo } from '../
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -58,6 +60,7 @@ export interface AzureDevOpsProviderOptions {
 }
 
 const CAPABILITIES: RepoCapabilities = {
+  userProfile: true,
   tagDates: false,
   repoSearch: false,
   ownedRepoFilter: false,
@@ -88,6 +91,15 @@ interface AzureRepo {
   remoteUrl?: string;
   sshUrl?: string;
   webUrl?: string;
+}
+
+interface AzureConnectionData {
+  authenticatedUser?: {
+    id?: string;
+    providerDisplayName?: string;
+    customDisplayName?: string;
+    properties?: { Account?: { $value?: string } };
+  };
 }
 
 interface AzureUserDate {
@@ -311,6 +323,24 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
   return {
     name: 'azure-devops',
     capabilities: CAPABILITIES,
+
+    // The profile API lives on a separate host, so the identity comes from the
+    // org-scoped connectionData endpoint instead. The `Account` property carries
+    // the sign-in address (UPN) when the identity provider exposes one.
+    async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
+      const { data } = await jsonApi<AzureConnectionData>('/_apis/connectionData', {
+        signal: params.signal,
+      });
+      const user = data.authenticatedUser;
+      const account = user?.properties?.Account?.$value;
+      return {
+        id: user?.id ?? '',
+        username: account ?? user?.providerDisplayName ?? '',
+        name: user?.customDisplayName ?? user?.providerDisplayName,
+        email: account?.includes('@') ? account : undefined,
+        raw: data,
+      };
+    },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       const query: HttpRequestOptions['query'] = { $top: params.limit };

@@ -1,12 +1,14 @@
 import { RepoError } from './errors.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -45,6 +47,9 @@ export interface CreateClientOptions {
 export interface RepoClient {
   providerName: ProviderName;
   capabilities: RepoCapabilities;
+  users: {
+    me(params?: GetAuthenticatedUserParams): Promise<AuthenticatedUser>;
+  };
   namespaces: {
     list(params?: ListNamespacesParams): Promise<Page<Namespace>>;
     listAll(params?: Omit<ListNamespacesParams, 'cursor'>): AsyncGenerator<Namespace, void>;
@@ -164,6 +169,17 @@ export function createClient(options: CreateClientOptions): RepoClient {
   return {
     providerName: provider.name,
     capabilities: provider.capabilities,
+    users: {
+      me: async (params = {}) => {
+        if (!provider.capabilities.userProfile) {
+          fail(
+            'unsupported',
+            `${provider.name} cannot resolve the authenticated user with the configured credentials`,
+          );
+        }
+        return withRetry(() => provider.getAuthenticatedUser(params));
+      },
+    },
     namespaces: {
       list: async (params = {}) => withRetry(() => provider.listNamespaces(params)),
       listAll: (params = {}) => listAllOf(params, (p) => provider.listNamespaces(p)),

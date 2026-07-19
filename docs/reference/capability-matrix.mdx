@@ -16,6 +16,7 @@ gates on these values and throws `unsupported` rather than silently dropping an 
 
 | Capability            | Type                            | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps  | Gitea                     |
 | --------------------- | ------------------------------- | ------------------------- | ------------------------- | ---------------- | ------------- | ------------------------- |
+| `userProfile`         | `boolean`                       | `true` (`false` under App auth) | `true`              | `true`           | `true`        | `true`                    |
 | `tagDates`            | `boolean`                       | `false`                   | `true`                    | `true`           | `false`       | `false`                   |
 | `repoSearch`          | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    |
 | `ownedRepoFilter`     | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    |
@@ -29,6 +30,7 @@ gates on these values and throws `unsupported` rather than silently dropping an 
 
 <TypeTable
   type={{
+    userProfile: { type: 'boolean', description: 'Whether users.me can resolve the authenticated user. False when the credential carries no user identity — e.g. GitHub App installation tokens.' },
     tagDates: { type: 'boolean', description: 'Whether listed tags carry a date. When false, Tag.date is undefined (GitHub, Azure DevOps, Gitea).' },
     repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query. Passing query without it throws unsupported.' },
     ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true. Passing it without support throws unsupported.' },

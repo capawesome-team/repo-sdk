@@ -46,6 +46,16 @@ export interface CloneUrl {
   expiresAt?: Date;
 }
 
+/** The account behind the configured credentials (see the `userProfile` capability). */
+export interface AuthenticatedUser {
+  id: string;
+  username: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+  raw: unknown;
+}
+
 /** Provider account resolved for a commit actor, when the provider can match one. */
 export interface UserRef {
   id: string;
@@ -131,6 +141,8 @@ export interface IncomingWebhookRequest {
 interface BaseParams {
   signal?: AbortSignal;
 }
+
+export type GetAuthenticatedUserParams = BaseParams;
 
 export interface ListNamespacesParams extends BaseParams {
   cursor?: string;
@@ -236,6 +248,8 @@ export interface DeleteWebhookParams extends BaseParams {
 }
 
 export interface RepoCapabilities {
+  /** Whether the authenticated user profile can be resolved (`users.me`); false e.g. for GitHub App installation tokens. */
+  userProfile: boolean;
   tagDates: boolean;
   repoSearch: boolean;
   ownedRepoFilter: boolean;
@@ -249,6 +263,7 @@ export interface RepoCapabilities {
 export interface RepoProvider {
   name: ProviderName;
   capabilities: RepoCapabilities;
+  getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser>;
   listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>>;
   listRepositories(params: ListRepositoriesParams): Promise<Page<Repository>>;
   getRepository(params: GetRepositoryParams): Promise<Repository>;

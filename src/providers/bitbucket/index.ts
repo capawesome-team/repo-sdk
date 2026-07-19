@@ -9,12 +9,14 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -49,6 +51,7 @@ export interface BitbucketProviderOptions {
 }
 
 const CAPABILITIES: RepoCapabilities = {
+  userProfile: true,
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
@@ -62,6 +65,14 @@ const CAPABILITIES: RepoCapabilities = {
 interface BitbucketList<T> {
   values?: T[];
   next?: string;
+}
+
+interface BitbucketUser {
+  uuid: string;
+  username?: string;
+  nickname?: string;
+  display_name?: string;
+  links?: { avatar?: { href?: string } };
 }
 
 interface BitbucketWorkspace {
@@ -302,6 +313,18 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   return {
     name: 'bitbucket',
     capabilities: CAPABILITIES,
+
+    // `email` stays unset: Bitbucket exposes it only via /user/emails with an extra scope.
+    async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
+      const { data } = await http.json<BitbucketUser>('/user', { signal: params.signal });
+      return {
+        id: data.uuid,
+        username: data.username ?? data.nickname ?? '',
+        name: data.display_name,
+        avatarUrl: data.links?.avatar?.href,
+        raw: data,
+      };
+    },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       if (params.cursor) {

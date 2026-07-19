@@ -10,12 +10,14 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -53,6 +55,7 @@ export interface GitLabProviderOptions {
 }
 
 const CAPABILITIES: RepoCapabilities = {
+  userProfile: true,
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
@@ -81,6 +84,8 @@ interface GitLabUser {
   id: number;
   username: string;
   name?: string;
+  email?: string | null;
+  public_email?: string | null;
   avatar_url?: string | null;
 }
 
@@ -343,6 +348,18 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
   return {
     name: 'gitlab',
     capabilities: CAPABILITIES,
+
+    async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
+      const { data } = await http.json<GitLabUser>('/user', { signal: params.signal });
+      return {
+        id: String(data.id),
+        username: data.username,
+        name: data.name,
+        email: data.email ?? data.public_email ?? undefined,
+        avatarUrl: data.avatar_url ?? undefined,
+        raw: data,
+      };
+    },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       if (params.cursor) {

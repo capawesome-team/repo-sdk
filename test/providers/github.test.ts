@@ -193,6 +193,39 @@ describe('getRepository', () => {
   });
 });
 
+describe('getAuthenticatedUser', () => {
+  it('maps the /user payload and reports the userProfile capability', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        id: 7,
+        login: 'octocat',
+        name: 'Octo Cat',
+        email: 'octo@example.com',
+        avatar_url: 'https://avatars.example/u7',
+      },
+    }));
+    expect(provider.capabilities.userProfile).toBe(true);
+    const user = await provider.getAuthenticatedUser({});
+    expect(user).toMatchObject({
+      id: '7',
+      username: 'octocat',
+      name: 'Octo Cat',
+      email: 'octo@example.com',
+      avatarUrl: 'https://avatars.example/u7',
+    });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/user');
+  });
+
+  it('drops null name and email', async () => {
+    const { provider } = setup(() => ({
+      json: { id: 7, login: 'octocat', name: null, email: null },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.name).toBeUndefined();
+    expect(user.email).toBeUndefined();
+  });
+});
+
 describe('listCommits', () => {
   const commitPayload = {
     sha: 'abc123',

@@ -11,12 +11,14 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  AuthenticatedUser,
   Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetAuthenticatedUserParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -55,6 +57,7 @@ export interface GiteaProviderOptions {
 }
 
 const CAPABILITIES: RepoCapabilities = {
+  userProfile: true,
   tagDates: false,
   repoSearch: true,
   ownedRepoFilter: true,
@@ -70,6 +73,7 @@ interface GiteaUser {
   login?: string;
   username?: string;
   full_name?: string;
+  email?: string;
   avatar_url?: string;
 }
 
@@ -346,6 +350,18 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
   return {
     name: 'gitea',
     capabilities: CAPABILITIES,
+
+    async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
+      const { data } = await http.json<GiteaUser>('/user', { signal: params.signal });
+      return {
+        id: String(data.id),
+        username: data.login ?? data.username ?? '',
+        name: data.full_name ? data.full_name : undefined,
+        email: data.email,
+        avatarUrl: data.avatar_url,
+        raw: data,
+      };
+    },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       if (params.cursor) {

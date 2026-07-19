@@ -3,6 +3,7 @@ import { decodeCursor, encodeCursor } from '../../pagination.ts';
 import type {
   Archive,
   ArchiveFormat,
+  AuthenticatedUser,
   ProviderName,
   Branch,
   CloneUrl,
@@ -40,6 +41,7 @@ import type {
 const PAGE_SIZE = 2;
 
 const CAPABILITIES: RepoCapabilities = {
+  userProfile: true,
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
@@ -110,7 +112,17 @@ export interface InMemoryWebhookSeed {
   active?: boolean;
 }
 
+export interface InMemoryUserSeed {
+  id?: string;
+  username?: string;
+  name?: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
 export interface InMemorySeed {
+  /** The authenticated user returned by `users.me`; defaults apply when omitted. */
+  user?: InMemoryUserSeed;
   namespaces?: InMemoryNamespaceSeed[];
   /** Repositories keyed by their path (e.g. `acme/service`). */
   repositories?: Record<string, InMemoryRepositorySeed>;
@@ -307,6 +319,18 @@ export function createInMemoryProvider(
   return {
     name,
     capabilities,
+
+    getAuthenticatedUser(): Promise<AuthenticatedUser> {
+      const user = seed.user ?? {};
+      return Promise.resolve({
+        id: user.id ?? 'user-1',
+        username: user.username ?? 'in-memory-user',
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        raw: user,
+      });
+    },
 
     listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       return Promise.resolve(paginate(state.namespaces, params.cursor));

@@ -382,3 +382,11 @@ describe('GitHub App auth', () => {
     expect(clone.expiresAt!.toISOString()).toBe(expiresAt);
   });
 });
+
+describe('getAuthenticatedUser under App auth', () => {
+  it('reports userProfile: false and rejects with unsupported', async () => {
+    const { provider } = setup(appHandler(), { privateKey: pkcs8Pem, installationId: 99 });
+    expect(provider.capabilities.userProfile).toBe(false);
+    await expectRepoError(provider.getAuthenticatedUser({}), 'unsupported');
+  });
+});

@@ -661,3 +661,26 @@ describe('commitWebUrl', () => {
     );
   });
 });
+
+describe('getAuthenticatedUser', () => {
+  it('maps the /user payload, treating an empty full_name as unset', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        id: 3,
+        login: 'robin',
+        full_name: '',
+        email: 'robin@example.com',
+        avatar_url: 'https://gitea.example/avatar.png',
+      },
+    }));
+    const user = await provider.getAuthenticatedUser({});
+    expect(user).toMatchObject({
+      id: '3',
+      username: 'robin',
+      email: 'robin@example.com',
+      avatarUrl: 'https://gitea.example/avatar.png',
+    });
+    expect(user.name).toBeUndefined();
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v1/user');
+  });
+});
