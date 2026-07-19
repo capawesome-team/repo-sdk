@@ -7,6 +7,7 @@ export default defineConfig({
   // Mount every generated docs route under /docs; the landing page owns /.
   basePath: '/docs',
   logo: {
+    image: '/logo.svg',
     text: 'repo-sdk',
   },
   theme: {

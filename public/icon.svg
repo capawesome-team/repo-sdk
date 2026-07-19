@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <style>
+    path { stroke: #18181b; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    circle { fill: #18181b; }
+    @media (prefers-color-scheme: dark) {
+      path { stroke: #fafafa; }
+      circle { fill: #fafafa; }
+    }
+  </style>
+  <path d="M8.5 6L3 12l5.5 6" />
+  <path d="M15.5 6L21 12l-5.5 6" />
+  <circle cx="12" cy="12" r="2.25" />
+</svg>
