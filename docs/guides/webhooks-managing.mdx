@@ -60,7 +60,7 @@ wiping the URL or stored secret.
 The `secret` is write-only. Providers never return it on read, so:
 
 - Store the secret yourself when you create the hook — you need the same value to
-  [verify incoming deliveries](/guides/webhooks-receiving).
+  [verify incoming deliveries](/docs/guides/webhooks-receiving).
 - On `update`, omit `secret` to keep the stored one; pass it again only to rotate it.
 
 :::warning
@@ -81,6 +81,6 @@ rather than silently clearing it — pass `secret` again on update.
 - An empty `events` array throws `validation` ("at least one webhook event is required").
 :::
 
-<Card title="Next: Receiving webhooks" icon="antenna" href="/guides/webhooks-receiving">
+<Card title="Next: Receiving webhooks" icon="antenna" href="/docs/guides/webhooks-receiving">
   Verify signatures and parse incoming events.
 </Card>

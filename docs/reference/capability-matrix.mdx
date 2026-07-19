@@ -10,7 +10,7 @@ filter, webhook events, webhook verification, and archive formats.
 
 Every provider exposes this object as `capabilities`, also surfaced on `client.capabilities`. The client
 gates on these values and throws `unsupported` rather than silently dropping an option — see
-[Capabilities](/concepts/capabilities).
+[Capabilities](/docs/concepts/capabilities).
 
 ## Matrix
 
@@ -50,6 +50,6 @@ if (client.capabilities.webhookEvents.includes('release')) {
 }
 ```
 
-<Card title="Provider support" icon="table" href="/reference/provider-support">
+<Card title="Provider support" icon="table" href="/docs/reference/provider-support">
   The broader feature-by-provider matrix, including auth and self-hosting.
 </Card>

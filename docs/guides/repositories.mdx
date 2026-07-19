@@ -61,7 +61,7 @@ const { data: hits } = await client.repos.list({ query: 'sdk' });
 `query` and `owned` are **gated on capabilities**. Azure DevOps supports neither `repoSearch` nor
 `ownedRepoFilter`, so passing `query` or `owned: true` throws a `RepoError` with `code: 'unsupported'`
 before any request is made. Check `client.capabilities.repoSearch` / `client.capabilities.ownedRepoFilter`
-first — see [Capabilities](/concepts/capabilities).
+first — see [Capabilities](/docs/concepts/capabilities).
 :::
 
 ## Fetching a single repository
@@ -87,9 +87,9 @@ repo.raw; // untouched provider payload
 
 :::note
 For Azure DevOps the `organization` is fixed on the provider factory, so it is not part of the `repo`
-string — only `project/repository` is. See [Repositories & namespaces](/concepts/repositories-and-namespaces).
+string — only `project/repository` is. See [Repositories & namespaces](/docs/concepts/repositories-and-namespaces).
 :::
 
-<Card title="Next: Working with commits" icon="git-commit" href="/guides/commits">
+<Card title="Next: Working with commits" icon="git-commit" href="/docs/guides/commits">
   List a repository's history and resolve refs to commits.
 </Card>

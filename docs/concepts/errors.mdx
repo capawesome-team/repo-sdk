@@ -75,7 +75,7 @@ provider errors. When the provider sent a `Retry-After` header, `retryAfter` car
 seconds to wait.
 
 The client already performs **one bounded retry** on `rate_limited` when `Retry-After` is small; see
-[retry configuration](/concepts/client-and-providers#retry-configuration). For anything beyond that, use
+[retry configuration](/docs/concepts/client-and-providers#retry-configuration). For anything beyond that, use
 `retryable` and `retryAfter` to build your own back-off.
 
 ## Secret redaction
@@ -89,6 +89,6 @@ Redaction covers the error **message**. Some values that inherently embed creden
 URL returned by `repos.getCloneUrl` — are secrets by design. Never log those directly.
 :::
 
-<Card title="Next: Capabilities" icon="toggle-right" href="/concepts/capabilities">
+<Card title="Next: Capabilities" icon="toggle-right" href="/docs/concepts/capabilities">
   How providers advertise what they can and can't do.
 </Card>

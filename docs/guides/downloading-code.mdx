@@ -50,7 +50,7 @@ await archive.stream.pipeTo(Writable.toWeb(file));
 :::warning
 **Azure DevOps only supports `zip`** (`capabilities.archiveFormats` is `['zip']`). Requesting `tar.gz`
 throws a `RepoError` with `code: 'unsupported'`. Bitbucket archive downloads additionally require API
-token auth — see [Bitbucket authentication](/authentication/bitbucket).
+token auth — see [Bitbucket authentication](/docs/authentication/bitbucket).
 :::
 
 ## Getting a clone URL
@@ -92,6 +92,6 @@ const clone = await client.repos.getCloneUrl({ repo: 'Payments/checkout' });
 // git -c http.extraheader="Authorization: Bearer …" clone <clone.url>
 ```
 
-<Card title="Next: Managing webhooks" icon="webhook" href="/guides/webhooks-managing">
+<Card title="Next: Managing webhooks" icon="webhook" href="/docs/guides/webhooks-managing">
   Register and manage repository webhooks.
 </Card>

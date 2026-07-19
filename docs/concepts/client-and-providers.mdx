@@ -50,7 +50,7 @@ import { azureDevOps } from 'repo-sdk/azure-devops';
 ```
 
 Every factory takes an `auth` block; most also accept an optional `baseUrl` for self-hosted or
-enterprise instances. See [Authentication](/authentication) for the per-provider auth shapes.
+enterprise instances. See [Authentication](/docs/authentication) for the per-provider auth shapes.
 
 ## Thin adapter, fat client
 
@@ -97,7 +97,7 @@ const client = createClient({ provider });
 
 :::tip
 For integration tests that don't target a specific provider's wire format, prefer the in-memory
-provider from `repo-sdk/testing` — see [Testing](/testing).
+provider from `repo-sdk/testing` — see [Testing](/docs/testing).
 :::
 
 ## Retry configuration
@@ -115,6 +115,6 @@ const client = createClient({
 });
 ```
 
-<Card title="Next: Repositories & namespaces" icon="folder-git" href="/concepts/repositories-and-namespaces">
+<Card title="Next: Repositories & namespaces" icon="folder-git" href="/docs/concepts/repositories-and-namespaces">
   How repositories are addressed and discovered.
 </Card>

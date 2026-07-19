@@ -1,0 +1,114 @@
+---
+title: 'How to Verify Webhook Signatures from GitHub, GitLab, Bitbucket, and Azure DevOps'
+description: A practical guide to verifying webhook signatures from GitHub, GitLab, Bitbucket, and Azure DevOps with one unified helper.
+type: blog
+date: 2026-07-18
+---
+
+To verify a webhook, recompute the provider's signature over the raw request body using your shared secret and compare it, in constant time, to the value the provider sent in the request headers. Each of the four major Git hosts does this differently: GitHub and Bitbucket use HMAC-SHA256, GitLab sends a shared token, and Azure DevOps uses HTTP Basic auth. With repo-sdk you call one helper, `verifyWebhook`, and it applies the correct scheme for whichever provider sent the delivery.
+
+## Why verify webhook deliveries?
+
+A webhook endpoint is a public URL that accepts POST requests. Anyone who discovers it can send it a payload that looks exactly like a real delivery. If your handler acts on unverified events, an attacker can trigger deployments, fake a push or release, or flood downstream systems with forged work.
+
+Verification closes that gap. The provider signs each delivery with a secret only it and you know. If the signature does not match, the request did not come from the provider, and you reject it before any business logic runs. This is the single most important control on any webhook endpoint, and it is cheap: one hash and one comparison per request.
+
+Two rules make verification correct regardless of provider:
+
+- Verify against the **raw request body**, byte for byte. Re-serializing parsed JSON changes whitespace and key order, and the signature will no longer match.
+- Compare signatures in **constant time**. A naive string equality check leaks how many leading bytes matched through timing, which can let an attacker recover a valid signature byte by byte.
+
+## How does each provider sign webhooks?
+
+The four providers agree on the goal and disagree on the mechanism. Here is the full comparison.
+
+| Provider     | Method       | Header                               | How it verifies                                                  |
+| ------------ | ------------ | ------------------------------------ | ---------------------------------------------------------------- |
+| GitHub       | HMAC-SHA256  | `x-hub-signature-256`                | HMAC-SHA256 of the raw body, prefixed `sha256=`                  |
+| GitLab       | shared token | `x-gitlab-token`                     | The header value is compared directly to the configured secret   |
+| Bitbucket    | HMAC-SHA256  | `x-hub-signature` (no `-256` suffix) | HMAC-SHA256 of the raw body, same scheme as GitHub               |
+| Azure DevOps | basic auth   | `Authorization: Basic`               | The hook is registered with the secret as HTTP Basic credentials |
+
+GitHub computes an HMAC-SHA256 over the exact bytes of the request body using your secret as the key, then sends it as `sha256=<hex>` in `x-hub-signature-256`. Bitbucket uses the same HMAC scheme but with the older `x-hub-signature` header and no `-256` suffix. GitLab takes a simpler path: it echoes your shared secret back verbatim in the `x-gitlab-token` header, so verification is a direct comparison rather than a hash. Azure DevOps does not sign the body at all; instead you register the hook with a username and password, and it sends them on every delivery in the standard `Authorization: Basic` header.
+
+You can read each provider's declared verification method at runtime from `client.capabilities.webhookVerification`, which is `hmac-sha256`, `shared-token`, or `basic-auth`. See the [capability matrix](/docs/reference/capability-matrix) for the full per-provider table.
+
+## How do you verify a webhook with repo-sdk?
+
+`verifyWebhook` and `parseWebhookEvent` are standalone exports on each provider subpath. They need no client and no configuration beyond the secret. Import the pair that matches the provider sending the webhook:
+
+```ts
+import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
+// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops'
+```
+
+Both helpers accept a Web-standard `Request`, so a single handler works across Next.js route handlers, Hono, and Cloudflare Workers:
+
+```ts
+import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
+
+export async function POST(request: Request): Promise<Response> {
+  const valid = await verifyWebhook({ request, secret: process.env.WEBHOOK_SECRET! });
+  if (!valid) return new Response('invalid signature', { status: 401 });
+
+  const event = await parseWebhookEvent(request);
+  switch (event.type) {
+    case 'push':
+      console.log(`push to ${event.repo} @ ${event.ref}`, event.commits);
+      break;
+    case 'tag_push':
+      console.log(`tag push to ${event.repo} @ ${event.ref}`);
+      break;
+    case 'release':
+      console.log(`release in ${event.repo}`);
+      break;
+    case 'ping':
+      break; // GitHub sends a ping when a hook is created
+  }
+  return new Response('ok');
+}
+```
+
+`verifyWebhook` returns `false` on a missing or mismatched signature. It never throws for a bad signature, so the verification branch stays a plain boolean check. Comparisons are constant-time internally, so you do not have to implement timing-safe equality yourself. The only thing you provide is the same `secret` value you used when you created the hook.
+
+Switching providers means changing the import, nothing else. The call shape is identical for GitHub, GitLab, Bitbucket, and Azure DevOps, even though the underlying scheme differs. That is the point of a unified API: your handler does not branch on provider quirks.
+
+### Verify before you parse
+
+`verifyWebhook` reads the raw request body to recompute the signature. If your framework or your own code has already consumed the body as JSON, the raw bytes may be gone. Two guidelines keep this correct:
+
+- Call `verifyWebhook` **before** you parse the body yourself.
+- If you have already read the body, pass a `{ headers, body }` pair instead of the `Request`, giving the helper the raw string directly:
+
+```ts
+const valid = await verifyWebhook({ headers, body, secret: process.env.WEBHOOK_SECRET! });
+```
+
+`parseWebhookEvent` does no verification of its own. Always verify first and reject invalid deliveries before acting on the parsed event.
+
+## What does the parsed event look like?
+
+`parseWebhookEvent` normalizes each provider's payload into a single `ParsedWebhookEvent` shape, so downstream code does not care which host sent it:
+
+- `type` is one of `push`, `tag_push`, `release`, `ping`, or `unknown`. Unrecognized events map to `unknown`.
+- `repo` is the repository path, when present in the payload.
+- `ref` is the git ref, such as `refs/heads/main` or `refs/tags/v1.0.0`.
+- `commits` is an array of `{ sha, message }` for the delivery, when present.
+- `deliveryId` is the provider's delivery id, useful for de-duplication and logging.
+- `raw` is the untouched provider payload, for anything the normalized shape does not cover.
+
+For creating and rotating the secrets these helpers verify against, see [managing webhooks](/docs/guides/webhooks-managing). For the full receiving workflow, see [receiving webhooks](/docs/guides/webhooks-receiving).
+
+## FAQ
+
+### Do I need to implement timing-safe comparison myself?
+
+No. `verifyWebhook` compares signatures in constant time internally, so a mismatch takes the same time to reject regardless of where the first differing byte falls. You do not need to add your own timing-safe equality check around it.
+
+### What should my endpoint do when verification fails?
+
+Reject the request immediately with a `401` response and do nothing else. `verifyWebhook` returns `false` rather than throwing, so a failed check is a normal boolean branch. Do not parse, log the payload as trusted, or trigger any side effect for an unverified delivery.
+
+### Does signature verification protect against replay attacks?
+
+Not on its own. A valid signature proves the payload is authentic but not that it is fresh, so a captured delivery could be replayed. Use the `deliveryId` from the parsed event to de-duplicate deliveries you have already processed, and reject or ignore ones you have seen before.

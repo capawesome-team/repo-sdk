@@ -1,0 +1,129 @@
+---
+title: 'How to Download a Repository Archive Programmatically'
+description: 'Download zip or tar.gz repository archives from GitHub, GitLab, Bitbucket, and Azure DevOps with one streaming API that runs on Node and edge.'
+type: blog
+date: 2026-07-17
+---
+
+To download a repository archive programmatically, request the provider's archive endpoint at a specific ref and stream the response to disk. Each provider exposes its own URL and format rules, but repo-sdk wraps them in a single `repos.downloadArchive` call that returns a Web-standard `ReadableStream`, so the same code works on GitHub, GitLab, Bitbucket, and Azure DevOps across Node and edge runtimes.
+
+This guide covers the per-provider archive formats, authentication for private repositories, the difference between streaming and buffering, and how the unified `downloadArchive` method removes the per-provider glue.
+
+## What is a repository archive?
+
+A repository archive is a compressed snapshot of a repository's tree at a given ref (a branch, tag, or commit SHA). Instead of running `git clone`, you fetch a single `zip` or `tar.gz` file containing the working tree at that point. Archives are the fastest way to get source code when you do not need history: build pipelines, source mirrors, deploy artifacts, and reproducible snapshots all use them.
+
+Every major host exposes an archive endpoint, but the URL shape, the accepted format, and the auth mechanism differ. That is the friction repo-sdk removes.
+
+## Which archive formats does each provider support?
+
+All four providers support `zip`. Three of them also support `tar.gz`. Azure DevOps is the exception: it only serves `zip`.
+
+| Provider     | zip | tar.gz |
+| ------------ | --- | ------ |
+| GitHub       | Yes | Yes    |
+| GitLab       | Yes | Yes    |
+| Bitbucket    | Yes | Yes    |
+| Azure DevOps | Yes | No     |
+
+These values come straight from the `archiveFormats` capability on each provider. Because capabilities are plain data, you can read them at runtime before offering a format in your UI. See the [capability matrix](/docs/reference/capability-matrix) for the full per-provider reference.
+
+```ts
+if (client.capabilities.archiveFormats.includes('tar.gz')) {
+  // safe to request tar.gz for this provider
+}
+```
+
+If you request a format a provider does not support, repo-sdk does not silently fall back. Asking Azure DevOps for `tar.gz` throws a `RepoError` with `code: 'unsupported'`, so mismatches fail loudly instead of producing a broken artifact.
+
+## How do you download an archive with repo-sdk?
+
+Create a client with a provider, then call `repos.downloadArchive` with the repo, a ref, and an optional format. The format defaults to `zip`.
+
+```ts
+import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+
+const archive = await client.repos.downloadArchive({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'v1.0.0',
+  format: 'zip',
+});
+// archive: { stream: ReadableStream<Uint8Array>, contentType?: string, filename?: string }
+```
+
+The returned `Archive` has three fields. `stream` is a Web-standard `ReadableStream` of bytes, `contentType` is the media type reported by the provider, and `filename` is the suggested name parsed from the response headers. Both metadata fields are optional, so treat them as hints rather than guarantees.
+
+Switching providers means swapping the provider factory. The `downloadArchive` call itself does not change:
+
+```ts
+import { gitlab } from 'repo-sdk/gitlab';
+
+const client = createClient({
+  provider: gitlab({ auth: { token: process.env.GITLAB_TOKEN! } }),
+});
+
+const archive = await client.repos.downloadArchive({
+  repo: 'my-group/my-project',
+  ref: 'main',
+  format: 'tar.gz',
+});
+```
+
+For the full walkthrough of creating a client and resolving refs, start with the [quickstart](/docs/quickstart).
+
+## Should you stream or buffer the archive?
+
+Stream it. Archives can be large, and buffering an entire repository into memory is wasteful and risks running out of heap on constrained runtimes. Because `downloadArchive` returns a `ReadableStream`, you can pipe the bytes straight to disk without holding the whole file at once.
+
+```ts
+import { createWriteStream } from 'node:fs';
+import { Writable } from 'node:stream';
+
+const archive = await client.repos.downloadArchive({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'v1.0.0',
+  format: 'tar.gz',
+});
+
+const file = createWriteStream(archive.filename ?? 'archive.tar.gz');
+await archive.stream.pipeTo(Writable.toWeb(file));
+```
+
+The stream is a Web standard, not a Node-only construct, so the same `Archive` works on edge runtimes and workers where the `node:fs` and `node:stream` imports are unavailable. On those platforms you can pipe the stream directly into a `Response`, upload it to object storage, or process it chunk by chunk. Only reach for buffering when a downstream API genuinely requires a full `ArrayBuffer`, and even then prefer to accumulate deliberately rather than by default.
+
+## How do you download from a private repository?
+
+Downloading a private archive uses the same authentication you already configured on the provider. There is no separate archive credential. Construct the provider with a token (or the equivalent for that host), and `downloadArchive` sends it automatically.
+
+```ts
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+```
+
+Two provider-specific notes matter here. First, Bitbucket archive downloads require API token auth, configured with an `email` and `apiToken` pair; see the [Bitbucket authentication guide](/docs/authentication/bitbucket) for details. Second, Azure DevOps only serves `zip`, so always request that format when targeting it.
+
+If you need a clone URL instead of an archive, for example to run `git clone` with full history, `repos.getCloneUrl` returns an authenticated URL. Be aware that it embeds credentials in the URL and must be treated as a secret. Both methods are covered in the [downloading code guide](/docs/guides/downloading-code).
+
+## Why use a unified archive API?
+
+Writing four archive integrations by hand means four URL templates, four auth schemes, four format quirks, and four sets of header parsing to recover a filename. A unified API collapses that into one method with one shape. You branch on a single `archiveFormats` capability instead of memorizing which host serves `tar.gz`, and you get the same streaming `Archive` back regardless of provider. Because the SDK is zero-dependency and built on Web standards, that single code path runs unchanged from a Node build server to an edge function.
+
+## FAQ
+
+### Can I download an archive at a specific commit?
+
+Yes. The `ref` parameter accepts a branch, a tag, or a full commit SHA. Passing a SHA gives you a reproducible snapshot of the tree at exactly that commit.
+
+### What happens if I request an unsupported format?
+
+repo-sdk throws a `RepoError` with `code: 'unsupported'` rather than falling back to another format. This mainly affects Azure DevOps, which only serves `zip`. Check `client.capabilities.archiveFormats` before requesting `tar.gz`.
+
+### Does downloadArchive work on edge runtimes?
+
+Yes. The method returns a Web-standard `ReadableStream`, so it works on Node, Deno, Cloudflare Workers, and other edge runtimes. Only the disk-writing example uses Node APIs; the archive stream itself is portable.

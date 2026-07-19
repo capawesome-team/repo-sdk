@@ -1,47 +1,59 @@
 ---
+import { Code } from 'astro:components';
 import PageLayout from 'blume/components/layout/PageLayout.astro';
+import Icon from 'blume/components/Icon.astro';
 import data from 'blume:data';
 
 const { config } = data;
 
 const features = [
   {
+    icon: 'layers',
     title: 'One unified API',
     description: 'Discovery, commits, tags, downloads, and webhooks over four providers — one interface.',
   },
   {
+    icon: 'feather',
     title: 'Zero dependencies',
     description: 'Just fetch and Web Crypto. Nothing to audit, nothing to bloat your bundle.',
   },
   {
+    icon: 'zap',
     title: 'Edge-compatible',
     description: 'Runs on Node.js ≥ 20, Cloudflare Workers, and any Web-standard runtime.',
   },
   {
+    icon: 'box',
     title: 'Normalized types',
     description: 'Namespace, Repository, Commit, Tag, Webhook — with a raw escape hatch on every object.',
   },
   {
+    icon: 'shield-alert',
     title: 'Typed errors',
     description: 'Every failure is a RepoError with a stable code union, retry hints, and redacted secrets.',
   },
   {
+    icon: 'webhook',
     title: 'Webhook verify & parse',
     description: 'Standalone helpers that take a Web-standard Request — no client needed.',
   },
   {
+    icon: 'list-checks',
     title: 'Capability gating',
     description: 'Providers differ. Unsupported options throw instead of being silently dropped.',
   },
   {
+    icon: 'flask-conical',
     title: 'In-memory testing provider',
     description: 'Exercise your integration end to end without hitting a real provider.',
   },
 ];
 
-const providers = ['GitHub', 'GitLab', 'Bitbucket Cloud', 'Azure DevOps'];
-
-const codeSample = `import { createClient } from 'repo-sdk';
+const providerTabs = [
+  {
+    id: 'github',
+    label: 'GitHub',
+    code: `import { createClient } from 'repo-sdk';
 import { github } from 'repo-sdk/github';
 
 const client = createClient({
@@ -53,7 +65,114 @@ const head = await client.commits.get({
   repo: 'capawesome-team/repo-sdk',
   ref: 'main',
 });
-console.log(head.sha, head.message);`;
+console.log(head.sha, head.message);`,
+  },
+  {
+    id: 'gitlab',
+    label: 'GitLab',
+    code: `import { createClient } from 'repo-sdk';
+import { gitlab } from 'repo-sdk/gitlab';
+
+const client = createClient({
+  provider: gitlab({ auth: { token: process.env.GITLAB_TOKEN! } }),
+});
+
+// Same call, same shape — only the provider changed.
+const head = await client.commits.get({
+  repo: 'my-group/my-project',
+  ref: 'main',
+});
+console.log(head.sha, head.message);`,
+  },
+  {
+    id: 'bitbucket',
+    label: 'Bitbucket',
+    code: `import { createClient } from 'repo-sdk';
+import { bitbucket } from 'repo-sdk/bitbucket';
+
+const client = createClient({
+  provider: bitbucket({
+    auth: {
+      email: process.env.BITBUCKET_EMAIL!,
+      apiToken: process.env.BITBUCKET_API_TOKEN!,
+    },
+  }),
+});
+
+const head = await client.commits.get({
+  repo: 'my-workspace/my-repo',
+  ref: 'main',
+});`,
+  },
+  {
+    id: 'azure-devops',
+    label: 'Azure DevOps',
+    code: `import { createClient } from 'repo-sdk';
+import { azureDevOps } from 'repo-sdk/azure-devops';
+
+const client = createClient({
+  provider: azureDevOps({
+    organization: 'my-org',
+    auth: { pat: process.env.AZURE_PAT! },
+  }),
+});
+
+const head = await client.commits.get({
+  repo: 'my-project/my-repo',
+  ref: 'main',
+});`,
+  },
+];
+
+const webhookCode = `import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
+
+export async function POST(request: Request): Promise<Response> {
+  const valid = await verifyWebhook({ request, secret: process.env.WEBHOOK_SECRET! });
+  if (!valid) return new Response('invalid signature', { status: 401 });
+
+  const event = await parseWebhookEvent(request);
+  if (event.type === 'push') {
+    console.log(\`push to \${event.repo} @ \${event.ref}\`);
+  }
+  return new Response(null, { status: 204 });
+}`;
+
+const capabilityRows = [
+  { label: 'Repository search', values: [true, true, true, false] },
+  { label: 'Tag dates', values: [false, true, true, false] },
+  { label: 'Release webhooks', values: [true, true, false, false] },
+  { label: 'tar.gz archives', values: [true, true, true, false] },
+];
+
+const docCards = [
+  {
+    icon: 'zap',
+    title: 'Quickstart',
+    description: 'From empty file to verified webhook in minutes.',
+    href: '/docs/quickstart',
+  },
+  {
+    icon: 'key-round',
+    title: 'Authentication',
+    description: 'Tokens, app passwords, and PATs for every provider.',
+    href: '/docs/authentication',
+  },
+  {
+    icon: 'webhook',
+    title: 'Webhooks',
+    description: 'Create, verify, and parse deliveries end to end.',
+    href: '/docs/guides/webhooks-receiving',
+  },
+  {
+    icon: 'table',
+    title: 'Reference',
+    description: 'Capability matrix, error codes, and provider support.',
+    href: '/docs/reference/capability-matrix',
+  },
+];
+
+const runtimes = ['Node.js ≥ 20', 'Cloudflare Workers', 'Web-standard runtimes'];
+const codeThemes = { light: 'github-light', dark: 'github-dark' };
 ---
 
 <PageLayout
@@ -70,55 +189,111 @@ console.log(head.sha, head.message);`;
   ogEnabled={config.og.enabled}
   page={{ title: 'repo-sdk — one unified API over four git providers', description: config.description }}
 >
-  <main class="mx-auto w-full max-w-5xl px-6">
+  <main class="mx-auto w-full max-w-6xl px-6">
     <!-- Hero -->
-    <section class="py-20 sm:py-28 text-center">
-      <span class="inline-flex items-center rounded-blume border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
-        Zero dependencies · Edge-compatible
-      </span>
-      <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-6xl">repo-sdk</h1>
-      <p class="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
-        One unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
-        Write your discovery, commit, tag, download, and webhook logic once — not four times.
-      </p>
+    <section class="grid grid-cols-1 items-center gap-12 py-16 sm:py-24 lg:grid-cols-2">
+      <div class="text-center lg:text-left">
+        <span class="inline-flex items-center gap-1.5 rounded-blume border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
+          <Icon name="feather" size={13} />
+          Zero dependencies · Edge-compatible
+        </span>
+        <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
+          One git API.<br />Four providers.
+        </h1>
+        <p class="mt-5 max-w-xl text-lg text-muted-foreground lg:pr-6">
+          A unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+          Write your discovery, commit, tag, download, and webhook logic once — not four times.
+        </p>
 
-      <div class="mx-auto mt-8 flex max-w-md items-center justify-center">
-        <code class="w-full rounded-blume border border-border bg-code-background px-4 py-3 text-left font-mono text-sm">
-          <span class="text-muted-foreground select-none">$ </span>npm install repo-sdk
-        </code>
+        <div class="mt-8 flex max-w-md items-center lg:max-w-none">
+          <div class="flex w-full items-center justify-between gap-2 rounded-blume border border-border bg-code-background px-4 py-3 font-mono text-sm">
+            <span><span class="select-none text-muted-foreground">$ </span>npm install repo-sdk</span>
+            <button
+              type="button"
+              class="copy-install inline-flex shrink-0 items-center text-muted-foreground transition-colors hover:text-foreground"
+              data-command="npm install repo-sdk"
+              aria-label="Copy install command"
+            >
+              <span class="copy-idle"><Icon name="copy" size={15} /></span>
+              <span class="copy-done hidden text-accent"><Icon name="check" size={15} /></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+          <a
+            href="/docs"
+            class="inline-flex items-center gap-1.5 rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+          >
+            Get started
+            <Icon name="arrow-right" size={15} />
+          </a>
+          <a
+            href="/docs/quickstart"
+            class="inline-flex items-center rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Quickstart
+          </a>
+          <a
+            href="https://github.com/capawesome-team/repo-sdk"
+            class="inline-flex items-center gap-1.5 rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Icon name="github" size={15} />
+            GitHub
+          </a>
+        </div>
       </div>
 
-      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <a
-          href="/docs"
-          class="inline-flex items-center rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
-        >
-          Get started
-        </a>
-        <a
-          href="/docs/quickstart"
-          class="inline-flex items-center rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          Quickstart
-        </a>
-        <a
-          href="https://github.com/capawesome-team/repo-sdk"
-          class="inline-flex items-center rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
-        >
-          GitHub
-        </a>
+      <!-- Tabbed provider sample -->
+      <div class="overflow-hidden rounded-blume border border-border bg-code-background text-left">
+        <div class="flex items-center gap-1 overflow-x-auto border-b border-border px-2 pt-2" role="tablist" aria-label="Provider">
+          {
+            providerTabs.map((tab, index) => (
+              <button
+                type="button"
+                role="tab"
+                id={`tab-${tab.id}`}
+                aria-controls={`panel-${tab.id}`}
+                aria-selected={index === 0 ? 'true' : 'false'}
+                class:list={[
+                  'provider-tab -mb-px whitespace-nowrap rounded-t-blume border-b-2 px-3 py-2 text-xs font-medium transition-colors',
+                  index === 0
+                    ? 'border-accent text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                ]}
+              >
+                {tab.label}
+              </button>
+            ))
+          }
+        </div>
+        {
+          providerTabs.map((tab, index) => (
+            <div
+              role="tabpanel"
+              id={`panel-${tab.id}`}
+              aria-labelledby={`tab-${tab.id}`}
+              class:list={['provider-panel overflow-x-auto p-5 text-sm', index === 0 ? '' : 'hidden']}
+            >
+              <Code code={tab.code} lang="ts" themes={codeThemes} />
+            </div>
+          ))
+        }
       </div>
     </section>
 
-    <!-- Providers -->
+    <!-- Providers + runtimes -->
     <section class="pb-8 text-center">
-      <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Supported providers</p>
+      <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Works with</p>
       <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
         {
-          providers.map((provider) => (
-            <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider}</span>
+          providerTabs.map((provider) => (
+            <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider.label}</span>
           ))
         }
+      </div>
+      <div class="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+        {runtimes.map((runtime) => <span>{runtime}</span>)}
       </div>
     </section>
 
@@ -128,7 +303,10 @@ console.log(head.sha, head.message);`;
         {
           features.map((feature) => (
             <div class="rounded-blume border border-border p-5 text-left">
-              <h3 class="text-sm font-semibold">{feature.title}</h3>
+              <span class="text-accent">
+                <Icon name={feature.icon} size={18} />
+              </span>
+              <h3 class="mt-3 text-sm font-semibold">{feature.title}</h3>
               <p class="mt-2 text-sm text-muted-foreground">{feature.description}</p>
             </div>
           ))
@@ -136,23 +314,165 @@ console.log(head.sha, head.message);`;
       </div>
     </section>
 
-    <!-- Code sample -->
-    <section class="pb-24">
-      <div class="mx-auto max-w-3xl">
-        <h2 class="text-center text-2xl font-semibold tracking-tight">Swap the provider, keep your code</h2>
-        <p class="mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
-          One client, one shape. Switching providers means swapping the <code class="font-mono">provider</code> argument.
-        </p>
-        <pre class="mt-6 overflow-x-auto rounded-blume border border-border bg-code-background p-5 text-left font-mono text-sm"><code>{codeSample}</code></pre>
-        <div class="mt-6 text-center">
+    <!-- Webhooks -->
+    <section class="py-8">
+      <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+        <div class="text-center lg:text-left">
+          <h2 class="text-2xl font-semibold tracking-tight">Webhooks without the ceremony</h2>
+          <p class="mt-3 text-sm text-muted-foreground lg:pr-8">
+            <code class="font-mono">verifyWebhook</code> and <code class="font-mono">parseWebhookEvent</code> are
+            standalone helpers that take a Web-standard <code class="font-mono">Request</code> — no client needed.
+            They drop straight into Next.js route handlers, Hono, and workers, and they know each provider's
+            signature scheme so you don't have to.
+          </p>
           <a
-            href="/docs/concepts/client-and-providers"
-            class="inline-flex items-center rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+            href="/docs/guides/webhooks-receiving"
+            class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
           >
-            Explore the core concepts
+            Read the webhook guide
+            <Icon name="arrow-right" size={14} />
           </a>
+        </div>
+        <div class="overflow-x-auto rounded-blume border border-border bg-code-background p-5 text-left text-sm">
+          <Code code={webhookCode} lang="ts" themes={codeThemes} />
         </div>
       </div>
     </section>
+
+    <!-- Capability matrix teaser -->
+    <section class="py-16">
+      <div class="mx-auto max-w-3xl text-center">
+        <h2 class="text-2xl font-semibold tracking-tight">Providers differ. repo-sdk tells you how.</h2>
+        <p class="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+          Every provider ships a typed capability object, and the client throws
+          <code class="font-mono">unsupported</code> instead of silently dropping options.
+        </p>
+        <div class="mt-6 overflow-x-auto rounded-blume border border-border">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-border bg-muted/50 text-left">
+                <th class="px-4 py-2.5 font-medium">Capability</th>
+                {providerTabs.map((provider) => <th class="px-4 py-2.5 text-center font-medium">{provider.label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {
+                capabilityRows.map((row) => (
+                  <tr class="border-b border-border text-left last:border-b-0">
+                    <td class="px-4 py-2.5">{row.label}</td>
+                    {row.values.map((supported) => (
+                      <td class="px-4 py-2.5 text-center">
+                        {supported ? (
+                          <span class="inline-flex text-accent" aria-label="Supported">
+                            <Icon name="check" size={15} />
+                          </span>
+                        ) : (
+                          <span class="text-muted-foreground" aria-label="Not supported">
+                            —
+                          </span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <a
+          href="/docs/reference/capability-matrix"
+          class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+        >
+          See the full capability matrix
+          <Icon name="arrow-right" size={14} />
+        </a>
+      </div>
+    </section>
+
+    <!-- Doc entry cards -->
+    <section class="pb-24">
+      <h2 class="text-center text-2xl font-semibold tracking-tight">Start here</h2>
+      <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          docCards.map((card) => (
+            <a
+              href={card.href}
+              class="group rounded-blume border border-border p-5 text-left transition-colors hover:bg-muted"
+            >
+              <span class="text-accent">
+                <Icon name={card.icon} size={18} />
+              </span>
+              <h3 class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold">
+                {card.title}
+                <span class="opacity-0 transition-opacity group-hover:opacity-100">
+                  <Icon name="arrow-right" size={13} />
+                </span>
+              </h3>
+              <p class="mt-2 text-sm text-muted-foreground">{card.description}</p>
+            </a>
+          ))
+        }
+      </div>
+    </section>
   </main>
+
+  <footer slot="footer" class="border-t border-border">
+    <div class="mx-auto flex w-full max-w-6xl flex-col items-center justify-between gap-4 px-6 py-10 text-sm text-muted-foreground sm:flex-row">
+      <p>repo-sdk · MIT licensed</p>
+      <nav class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <a href="/docs" class="transition-colors hover:text-foreground">Docs</a>
+        <a href="/blog" class="transition-colors hover:text-foreground">Blog</a>
+        <a href="/changelog" class="transition-colors hover:text-foreground">Changelog</a>
+        <a href="https://github.com/capawesome-team/repo-sdk" class="transition-colors hover:text-foreground">GitHub</a>
+        <a href="https://www.npmjs.com/package/repo-sdk" class="transition-colors hover:text-foreground">npm</a>
+      </nav>
+    </div>
+  </footer>
 </PageLayout>
+
+<style is:global>
+  /* Shiki dual themes: the landing page lives outside .prose, so mirror the
+     dark-mode variable switch Blume applies to docs code blocks. */
+  main pre.astro-code {
+    background-color: transparent !important;
+  }
+  :root[data-theme='dark'] main pre.astro-code,
+  :root[data-theme='dark'] main pre.astro-code span {
+    color: var(--shiki-dark, inherit) !important;
+    font-style: var(--shiki-dark-font-style, inherit) !important;
+    font-weight: var(--shiki-dark-font-weight, inherit) !important;
+    text-decoration: var(--shiki-dark-text-decoration, inherit) !important;
+  }
+</style>
+
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>('.copy-install')) {
+    button.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(button.dataset.command ?? '');
+      button.querySelector('.copy-idle')?.classList.add('hidden');
+      button.querySelector('.copy-done')?.classList.remove('hidden');
+      setTimeout(() => {
+        button.querySelector('.copy-idle')?.classList.remove('hidden');
+        button.querySelector('.copy-done')?.classList.add('hidden');
+      }, 1500);
+    });
+  }
+
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.provider-tab'));
+  const panels = Array.from(document.querySelectorAll<HTMLElement>('.provider-panel'));
+  const activeClasses = ['border-accent', 'text-foreground'];
+  const inactiveClasses = ['border-transparent', 'text-muted-foreground', 'hover:text-foreground'];
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => {
+      for (const other of tabs) {
+        const selected = other === tab;
+        other.setAttribute('aria-selected', String(selected));
+        other.classList.remove(...(selected ? inactiveClasses : activeClasses));
+        other.classList.add(...(selected ? activeClasses : inactiveClasses));
+      }
+      for (const panel of panels) {
+        panel.classList.toggle('hidden', panel.id !== tab.getAttribute('aria-controls'));
+      }
+    });
+  }
+</script>
