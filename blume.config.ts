@@ -9,8 +9,9 @@ export default defineConfig({
     text: 'repo-sdk',
   },
   theme: {
-    // Monochrome accent: black in light mode, white in dark mode.
-    accent: { light: '#000000', dark: '#ffffff' },
+    // Monochrome accent using Blume's own neutral palette values:
+    // near-black in light mode, near-white in dark mode.
+    accent: { light: 'oklch(0.145 0 0)', dark: 'oklch(0.96 0 0)' },
     radius: 'md',
     mode: 'system',
   },
