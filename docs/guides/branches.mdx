@@ -31,6 +31,10 @@ for await (const branch of client.branches.listAll({ repo: 'capawesome-team/repo
   }}
 />
 
+:::note
+Branch listing is uniform — every provider supports it, so there is no capability flag to check first.
+:::
+
 The model is intentionally minimal — provider-specific extras such as protection flags are available on
 `raw`. To find the default branch, use the repository itself:
 

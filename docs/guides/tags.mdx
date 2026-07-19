@@ -53,6 +53,11 @@ if (client.capabilities.tagDates) {
 `isAnnotated` distinguishes annotated tags (which carry their own object and message) from lightweight
 tags. When available it's derived from whether the provider returns an annotation for the tag.
 
-<Card title="Next: Downloading code" icon="download" href="/docs/guides/downloading-code">
-  Stream a repository archive or get an authenticated clone URL.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Next: Downloading code" icon="download" href="/docs/guides/downloading-code">
+    Stream a repository archive or get an authenticated clone URL.
+  </Card>
+  <Card title="Working with branches" icon="git-branch" href="/docs/guides/branches">
+    List a repository's branches as normalized Branch objects.
+  </Card>
+</CardGroup>

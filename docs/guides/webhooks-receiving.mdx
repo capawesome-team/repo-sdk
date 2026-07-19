@@ -62,15 +62,19 @@ standalone export from the core `repo-sdk` entry) identifies the sender so you c
 right per-provider helpers:
 
 ```ts
-import { detectWebhookProvider } from 'repo-sdk';
+import { detectWebhookProvider, type ProviderName } from 'repo-sdk';
 import * as github from 'repo-sdk/github';
 import * as gitlab from 'repo-sdk/gitlab';
 
+type WebhookHelpers = Pick<typeof github, 'verifyWebhook' | 'parseWebhookEvent'>;
+const handlers: Partial<Record<ProviderName, WebhookHelpers>> = { github, gitlab };
+
 export async function POST(request: Request): Promise<Response> {
   const provider = await detectWebhookProvider(request);
-  if (provider === undefined) return new Response('unknown sender', { status: 400 });
+  const helpers = provider === undefined ? undefined : handlers[provider];
+  if (helpers === undefined) return new Response('unknown sender', { status: 400 });
 
-  const { verifyWebhook, parseWebhookEvent } = { github, gitlab }[provider] ?? {};
+  const { verifyWebhook, parseWebhookEvent } = helpers;
   // ... verify and parse with the matched pair
 }
 ```

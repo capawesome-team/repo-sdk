@@ -75,9 +75,12 @@ if (client.capabilities.webhookEvents.includes('release')) {
 
 | Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     | Gitea                     |
 | ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- | ------------------------- |
+| User profile (`users.me`) | ✓ (✗ under App auth)   | ✓                         | ✓                | ✓                | ✓                         |
 | Tag dates              | ✗                         | ✓                         | ✓                | ✗                | ✗                         |
 | Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
 | Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
+| Commit author identity (`author.user`) | ✓         | ✗                         | ✓                | ✗                | ✓                         |
+| Ref search             | ✓                         | ✓                         | ✓                | ✓                | ✓                         |
 | Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   | push, tag_push, release   |
 | Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       | HMAC-SHA256               |
 | Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              | zip, tar.gz               |

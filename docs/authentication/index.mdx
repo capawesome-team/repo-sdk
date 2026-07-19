@@ -82,7 +82,7 @@ const me = await client.users.me();
 me.id; // stable provider user id
 me.username; // login / handle
 me.name; // display name, when the provider exposes one
-me.email; // when the provider exposes one (Bitbucket never does here)
+me.email; // when the provider exposes one — see "Resolving a hidden email"
 me.avatarUrl;
 ```
 

@@ -27,17 +27,17 @@ repo-sdk
 ## Subpath exports
 
 The client lives at the package root; each provider factory lives on its own subpath so you only pull in
-the provider you use. The webhook helpers (`verifyWebhook`, `parseWebhookEvent`) are re-exported from each
-provider subpath too.
+the provider you use. Each provider subpath also exports the webhook helpers (`verifyWebhook`,
+`parseWebhookEvent`) and a `commitWebUrl` helper for provider-specific commit URLs.
 
 | Import                    | Exports                                                                 |
 | ------------------------- | ----------------------------------------------------------------------- |
 | `repo-sdk`                | `createClient`, `RepoError`, `detectWebhookProvider`, and all normalized types |
-| `repo-sdk/github`         | `github`, `verifyWebhook`, `parseWebhookEvent`                          |
-| `repo-sdk/gitlab`         | `gitlab`, `verifyWebhook`, `parseWebhookEvent`                          |
-| `repo-sdk/bitbucket`      | `bitbucket`, `verifyWebhook`, `parseWebhookEvent`                       |
-| `repo-sdk/azure-devops`   | `azureDevOps`, `listOrganizations`, `verifyWebhook`, `parseWebhookEvent` |
-| `repo-sdk/gitea`          | `gitea`, `verifyWebhook`, `parseWebhookEvent`                           |
+| `repo-sdk/github`         | `github`, `verifyWebhook`, `parseWebhookEvent`, `commitWebUrl`          |
+| `repo-sdk/gitlab`         | `gitlab`, `verifyWebhook`, `parseWebhookEvent`, `commitWebUrl`          |
+| `repo-sdk/bitbucket`      | `bitbucket`, `verifyWebhook`, `parseWebhookEvent`, `commitWebUrl`       |
+| `repo-sdk/azure-devops`   | `azureDevOps`, `listOrganizations`, `verifyWebhook`, `parseWebhookEvent`, `commitWebUrl` |
+| `repo-sdk/gitea`          | `gitea`, `verifyWebhook`, `parseWebhookEvent`, `commitWebUrl`           |
 | `repo-sdk/testing`        | `createInMemoryProvider`                                                 |
 
 ## Import the client and a provider

@@ -153,7 +153,5 @@ github({
 
 ## Expiring tokens
 
-`auth: { tokenProvider }` accepts an async callback minting the bearer token per request — for
-OAuth-style credentials that expire. On a `401` the callback is re-invoked once with
-`forceRefresh: true` and the request retried. See
-[Expiring tokens](/docs/authentication#expiring-tokens-tokenprovider) for the contract.
+`auth: { tokenProvider }` mints the bearer token per request, with one forced-refresh retry on `401` —
+see [Expiring tokens](/docs/authentication#expiring-tokens-tokenprovider) for the contract.

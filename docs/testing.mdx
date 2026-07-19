@@ -42,7 +42,7 @@ options argument lets you simulate a specific provider and its capability gaps, 
 on `client.capabilities` before offering a feature is testable:
 
 ```ts
-const provider = createInMemoryProvider(seed, {
+const provider = createInMemoryProvider({}, {
   name: 'azure-devops',
   capabilities: { repoSearch: false },
 });

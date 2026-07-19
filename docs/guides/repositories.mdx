@@ -21,6 +21,9 @@ normalizes them to a `Namespace` with a `kind` telling you which one you're look
 | Azure DevOps | The projects in the pinned organization                        | `project`                  |
 | Gitea        | The authenticated user plus their organizations                | `user`, `organization`     |
 
+To resolve the account behind the credentials themselves, use `users.me()` — see
+[Who is this token?](/docs/authentication#who-is-this-token) in the authentication guide.
+
 ```ts
 const { data: namespaces } = await client.namespaces.list();
 
