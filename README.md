@@ -81,6 +81,10 @@ Docs site:
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please), driven by [Conventional Commits](https://www.conventionalcommits.org/). While pre-`1.0.0`, breaking changes bump the minor version and features bump the patch version. Merging the release pull request publishes to npm. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
+## About
+
+repo-sdk is developed and maintained by [Genz IT Solutions GmbH](http://genz-its.de/). It powers [Capawesome](https://capawesome.io/), a cloud platform for mobile apps.
+
 ## License
 
 [MIT](./LICENSE)
