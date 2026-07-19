@@ -1,5 +1,7 @@
 export { createClient } from './client.ts';
 export type { CreateClientOptions, RetryOptions, RepoClient } from './client.ts';
+export { detectWebhookProvider } from './webhooks/detect.ts';
+export type { DetectWebhookProviderInput } from './webhooks/detect.ts';
 export { RepoError } from './errors.ts';
 export type { RepoErrorCode, RepoErrorOptions } from './errors.ts';
 export type {

@@ -55,6 +55,36 @@ If you've already consumed the request body elsewhere, pass a `{ headers, body }
 **before** parsing JSON yourself.
 :::
 
+## One endpoint for multiple providers
+
+When a single endpoint receives webhooks from more than one provider, `detectWebhookProvider` (a
+standalone export from the core `repo-sdk` entry) identifies the sender so you can dispatch to the
+right per-provider helpers:
+
+```ts
+import { detectWebhookProvider } from 'repo-sdk';
+import * as github from 'repo-sdk/github';
+import * as gitlab from 'repo-sdk/gitlab';
+
+export async function POST(request: Request): Promise<Response> {
+  const provider = await detectWebhookProvider(request);
+  if (provider === undefined) return new Response('unknown sender', { status: 400 });
+
+  const { verifyWebhook, parseWebhookEvent } = { github, gitlab }[provider] ?? {};
+  // ... verify and parse with the matched pair
+}
+```
+
+It accepts a `Request` or `{ headers, body? }` and returns the `ProviderName` or `undefined`. GitHub,
+GitLab, Bitbucket, and Gitea are identified by their event headers (Gitea deliveries also carry a
+compatibility `x-github-event` header — the helper handles that); Azure DevOps sends no identifying
+header, so its JSON body is checked for the `eventType` field, which is why the helper is async.
+
+:::warning
+Detection is routing, not authentication — headers are attacker-controlled. Always verify the delivery
+with the detected provider's `verifyWebhook` before acting on it.
+:::
+
 ## Verification per provider
 
 `verifyWebhook` handles each provider's scheme transparently — you always call it the same way. It
