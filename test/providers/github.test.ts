@@ -52,11 +52,13 @@ describe('listNamespaces', () => {
   it('returns user plus orgs on the first page and orgs only on the cursor page', async () => {
     const { provider } = setup((request) => {
       const url = new URL(request.url);
-      if (url.pathname === '/user') return { json: { id: 1, login: 'octocat' } };
+      if (url.pathname === '/user') {
+        return { json: { id: 1, login: 'octocat', avatar_url: 'https://avatars.example/u1' } };
+      }
       if (url.pathname === '/user/orgs') {
         if (url.searchParams.get('page') === '2') return { json: [{ id: 20, login: 'org2' }] };
         return {
-          json: [{ id: 10, login: 'org1' }],
+          json: [{ id: 10, login: 'org1', avatar_url: 'https://avatars.example/o10' }],
           headers: { link: '<https://api.github.com/user/orgs?page=2>; rel="next"' },
         };
       }
@@ -64,8 +66,18 @@ describe('listNamespaces', () => {
     });
 
     const first = await provider.listNamespaces({});
-    expect(first.data[0]).toMatchObject({ slug: 'octocat', kind: 'user', id: '1' });
-    expect(first.data[1]).toMatchObject({ slug: 'org1', kind: 'organization', id: '10' });
+    expect(first.data[0]).toMatchObject({
+      slug: 'octocat',
+      kind: 'user',
+      id: '1',
+      avatarUrl: 'https://avatars.example/u1',
+    });
+    expect(first.data[1]).toMatchObject({
+      slug: 'org1',
+      kind: 'organization',
+      id: '10',
+      avatarUrl: 'https://avatars.example/o10',
+    });
     expect(first.cursor).toBeDefined();
 
     const second = await provider.listNamespaces({ cursor: first.cursor });
@@ -218,6 +230,25 @@ describe('listCommits', () => {
     const next = await provider.listCommits({ repo: 'o/r', cursor: page.cursor });
     expect(next.data[0]?.sha).toBe('def456');
     expect(next.cursor).toBeUndefined();
+  });
+
+  it('maps the linked account of author and committer when present', async () => {
+    const { provider } = setup(() => ({
+      json: [
+        {
+          ...commitPayload,
+          author: { id: 1, login: 'robingenz', avatar_url: 'https://avatars.example/u1' },
+          committer: null,
+        },
+      ],
+    }));
+    const page = await provider.listCommits({ repo: 'o/r' });
+    expect(page.data[0]?.author.user).toEqual({
+      id: '1',
+      username: 'robingenz',
+      avatarUrl: 'https://avatars.example/u1',
+    });
+    expect(page.data[0]?.committer?.user).toBeUndefined();
   });
 });
 

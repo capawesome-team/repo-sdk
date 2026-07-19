@@ -68,7 +68,14 @@ describe('listNamespaces', () => {
       }
       return {
         json: {
-          values: [{ uuid: '{ws1}', slug: 'team1', name: 'Team One' }],
+          values: [
+            {
+              uuid: '{ws1}',
+              slug: 'team1',
+              name: 'Team One',
+              links: { avatar: { href: 'https://avatars.example/ws1' } },
+            },
+          ],
           next: 'https://api.bitbucket.org/2.0/workspaces?page=2',
         },
       };
@@ -76,6 +83,7 @@ describe('listNamespaces', () => {
 
     const first = await provider.listNamespaces({});
     expect(first.data[0]).toMatchObject({
+      avatarUrl: 'https://avatars.example/ws1',
       id: '{ws1}',
       slug: 'team1',
       name: 'Team One',
@@ -165,6 +173,39 @@ describe('listCommits', () => {
     expect(page.data[0]?.author).toMatchObject({ name: 'Robin Genz', email: 'robin@example.com' });
     expect(page.data[0]?.author.date).toBeInstanceOf(Date);
     expect(page.data[0]?.committer).toBeUndefined();
+  });
+
+  it('maps the linked account when Bitbucket resolves the author to a user', async () => {
+    const { provider } = setup(() => ({
+      json: {
+        values: [
+          {
+            ...commitPayload,
+            author: {
+              raw: 'Robin Genz <robin@example.com>',
+              user: {
+                display_name: 'Robin Genz',
+                nickname: 'robingenz',
+                account_id: 'acc-1',
+                links: { avatar: { href: 'https://avatars.example/acc-1' } },
+              },
+            },
+          },
+        ],
+      },
+    }));
+    const page = await provider.listCommits({ repo: 'o/r' });
+    expect(page.data[0]?.author.user).toEqual({
+      id: 'acc-1',
+      username: 'robingenz',
+      avatarUrl: 'https://avatars.example/acc-1',
+    });
+  });
+
+  it('leaves the account unset for unmapped authors', async () => {
+    const { provider } = setup(() => ({ json: { values: [commitPayload] } }));
+    const page = await provider.listCommits({ repo: 'o/r' });
+    expect(page.data[0]?.author.user).toBeUndefined();
   });
 
   it('falls back to the raw ident when there is no email', async () => {

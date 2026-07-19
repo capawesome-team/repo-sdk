@@ -48,6 +48,7 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
+  commitUserRef: true,
   webhookEvents: ['push', 'tag_push'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -62,6 +63,7 @@ interface BitbucketWorkspace {
   uuid: string;
   slug: string;
   name: string;
+  links?: { avatar?: { href?: string } };
 }
 
 interface BitbucketCloneLink {
@@ -84,7 +86,13 @@ interface BitbucketRepo {
 
 interface BitbucketAuthor {
   raw?: string;
-  user?: { display_name?: string };
+  user?: {
+    display_name?: string;
+    nickname?: string;
+    account_id?: string;
+    uuid?: string;
+    links?: { avatar?: { href?: string } };
+  };
 }
 
 interface BitbucketCommit {
@@ -132,6 +140,7 @@ function toNamespace(workspace: BitbucketWorkspace): Namespace {
     slug: workspace.slug,
     name: workspace.name,
     kind: 'workspace',
+    avatarUrl: workspace.links?.avatar?.href,
     raw: workspace,
   };
 }
@@ -159,10 +168,20 @@ function toActor(author: BitbucketAuthor | undefined, date: string | undefined):
   const match = raw.match(/^\s*(.*?)\s*<([^>]*)>\s*$/);
   const parsedName = match ? match[1]! : raw;
   const email = match ? match[2] : undefined;
+  const account = author?.user;
+  const accountId = account?.account_id ?? account?.uuid;
   return {
-    name: author?.user?.display_name ?? parsedName,
+    name: account?.display_name ?? parsedName,
     email,
     date: new Date(date ?? 0),
+    user:
+      account && accountId
+        ? {
+            id: accountId,
+            username: account.nickname ?? account.display_name ?? '',
+            avatarUrl: account.links?.avatar?.href,
+          }
+        : undefined,
   };
 }
 

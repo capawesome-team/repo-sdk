@@ -52,6 +52,8 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
+  // The GitLab commits API exposes only name/email for authors, never a user account.
+  commitUserRef: false,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'shared-token',
   archiveFormats: ['zip', 'tar.gz'],
@@ -74,6 +76,7 @@ interface GitLabUser {
   id: number;
   username: string;
   name?: string;
+  avatar_url?: string | null;
 }
 
 interface GitLabGroup {
@@ -81,6 +84,7 @@ interface GitLabGroup {
   name: string;
   full_path: string;
   parent_id?: number | null;
+  avatar_url?: string | null;
 }
 
 interface GitLabProject {
@@ -157,6 +161,7 @@ function toUserNamespace(user: GitLabUser): Namespace {
     slug: user.username,
     name: user.name ?? user.username,
     kind: 'user',
+    avatarUrl: user.avatar_url ?? undefined,
     raw: user,
   };
 }
@@ -168,6 +173,7 @@ function toGroupNamespace(group: GitLabGroup): Namespace {
     name: group.name,
     kind: 'group',
     parent: group.parent_id != null ? group.full_path.split('/').slice(0, -1).join('/') : undefined,
+    avatarUrl: group.avatar_url ?? undefined,
     raw: group,
   };
 }

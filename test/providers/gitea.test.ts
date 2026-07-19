@@ -49,14 +49,28 @@ describe('listNamespaces', () => {
     const { provider } = setup((request) => {
       const url = new URL(request.url);
       if (url.pathname === '/api/v1/user') {
-        return { json: { id: 1, login: 'robin', full_name: 'Robin Genz' } };
+        return {
+          json: {
+            id: 1,
+            login: 'robin',
+            full_name: 'Robin Genz',
+            avatar_url: 'https://avatars.example/u1',
+          },
+        };
       }
       if (url.pathname === '/api/v1/user/orgs') {
         if (url.searchParams.get('page') === '2') {
           return { json: [{ id: 30, username: 'third-org', full_name: '' }] };
         }
         return {
-          json: [{ id: 10, username: 'capawesome-team', full_name: 'Capawesome' }],
+          json: [
+            {
+              id: 10,
+              username: 'capawesome-team',
+              full_name: 'Capawesome',
+              avatar_url: 'https://avatars.example/o10',
+            },
+          ],
           headers: { link: '<https://gitea.com/api/v1/user/orgs?page=2>; rel="next"' },
         };
       }
@@ -69,12 +83,14 @@ describe('listNamespaces', () => {
       slug: 'robin',
       name: 'Robin Genz',
       kind: 'user',
+      avatarUrl: 'https://avatars.example/u1',
     });
     expect(first.data[1]).toMatchObject({
       id: '10',
       slug: 'capawesome-team',
       name: 'Capawesome',
       kind: 'organization',
+      avatarUrl: 'https://avatars.example/o10',
     });
     expect(first.cursor).toBeDefined();
 
@@ -201,6 +217,25 @@ describe('listCommits', () => {
     });
     expect(page.data[0]?.author.date.toISOString()).toBe('2026-01-15T10:00:00.000Z');
     expect(page.data[0]?.committer?.date.toISOString()).toBe('2026-01-15T11:00:00.000Z');
+  });
+
+  it('maps the linked account of author and committer when present', async () => {
+    const { provider } = setup(() => ({
+      json: [
+        {
+          ...commitPayload,
+          author: { id: 1, login: 'robingenz', avatar_url: 'https://avatars.example/u1' },
+          committer: null,
+        },
+      ],
+    }));
+    const page = await provider.listCommits({ repo: 'o/r' });
+    expect(page.data[0]?.author.user).toEqual({
+      id: '1',
+      username: 'robingenz',
+      avatarUrl: 'https://avatars.example/u1',
+    });
+    expect(page.data[0]?.committer?.user).toBeUndefined();
   });
 
   it('filters by author locally', async () => {

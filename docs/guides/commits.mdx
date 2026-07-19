@@ -86,7 +86,11 @@ commit SHA. A ref that doesn't exist throws a `RepoError` with `code: 'not_found
   }}
 />
 
-A `GitActor` is `{ name: string; email?: string; date: Date }`.
+A `GitActor` is `{ name: string; email?: string; date: Date; user?: UserRef }`. When the
+provider can resolve the actor to an account — GitHub, Bitbucket, and Gitea can; GitLab and Azure DevOps
+never return account data for commits — `user` carries `{ id, username, avatarUrl? }`. Check the
+`commitUserRef` capability to know whether a provider can ever populate it; even on capable
+providers it is `undefined` for unmapped actors (e.g. an email not linked to any account).
 
 ## Building a commit web URL without a request
 

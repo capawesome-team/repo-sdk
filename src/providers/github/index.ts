@@ -63,6 +63,7 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: false,
   repoSearch: true,
   ownedRepoFilter: true,
+  commitUserRef: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -100,18 +101,26 @@ function createTokenSource(
 interface GitHubUser {
   id: number;
   login: string;
+  avatar_url?: string;
 }
 
 interface GitHubOrg {
   id: number;
   login: string;
+  avatar_url?: string;
+}
+
+interface GitHubIdentity {
+  id: number;
+  login: string;
+  avatar_url?: string;
 }
 
 interface GitHubRepo {
   id: number;
   name: string;
   full_name: string;
-  owner: { login: string; type?: string };
+  owner: { login: string; type?: string; avatar_url?: string };
   default_branch?: string;
   private: boolean;
   archived?: boolean;
@@ -130,6 +139,8 @@ interface GitHubCommit {
   sha: string;
   html_url?: string;
   parents?: { sha: string }[];
+  author?: GitHubIdentity | null;
+  committer?: GitHubIdentity | null;
   commit?: {
     message?: string;
     author?: GitHubActor;
@@ -174,11 +185,25 @@ function reposFromBody(body: unknown): GitHubRepo[] {
 }
 
 function toUserNamespace(user: GitHubUser): Namespace {
-  return { id: String(user.id), slug: user.login, name: user.login, kind: 'user', raw: user };
+  return {
+    id: String(user.id),
+    slug: user.login,
+    name: user.login,
+    kind: 'user',
+    avatarUrl: user.avatar_url,
+    raw: user,
+  };
 }
 
 function toOrgNamespace(org: GitHubOrg): Namespace {
-  return { id: String(org.id), slug: org.login, name: org.login, kind: 'organization', raw: org };
+  return {
+    id: String(org.id),
+    slug: org.login,
+    name: org.login,
+    kind: 'organization',
+    avatarUrl: org.avatar_url,
+    raw: org,
+  };
 }
 
 function toRepository(repo: GitHubRepo): Repository {
@@ -199,11 +224,14 @@ function toRepository(repo: GitHubRepo): Repository {
   };
 }
 
-function toActor(actor: GitHubActor | undefined): GitActor {
+function toActor(actor: GitHubActor | undefined, identity?: GitHubIdentity | null): GitActor {
   return {
     name: actor?.name ?? '',
     email: actor?.email ?? undefined,
     date: actor?.date ? new Date(actor.date) : new Date(0),
+    user: identity
+      ? { id: String(identity.id), username: identity.login, avatarUrl: identity.avatar_url }
+      : undefined,
   };
 }
 
@@ -211,8 +239,10 @@ function toCommit(commit: GitHubCommit): Commit {
   return {
     sha: commit.sha,
     message: commit.commit?.message ?? '',
-    author: toActor(commit.commit?.author),
-    committer: commit.commit?.committer ? toActor(commit.commit.committer) : undefined,
+    author: toActor(commit.commit?.author, commit.author),
+    committer: commit.commit?.committer
+      ? toActor(commit.commit.committer, commit.committer)
+      : undefined,
     parents: (commit.parents ?? []).map((parent) => parent.sha),
     url: commit.html_url,
     raw: commit,
@@ -324,16 +354,14 @@ export function github(options: GitHubProviderOptions): RepoProvider {
     );
     const owner = data.repositories?.[0]?.owner;
     if (!owner) return { data: [] };
-    const namespace: Namespace =
-      owner.type === 'Organization'
-        ? {
-            id: owner.login,
-            slug: owner.login,
-            name: owner.login,
-            kind: 'organization',
-            raw: owner,
-          }
-        : { id: owner.login, slug: owner.login, name: owner.login, kind: 'user', raw: owner };
+    const namespace: Namespace = {
+      id: owner.login,
+      slug: owner.login,
+      name: owner.login,
+      kind: owner.type === 'Organization' ? 'organization' : 'user',
+      avatarUrl: owner.avatar_url,
+      raw: owner,
+    };
     return { data: [namespace] };
   }
 

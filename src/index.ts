@@ -29,6 +29,7 @@ export type {
   Repository,
   Tag,
   UpdateWebhookParams,
+  UserRef,
   RepoCapabilities,
   RepoProvider,
   Webhook,

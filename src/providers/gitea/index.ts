@@ -53,6 +53,7 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: false,
   repoSearch: true,
   ownedRepoFilter: true,
+  commitUserRef: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -63,6 +64,7 @@ interface GiteaUser {
   login?: string;
   username?: string;
   full_name?: string;
+  avatar_url?: string;
 }
 
 interface GiteaOrg {
@@ -70,6 +72,7 @@ interface GiteaOrg {
   name?: string;
   username?: string;
   full_name?: string;
+  avatar_url?: string;
 }
 
 interface GiteaRepo {
@@ -95,6 +98,8 @@ interface GiteaCommit {
   sha: string;
   html_url?: string;
   parents?: { sha: string }[];
+  author?: GiteaUser | null;
+  committer?: GiteaUser | null;
   commit?: {
     message?: string;
     author?: GiteaActor;
@@ -136,7 +141,14 @@ function reposFromBody(body: unknown): GiteaRepo[] {
 
 function toUserNamespace(user: GiteaUser): Namespace {
   const slug = user.login ?? user.username ?? '';
-  return { id: String(user.id), slug, name: user.full_name || slug, kind: 'user', raw: user };
+  return {
+    id: String(user.id),
+    slug,
+    name: user.full_name || slug,
+    kind: 'user',
+    avatarUrl: user.avatar_url,
+    raw: user,
+  };
 }
 
 function toOrgNamespace(org: GiteaOrg): Namespace {
@@ -146,6 +158,7 @@ function toOrgNamespace(org: GiteaOrg): Namespace {
     slug,
     name: org.full_name || slug,
     kind: 'organization',
+    avatarUrl: org.avatar_url,
     raw: org,
   };
 }
@@ -168,11 +181,18 @@ function toRepository(repo: GiteaRepo): Repository {
   };
 }
 
-function toActor(actor: GiteaActor | undefined): GitActor {
+function toActor(actor: GiteaActor | undefined, identity?: GiteaUser | null): GitActor {
   return {
     name: actor?.name ?? '',
     email: actor?.email ?? undefined,
     date: actor?.date ? new Date(actor.date) : new Date(0),
+    user: identity
+      ? {
+          id: String(identity.id),
+          username: identity.login ?? identity.username ?? '',
+          avatarUrl: identity.avatar_url,
+        }
+      : undefined,
   };
 }
 
@@ -180,8 +200,10 @@ function toCommit(commit: GiteaCommit): Commit {
   return {
     sha: commit.sha,
     message: commit.commit?.message ?? '',
-    author: toActor(commit.commit?.author),
-    committer: commit.commit?.committer ? toActor(commit.commit.committer) : undefined,
+    author: toActor(commit.commit?.author, commit.author),
+    committer: commit.commit?.committer
+      ? toActor(commit.commit.committer, commit.committer)
+      : undefined,
     parents: (commit.parents ?? []).map((parent) => parent.sha),
     url: commit.html_url,
     raw: commit,

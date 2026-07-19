@@ -46,6 +46,7 @@ for the same idea, the `kind` field tells you which one you're looking at:
     name: { type: 'string', description: 'Human-readable display name.' },
     kind: { type: "'user' | 'organization' | 'group' | 'workspace' | 'project'", description: 'The provider-native container type.' },
     parent: { type: 'string', required: false, description: 'Parent namespace slug, for nested groups.' },
+    avatarUrl: { type: 'string', required: false, description: 'Avatar/logo URL, when the provider exposes one (not on Azure DevOps projects).' },
     raw: { type: 'unknown', description: 'The untouched provider payload.' },
   }}
 />

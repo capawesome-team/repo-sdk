@@ -38,6 +38,7 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: true,
   repoSearch: true,
   ownedRepoFilter: true,
+  commitUserRef: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -49,6 +50,7 @@ export interface InMemoryNamespaceSeed {
   name: string;
   kind: NamespaceKind;
   parent?: string;
+  avatarUrl?: string;
 }
 
 export interface InMemoryRepositorySeed {
@@ -68,6 +70,7 @@ export interface InMemoryActorSeed {
   name?: string;
   email?: string;
   date?: Date;
+  user?: { id: string; username: string; avatarUrl?: string };
 }
 
 export interface InMemoryCommitSeed {
@@ -125,6 +128,7 @@ function toActor(actor: InMemoryActorSeed | undefined) {
     name: actor?.name ?? '',
     email: actor?.email,
     date: actor?.date ?? new Date(0),
+    user: actor?.user,
   };
 }
 
@@ -135,6 +139,7 @@ function normalizeNamespace(seed: InMemoryNamespaceSeed): Namespace {
     name: seed.name,
     kind: seed.kind,
     parent: seed.parent,
+    avatarUrl: seed.avatarUrl,
     raw: seed,
   };
 }

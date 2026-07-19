@@ -19,6 +19,7 @@ export interface Namespace {
   name: string;
   kind: NamespaceKind;
   parent?: string;
+  avatarUrl?: string;
   raw: unknown;
 }
 
@@ -44,10 +45,19 @@ export interface CloneUrl {
   expiresAt?: Date;
 }
 
+/** Provider account resolved for a commit actor, when the provider can match one. */
+export interface UserRef {
+  id: string;
+  username: string;
+  avatarUrl?: string;
+}
+
 export interface GitActor {
   name: string;
   email?: string;
   date: Date;
+  /** Set when the provider resolves this actor to an account (see `commitUserRef` capability). */
+  user?: UserRef;
 }
 
 export interface Commit {
@@ -191,6 +201,7 @@ export interface RepoCapabilities {
   tagDates: boolean;
   repoSearch: boolean;
   ownedRepoFilter: boolean;
+  commitUserRef: boolean;
   webhookEvents: WebhookEventType[];
   webhookVerification: WebhookVerificationMethod;
   archiveFormats: ArchiveFormat[];

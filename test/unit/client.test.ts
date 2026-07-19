@@ -24,6 +24,7 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
       tagDates: false,
       repoSearch: true,
       ownedRepoFilter: true,
+      commitUserRef: true,
       webhookEvents: ['push', 'tag_push'],
       webhookVerification: 'hmac-sha256',
       archiveFormats: ['zip', 'tar.gz'],

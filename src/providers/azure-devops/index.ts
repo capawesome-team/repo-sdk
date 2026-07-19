@@ -57,6 +57,8 @@ const CAPABILITIES: RepoCapabilities = {
   tagDates: false,
   repoSearch: false,
   ownedRepoFilter: false,
+  // Azure DevOps commit payloads carry only name/email/date for authors.
+  commitUserRef: false,
   webhookEvents: ['push', 'tag_push'],
   webhookVerification: 'basic-auth',
   archiveFormats: ['zip'],

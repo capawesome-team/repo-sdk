@@ -19,6 +19,7 @@ Every provider exposes a `capabilities` object, also surfaced on `client.capabil
     tagDates: { type: 'boolean', description: 'Whether listed tags carry a date.' },
     repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query.' },
     ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true.' },
+    commitUserRef: { type: 'boolean', description: 'Whether commit actors can carry a resolved account (GitActor.user).' },
     webhookEvents: { type: 'WebhookEventType[]', description: 'The webhook events the provider can register.' },
     webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How incoming webhooks are verified.' },
     archiveFormats: { type: 'ArchiveFormat[]', description: 'The archive formats downloadArchive can return.' },

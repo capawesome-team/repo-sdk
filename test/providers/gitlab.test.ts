@@ -62,7 +62,14 @@ describe('listNamespaces', () => {
     const { provider } = setup((request) => {
       const url = new URL(request.url);
       if (url.pathname === '/api/v4/user') {
-        return { json: { id: 1, username: 'octocat', name: 'Octo Cat' } };
+        return {
+          json: {
+            id: 1,
+            username: 'octocat',
+            name: 'Octo Cat',
+            avatar_url: 'https://avatars.example/u1',
+          },
+        };
       }
       if (url.pathname === '/api/v4/groups') {
         if (url.searchParams.get('page') === '2') {
@@ -70,8 +77,14 @@ describe('listNamespaces', () => {
         }
         return {
           json: [
-            { id: 10, name: 'Top', full_path: 'top', parent_id: null },
-            { id: 20, name: 'Sub', full_path: 'top/sub', parent_id: 10 },
+            {
+              id: 10,
+              name: 'Top',
+              full_path: 'top',
+              parent_id: null,
+              avatar_url: 'https://avatars.example/g10',
+            },
+            { id: 20, name: 'Sub', full_path: 'top/sub', parent_id: 10, avatar_url: null },
           ],
           headers: { link: '<https://gitlab.com/api/v4/groups?page=2>; rel="next"' },
         };
@@ -85,8 +98,15 @@ describe('listNamespaces', () => {
       name: 'Octo Cat',
       kind: 'user',
       id: '1',
+      avatarUrl: 'https://avatars.example/u1',
     });
-    expect(first.data[1]).toMatchObject({ slug: 'top', kind: 'group', parent: undefined });
+    expect(first.data[1]).toMatchObject({
+      slug: 'top',
+      kind: 'group',
+      parent: undefined,
+      avatarUrl: 'https://avatars.example/g10',
+    });
+    expect(first.data[2]?.avatarUrl).toBeUndefined();
     expect(first.data[2]).toMatchObject({ slug: 'top/sub', kind: 'group', parent: 'top' });
     expect(first.cursor).toBeDefined();
 
