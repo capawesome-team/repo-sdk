@@ -36,7 +36,11 @@ const feed = data.feeds.find((entry) => entry.href.includes('/blog/'));
   searchEnabled={config.search.enabled}
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
-  page={{ title: 'Blog — repo-sdk', description: 'Guides and deep dives on building against the GitHub, GitLab, Bitbucket, and Azure DevOps APIs.' }}
+  page={{
+    title: 'Blog — repo-sdk',
+    description: 'Guides and deep dives on building against the GitHub, GitLab, Bitbucket, and Azure DevOps APIs.',
+    route: '/blog',
+  }}
 >
   <main class="mx-auto w-full max-w-3xl px-6 py-16">
     <header class="flex items-end justify-between gap-4">
