@@ -16,6 +16,12 @@ export function parseLinkNext(header: string | null): string | undefined {
   return undefined;
 }
 
+export function commitWebUrlBuilder(pathSegment: string) {
+  return function commitWebUrl(repoWebUrl: string, sha: string): string {
+    return `${repoWebUrl.replace(/\/+$/, '')}/${pathSegment}/${sha}`;
+  };
+}
+
 export function filenameFromContentDisposition(header: string | null): string | undefined {
   if (!header) return undefined;
   const extended = header.match(/filename\*=(?:UTF-8'')?([^;]+)/i);

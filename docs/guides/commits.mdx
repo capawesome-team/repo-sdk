@@ -88,6 +88,23 @@ commit SHA. A ref that doesn't exist throws a `RepoError` with `code: 'not_found
 
 A `GitActor` is `{ name: string; email?: string; date: Date }`.
 
+## Building a commit web URL without a request
+
+`Commit.url` comes from the provider's API response, so it is only available after fetching the commit.
+When you already hold a repository web URL and a SHA — for example from a webhook delivery — each
+provider subpath exports a pure `commitWebUrl` helper that builds the URL locally:
+
+```ts
+import { commitWebUrl } from 'repo-sdk/github';
+
+commitWebUrl('https://github.com/capawesome-team/repo-sdk', 'abc123');
+// https://github.com/capawesome-team/repo-sdk/commit/abc123
+```
+
+The first argument composes with the normalized `Repository.urls.web`. Each provider applies its own
+path convention (`/commit/` on GitHub and Azure DevOps, `/commits/` on Bitbucket, `/-/commit/` on
+GitLab), so import the helper from the matching provider subpath.
+
 <Card title="Next: Working with tags" icon="tag" href="/docs/guides/tags">
   List a repository's tags and read annotation details.
 </Card>

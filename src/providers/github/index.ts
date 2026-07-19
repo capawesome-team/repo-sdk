@@ -4,6 +4,7 @@ import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
+  commitWebUrlBuilder,
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
@@ -262,6 +263,12 @@ function mapError(status: number, body: unknown, response: Response): ProviderEr
   }
   return { code, message };
 }
+
+/**
+ * Builds the human-facing web URL for a commit from the repository's web URL
+ * (`Repository.urls.web`) and a commit SHA — no API request needed.
+ */
+export const commitWebUrl = commitWebUrlBuilder('commit');
 
 export function github(options: GitHubProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;

@@ -76,6 +76,13 @@ returns `false` (never throws) on a missing or mismatched signature, and compari
   }}
 />
 
+:::note
+**Azure DevOps only:** hooks registered with the factory's `webhookSecretHeader` option deliver the
+secret in that custom header instead of Basic auth. Pass the same header name as `header` to
+`verifyWebhook` (`verifyWebhook({ request, secret, header: 'X-My-Secret' })`) and the secret is
+compared against that header in constant time.
+:::
+
 ## The parsed event
 
 `parseWebhookEvent` normalizes the payload into a `ParsedWebhookEvent`, regardless of provider:
@@ -86,7 +93,9 @@ returns `false` (never throws) on a missing or mismatched signature, and compari
     repo: { type: 'string', required: false, description: 'The repository path, when present in the payload.' },
     ref: { type: 'string', required: false, description: 'The git ref (e.g. refs/heads/main or refs/tags/v1.0.0).' },
     commits: { type: '{ sha: string; message?: string }[]', required: false, description: 'The commits in the delivery, when present.' },
+    headCommitSha: { type: 'string', required: false, description: 'The SHA the ref points to after the push. Undefined when the push deleted the ref.' },
     deliveryId: { type: 'string', required: false, description: "The provider's delivery id, for de-duplication/logging." },
+    webhookId: { type: 'string', required: false, description: 'The provider-assigned id of the webhook registration that produced the delivery.' },
     raw: { type: 'unknown', description: 'The untouched provider payload.' },
   }}
 />

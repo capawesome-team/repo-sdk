@@ -88,7 +88,11 @@ export interface ParsedWebhookEvent {
   repo?: string;
   ref?: string;
   commits?: { sha: string; message?: string }[];
+  /** SHA the ref points to after the push; undefined when the push deleted the ref. */
+  headCommitSha?: string;
   deliveryId?: string;
+  /** Provider-assigned identifier of the webhook registration that produced this delivery. */
+  webhookId?: string;
   raw: unknown;
 }
 

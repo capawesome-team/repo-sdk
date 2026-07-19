@@ -1,4 +1,5 @@
 import type { IncomingWebhookRequest, ParsedWebhookEvent } from '../../types.ts';
+import { headShaOrUndefined } from '../../webhooks/parse.ts';
 import {
   toIncomingWebhook,
   verifyHmacSignature,
@@ -10,6 +11,7 @@ export type { VerifyWebhookParams } from '../../webhooks/verify.ts';
 interface GitHubWebhookPayload {
   ref?: string;
   ref_type?: string;
+  after?: string;
   repository?: { full_name?: string };
   commits?: { id?: string; message?: string }[];
 }
@@ -50,7 +52,9 @@ export async function parseWebhookEvent(
     repo: payload.repository?.full_name,
     ref,
     commits,
+    headCommitSha: headShaOrUndefined(payload.after),
     deliveryId: incoming.headers['x-github-delivery'],
+    webhookId: incoming.headers['x-github-hook-id'],
     raw: payload,
   };
 }

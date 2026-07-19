@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gitlab, parseWebhookEvent, verifyWebhook } from '../../src/gitlab.ts';
+import { commitWebUrl, gitlab, parseWebhookEvent, verifyWebhook } from '../../src/gitlab.ts';
 import { RepoError } from '../../src/errors.ts';
 import { encodeCursor } from '../../src/pagination.ts';
 import { createFetchStub, type StubHandler } from '../helpers/fetch-stub.ts';
@@ -485,9 +485,14 @@ describe('verifyWebhook', () => {
 describe('parseWebhookEvent', () => {
   it('distinguishes push, tag push and release', async () => {
     const push = await parseWebhookEvent({
-      headers: { 'x-gitlab-event': 'Push Hook', 'x-gitlab-event-uuid': 'uuid-1' },
+      headers: {
+        'x-gitlab-event': 'Push Hook',
+        'x-gitlab-event-uuid': 'uuid-1',
+        'x-gitlab-webhook-uuid': 'hook-uuid-1',
+      },
       body: JSON.stringify({
         ref: 'refs/heads/main',
+        after: 'headsha',
         project: { path_with_namespace: 'o/r' },
         commits: [{ id: 'sha1', message: 'msg' }],
       }),
@@ -496,9 +501,17 @@ describe('parseWebhookEvent', () => {
       type: 'push',
       repo: 'o/r',
       ref: 'refs/heads/main',
+      headCommitSha: 'headsha',
       deliveryId: 'uuid-1',
+      webhookId: 'hook-uuid-1',
     });
     expect(push.commits).toEqual([{ sha: 'sha1', message: 'msg' }]);
+
+    const deletion = await parseWebhookEvent({
+      headers: { 'x-gitlab-event': 'Push Hook' },
+      body: JSON.stringify({ ref: 'refs/heads/gone', after: '0'.repeat(40) }),
+    });
+    expect(deletion.headCommitSha).toBeUndefined();
 
     const tagPush = await parseWebhookEvent({
       headers: { 'x-gitlab-event': 'Tag Push Hook' },
@@ -517,5 +530,13 @@ describe('parseWebhookEvent', () => {
       body: JSON.stringify({}),
     });
     expect(other.type).toBe('unknown');
+  });
+});
+
+describe('commitWebUrl', () => {
+  it('builds the commit web URL from the repository web URL', () => {
+    expect(commitWebUrl('https://gitlab.com/group/project', 'abc123')).toBe(
+      'https://gitlab.com/group/project/-/commit/abc123',
+    );
   });
 });

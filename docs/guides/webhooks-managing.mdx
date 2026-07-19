@@ -69,6 +69,13 @@ secret-protected Azure hook **without** passing `secret`, the SDK refuses with a
 rather than silently clearing it — pass `secret` again on update.
 :::
 
+:::note
+Azure DevOps alternatively supports delivering the secret in a **custom HTTP header**: pass
+`webhookSecretHeader: 'X-My-Secret'` to the `azureDevOps` factory and hooks are registered with the
+service hook's `httpHeaders` input instead of Basic auth. Pass the same header name to `verifyWebhook`
+via its Azure-only `header` option when [verifying deliveries](/docs/guides/webhooks-receiving).
+:::
+
 ## Per-provider caveats
 
 :::warning

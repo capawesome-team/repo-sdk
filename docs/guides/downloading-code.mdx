@@ -82,8 +82,9 @@ Unlike error messages, this value is a credential by design and is not redacted.
 
 ### Azure DevOps with Entra auth
 
-With an Entra ID `tokenProvider`, the credential is returned in `headers` instead of being embedded in
-the URL. Pass it to git via `http.extraheader`:
+With an OAuth `accessToken`, the token is embedded in the URL with the `oauth2` username
+(`https://oauth2:<token>@dev.azure.com/...`). With an Entra ID `tokenProvider`, the credential is
+returned in `headers` instead of being embedded in the URL. Pass it to git via `http.extraheader`:
 
 ```ts
 const clone = await client.repos.getCloneUrl({ repo: 'Payments/checkout' });

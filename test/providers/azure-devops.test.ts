@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   azureDevOps,
+  commitWebUrl,
   listOrganizations,
   parseWebhookEvent,
   verifyWebhook,
@@ -58,6 +59,17 @@ describe('authentication', () => {
     });
     await provider.getRepository({ repo: 'core/repo-sdk' });
     expect(stub.requests[0]!.headers.authorization).toBe('Bearer entra-token');
+  });
+
+  it('uses an OAuth access token as a Bearer token', async () => {
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { accessToken: 'oauth-access-token' },
+      fetch: stub.fetch,
+    });
+    await provider.getRepository({ repo: 'core/repo-sdk' });
+    expect(stub.requests[0]!.headers.authorization).toBe('Bearer oauth-access-token');
   });
 });
 
@@ -365,6 +377,18 @@ describe('getCloneUrl', () => {
     expect(clone.expiresAt).toBeUndefined();
   });
 
+  it('embeds an OAuth access token with the oauth2 username', async () => {
+    const stub = createFetchStub(() => ({ json: {} }));
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { accessToken: 'oauth-access-token' },
+      fetch: stub.fetch,
+    });
+    const clone = await provider.getCloneUrl({ repo: 'core/repo-sdk' });
+    expect(clone.url).toBe('https://oauth2:oauth-access-token@dev.azure.com/contoso/core/_git/repo-sdk');
+    expect(clone.headers).toBeUndefined();
+  });
+
   it('returns Entra tokens via headers instead of embedding them', async () => {
     const stub = createFetchStub(() => ({ json: {} }));
     const provider = azureDevOps({
@@ -415,6 +439,31 @@ describe('webhooks', () => {
       basicAuthPassword: 'shh',
     });
     expect(webhook).toMatchObject({ id: 'sub-1', events: ['push', 'tag_push'], active: true });
+  });
+
+  it('registers the secret in a custom header when webhookSecretHeader is set', async () => {
+    const stub = createFetchStub((request) => {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith('/git/repositories/repo-sdk')) return { json: repoPayload };
+      return { json: subscription };
+    });
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { pat: PAT },
+      fetch: stub.fetch,
+      webhookSecretHeader: 'X-Capawesome-Secret',
+    });
+    await provider.createWebhook({
+      repo: 'core/repo-sdk',
+      url: 'https://example.com/hook',
+      events: ['push', 'tag_push'],
+      secret: 'shh',
+    });
+    const body = JSON.parse(stub.requests.find((r) => r.method === 'POST')!.body!);
+    expect(body.consumerInputs).toEqual({
+      url: 'https://example.com/hook',
+      httpHeaders: 'X-Capawesome-Secret:shh',
+    });
   });
 
   it('rejects a strict event subset that Azure cannot deliver on its own', async () => {
@@ -579,6 +628,25 @@ describe('verifyWebhook', () => {
       await verifyWebhook({ headers: { authorization: header }, body: '{}', secret: '' }),
     ).toBe(false);
   });
+
+  it('compares the named custom header when header is set', async () => {
+    const secret = 'topsecret';
+    const params = { body: '{}', secret, header: 'X-Capawesome-Secret' };
+    expect(
+      await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': secret } }),
+    ).toBe(true);
+    expect(
+      await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': 'wrong' } }),
+    ).toBe(false);
+    expect(await verifyWebhook({ ...params, headers: {} })).toBe(false);
+    // With header set, a valid Basic auth header alone must not pass.
+    expect(
+      await verifyWebhook({
+        ...params,
+        headers: { authorization: `Basic ${btoa(`repo-sdk:${secret}`)}` },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('parseWebhookEvent', () => {
@@ -587,9 +655,10 @@ describe('parseWebhookEvent', () => {
       headers: {},
       body: JSON.stringify({
         id: 'notif-1',
+        subscriptionId: 'sub-1',
         eventType: 'git.push',
         resource: {
-          refUpdates: [{ name: 'refs/heads/main' }],
+          refUpdates: [{ name: 'refs/heads/main', newObjectId: 'headsha' }],
           commits: [{ commitId: 'sha1', comment: 'msg' }],
           repository: { name: 'repo-sdk', project: { name: 'core' } },
         },
@@ -599,9 +668,20 @@ describe('parseWebhookEvent', () => {
       type: 'push',
       repo: 'core/repo-sdk',
       ref: 'refs/heads/main',
+      headCommitSha: 'headsha',
       deliveryId: 'notif-1',
+      webhookId: 'sub-1',
     });
     expect(push.commits).toEqual([{ sha: 'sha1', message: 'msg' }]);
+
+    const deletion = await parseWebhookEvent({
+      headers: {},
+      body: JSON.stringify({
+        eventType: 'git.push',
+        resource: { refUpdates: [{ name: 'refs/heads/gone', newObjectId: '0'.repeat(40) }] },
+      }),
+    });
+    expect(deletion.headCommitSha).toBeUndefined();
 
     const tagPush = await parseWebhookEvent({
       headers: {},
@@ -649,5 +729,13 @@ describe('listOrganizations', () => {
     for (const request of stub.requests) {
       expect(new URL(request.url).searchParams.get('api-version')).toBe('7.1');
     }
+  });
+});
+
+describe('commitWebUrl', () => {
+  it('builds the commit web URL from the repository web URL', () => {
+    expect(commitWebUrl('https://dev.azure.com/contoso/core/_git/repo-sdk', 'abc123')).toBe(
+      'https://dev.azure.com/contoso/core/_git/repo-sdk/commit/abc123',
+    );
   });
 });

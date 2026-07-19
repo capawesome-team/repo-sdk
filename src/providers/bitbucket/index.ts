@@ -1,7 +1,12 @@
 import { RepoError, type RepoErrorCode } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
-import { clampPerPage, filenameFromContentDisposition, isRecord } from '../shared.ts';
+import {
+  clampPerPage,
+  commitWebUrlBuilder,
+  filenameFromContentDisposition,
+  isRecord,
+} from '../shared.ts';
 import type {
   Archive,
   CloneUrl,
@@ -225,6 +230,12 @@ function mapError(status: number, body: unknown): ProviderErrorInfo {
   const code: RepoErrorCode | undefined = undefined;
   return { code, message };
 }
+
+/**
+ * Builds the human-facing web URL for a commit from the repository's web URL
+ * (`Repository.urls.web`) and a commit SHA — no API request needed.
+ */
+export const commitWebUrl = commitWebUrlBuilder('commits');
 
 export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   const { auth } = options;

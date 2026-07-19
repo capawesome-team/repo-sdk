@@ -3,6 +3,7 @@ import { HttpClient, type ProviderErrorInfo, type QueryValue } from '../../http.
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
+  commitWebUrlBuilder,
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
@@ -286,6 +287,12 @@ function mapError(_status: number, body: unknown): ProviderErrorInfo {
   // Status→code mapping (429/retry-after etc.) is handled by the core HTTP layer.
   return { message };
 }
+
+/**
+ * Builds the human-facing web URL for a commit from the repository's web URL
+ * (`Repository.urls.web`) and a commit SHA — no API request needed.
+ */
+export const commitWebUrl = commitWebUrlBuilder('-/commit');
 
 export function gitlab(options: GitLabProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;

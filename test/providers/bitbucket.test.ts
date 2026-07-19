@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bitbucket, parseWebhookEvent, verifyWebhook } from '../../src/bitbucket.ts';
+import { bitbucket, commitWebUrl, parseWebhookEvent, verifyWebhook } from '../../src/bitbucket.ts';
 import type { BitbucketProviderOptions } from '../../src/bitbucket.ts';
 import { RepoError } from '../../src/errors.ts';
 import { encodeCursor } from '../../src/pagination.ts';
@@ -441,13 +441,13 @@ describe('verifyWebhook', () => {
 describe('parseWebhookEvent', () => {
   it('distinguishes a branch push from a tag push', async () => {
     const push = await parseWebhookEvent({
-      headers: { 'x-event-key': 'repo:push', 'x-hook-uuid': 'hook-1' },
+      headers: { 'x-event-key': 'repo:push', 'x-hook-uuid': 'hook-1', 'x-request-uuid': 'req-0' },
       body: JSON.stringify({
         repository: { full_name: 'o/r' },
         push: {
           changes: [
             {
-              new: { type: 'branch', name: 'main' },
+              new: { type: 'branch', name: 'main', target: { hash: 'headsha' } },
               commits: [{ hash: 'sha1', message: 'msg' }],
             },
           ],
@@ -458,9 +458,20 @@ describe('parseWebhookEvent', () => {
       type: 'push',
       repo: 'o/r',
       ref: 'refs/heads/main',
-      deliveryId: 'hook-1',
+      headCommitSha: 'headsha',
+      deliveryId: 'req-0',
+      webhookId: 'hook-1',
     });
     expect(push.commits).toEqual([{ sha: 'sha1', message: 'msg' }]);
+
+    const deletion = await parseWebhookEvent({
+      headers: { 'x-event-key': 'repo:push' },
+      body: JSON.stringify({
+        push: { changes: [{ old: { type: 'branch', name: 'gone' }, new: null }] },
+      }),
+    });
+    expect(deletion.type).toBe('push');
+    expect(deletion.headCommitSha).toBeUndefined();
 
     const tagPush = await parseWebhookEvent({
       headers: { 'x-event-key': 'repo:push', 'x-request-uuid': 'req-1' },
@@ -507,5 +518,13 @@ describe('parseWebhookEvent', () => {
     });
     expect(event.type).toBe('push');
     expect(event.ref).toBe('refs/heads/main');
+  });
+});
+
+describe('commitWebUrl', () => {
+  it('builds the commit web URL from the repository web URL', () => {
+    expect(commitWebUrl('https://bitbucket.org/o/r', 'abc123')).toBe(
+      'https://bitbucket.org/o/r/commits/abc123',
+    );
   });
 });

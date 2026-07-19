@@ -1,4 +1,4 @@
-export { github } from './providers/github/index.ts';
+export { commitWebUrl, github } from './providers/github/index.ts';
 export type {
   GitHubAppAuth,
   GitHubAuth,

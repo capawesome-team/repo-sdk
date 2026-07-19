@@ -28,7 +28,7 @@ import type {
   Webhook,
   WebhookEventType,
 } from '../../types.ts';
-import { filenameFromContentDisposition, isRecord } from '../shared.ts';
+import { commitWebUrlBuilder, filenameFromContentDisposition, isRecord } from '../shared.ts';
 import {
   API_VERSION,
   authHeader,
@@ -45,6 +45,12 @@ export interface AzureDevOpsProviderOptions {
   auth: AzureDevOpsAuth;
   baseUrl?: string;
   fetch?: typeof fetch;
+  /**
+   * When set, webhooks are registered to deliver the secret verbatim in this
+   * custom HTTP header (via the service hook's `httpHeaders` consumer input)
+   * instead of HTTP Basic auth. Pass the same header name to `verifyWebhook`.
+   */
+  webhookSecretHeader?: string;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -108,6 +114,7 @@ interface AzureSubscription {
     url?: string;
     basicAuthUsername?: string;
     basicAuthPassword?: string;
+    httpHeaders?: string;
   };
 }
 
@@ -213,10 +220,21 @@ function repoBasePath(repo: string): string {
   return `/${enc(project)}/_apis/git/repositories/${enc(repository)}`;
 }
 
+/**
+ * Builds the human-facing web URL for a commit from the repository's web URL
+ * (`Repository.urls.web`) and a commit SHA — no API request needed.
+ */
+export const commitWebUrl = commitWebUrlBuilder('commit');
+
 export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const auth = options.auth;
+
+  const secretConsumerInputs = (secret: string) =>
+    options.webhookSecretHeader
+      ? { httpHeaders: `${options.webhookSecretHeader}:${secret}` }
+      : { basicAuthUsername: BASIC_AUTH_USERNAME, basicAuthPassword: secret };
 
   const http = new HttpClient({
     provider: 'azure-devops',
@@ -447,6 +465,9 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       if ('pat' in auth) {
         return { url: `https://pat:${encodeURIComponent(auth.pat)}@${host}/${repoPath}` };
       }
+      if ('accessToken' in auth) {
+        return { url: `https://oauth2:${encodeURIComponent(auth.accessToken)}@${host}/${repoPath}` };
+      }
       const token = await auth.tokenProvider();
       return { url: `https://${host}/${repoPath}`, headers: { Authorization: `Bearer ${token}` } };
     },
@@ -475,9 +496,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           publisherInputs: { projectId, repository: repoId },
           consumerInputs: {
             url: params.url,
-            ...(params.secret
-              ? { basicAuthUsername: BASIC_AUTH_USERNAME, basicAuthPassword: params.secret }
-              : {}),
+            ...(params.secret ? secretConsumerInputs(params.secret) : {}),
           },
         },
         signal: params.signal,
@@ -511,8 +530,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       const consumerInputs = { ...existing.consumerInputs };
       if (params.url !== undefined) consumerInputs.url = params.url;
       if (params.secret !== undefined) {
-        consumerInputs.basicAuthUsername = BASIC_AUTH_USERNAME;
-        consumerInputs.basicAuthPassword = params.secret;
+        Object.assign(consumerInputs, secretConsumerInputs(params.secret));
       } else if (
         existing.consumerInputs?.basicAuthUsername &&
         !existing.consumerInputs.basicAuthPassword

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { github, parseWebhookEvent, verifyWebhook } from '../../src/github.ts';
+import { commitWebUrl, github, parseWebhookEvent, verifyWebhook } from '../../src/github.ts';
 import { RepoError } from '../../src/errors.ts';
 import { encodeCursor } from '../../src/pagination.ts';
 import { hmacSha256Hex } from '../../src/webhooks/verify.ts';
@@ -446,9 +446,10 @@ describe('verifyWebhook', () => {
 describe('parseWebhookEvent', () => {
   it('distinguishes push, tag push, tag create and ping', async () => {
     const push = await parseWebhookEvent({
-      headers: { 'x-github-event': 'push', 'x-github-delivery': 'd1' },
+      headers: { 'x-github-event': 'push', 'x-github-delivery': 'd1', 'x-github-hook-id': 'h1' },
       body: JSON.stringify({
         ref: 'refs/heads/main',
+        after: 'headsha',
         repository: { full_name: 'o/r' },
         commits: [{ id: 'sha1', message: 'msg' }],
       }),
@@ -457,9 +458,18 @@ describe('parseWebhookEvent', () => {
       type: 'push',
       repo: 'o/r',
       ref: 'refs/heads/main',
+      headCommitSha: 'headsha',
       deliveryId: 'd1',
+      webhookId: 'h1',
     });
     expect(push.commits).toEqual([{ sha: 'sha1', message: 'msg' }]);
+
+    const deletion = await parseWebhookEvent({
+      headers: { 'x-github-event': 'push' },
+      body: JSON.stringify({ ref: 'refs/heads/gone', after: '0'.repeat(40) }),
+    });
+    expect(deletion.type).toBe('push');
+    expect(deletion.headCommitSha).toBeUndefined();
 
     const tagPush = await parseWebhookEvent({
       headers: { 'x-github-event': 'push' },
@@ -602,5 +612,16 @@ describe('GitHub App auth avoids user-scoped endpoints', () => {
   it('rejects search-by-self (query + owned) as unsupported', async () => {
     const { provider } = appSetup(() => ({ status: 404, json: {} }));
     await expectRepoError(provider.listRepositories({ query: 'sdk', owned: true }), 'unsupported');
+  });
+});
+
+describe('commitWebUrl', () => {
+  it('builds the commit web URL from the repository web URL', () => {
+    expect(commitWebUrl('https://github.com/o/r', 'abc123')).toBe(
+      'https://github.com/o/r/commit/abc123',
+    );
+    expect(commitWebUrl('https://github.com/o/r/', 'abc123')).toBe(
+      'https://github.com/o/r/commit/abc123',
+    );
   });
 });

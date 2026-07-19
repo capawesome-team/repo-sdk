@@ -1,4 +1,5 @@
 import type { IncomingWebhookRequest, ParsedWebhookEvent } from '../../types.ts';
+import { headShaOrUndefined } from '../../webhooks/parse.ts';
 import {
   timingSafeEqual,
   toIncomingWebhook,
@@ -9,6 +10,7 @@ export type { VerifyWebhookParams } from '../../webhooks/verify.ts';
 
 interface GitLabWebhookPayload {
   ref?: string;
+  after?: string;
   project?: { path_with_namespace?: string };
   commits?: { id?: string; message?: string }[];
 }
@@ -47,7 +49,9 @@ export async function parseWebhookEvent(
     repo: payload.project?.path_with_namespace,
     ref: payload.ref,
     commits,
+    headCommitSha: headShaOrUndefined(payload.after),
     deliveryId: incoming.headers['x-gitlab-event-uuid'],
+    webhookId: incoming.headers['x-gitlab-webhook-uuid'],
     raw: payload,
   };
 }

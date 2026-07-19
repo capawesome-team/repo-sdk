@@ -1,13 +1,13 @@
 ---
 title: Azure DevOps authentication
-description: Authenticate the Azure DevOps provider with a PAT or Entra ID token provider.
+description: Authenticate the Azure DevOps provider with a PAT, an OAuth access token, or an Entra ID token provider.
 sidebar:
   label: Azure DevOps
 ---
 
-The `azureDevOps` provider from `repo-sdk/azure-devops` authenticates with a Personal Access Token or an
-Entra ID `tokenProvider` callback, is pinned to an `organization`, and supports Azure DevOps Server via
-`baseUrl`.
+The `azureDevOps` provider from `repo-sdk/azure-devops` authenticates with a Personal Access Token, an
+OAuth access token, or an Entra ID `tokenProvider` callback, is pinned to an `organization`, and supports
+Azure DevOps Server via `baseUrl`.
 
 ## The organization is required
 
@@ -37,6 +37,25 @@ const client = createClient({
   }}
 />
 
+## OAuth access token
+
+If you already hold an OAuth access token for the user (for example from an Azure DevOps OAuth app),
+pass it as `accessToken`. The SDK sends it as a `Bearer` token, and `repos.getCloneUrl` embeds it with
+the `oauth2` username (`https://oauth2:<token>@dev.azure.com/...`).
+
+```ts
+azureDevOps({
+  organization: 'my-org',
+  auth: { accessToken: userAccessToken },
+});
+```
+
+<TypeTable
+  type={{
+    accessToken: { type: 'string', description: 'An OAuth access token — sent as a Bearer token.' },
+  }}
+/>
+
 ## Entra ID token provider
 
 Instead of a PAT, supply a `tokenProvider` callback that returns a short-lived bearer token. The SDK
@@ -63,7 +82,8 @@ header) rather than embedded in the URL — see [Downloading code](/docs/guides/
 ## Listing organizations
 
 Organizations live outside the org-pinned provider, so `listOrganizations` is a standalone helper. Pass
-the same auth shape (PAT or `tokenProvider`); an optional second argument accepts an injectable `fetch`.
+the same auth shape (PAT, `accessToken`, or `tokenProvider`); an optional second argument accepts an
+injectable `fetch`.
 
 ```ts
 import { listOrganizations } from 'repo-sdk/azure-devops';

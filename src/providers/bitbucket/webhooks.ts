@@ -1,4 +1,5 @@
 import type { IncomingWebhookRequest, ParsedWebhookEvent } from '../../types.ts';
+import { headShaOrUndefined } from '../../webhooks/parse.ts';
 import {
   toIncomingWebhook,
   verifyHmacSignature,
@@ -10,6 +11,7 @@ export type { VerifyWebhookParams } from '../../webhooks/verify.ts';
 interface BitbucketRefState {
   type?: string;
   name?: string;
+  target?: { hash?: string };
 }
 
 interface BitbucketChange {
@@ -37,6 +39,7 @@ export async function parseWebhookEvent(
   let type: ParsedWebhookEvent['type'] = 'unknown';
   let ref: string | undefined;
   let commits: { sha: string; message?: string }[] | undefined;
+  let headCommitSha: string | undefined;
 
   if (eventKey === 'repo:push') {
     const changes = payload.push?.changes ?? [];
@@ -52,6 +55,8 @@ export async function parseWebhookEvent(
       sha: commit.hash ?? '',
       message: commit.message,
     }));
+    // A deleted ref has no `new` state, so the head SHA stays undefined.
+    headCommitSha = headShaOrUndefined(changes[0]?.new?.target?.hash);
   }
 
   return {
@@ -59,7 +64,9 @@ export async function parseWebhookEvent(
     repo: payload.repository?.full_name,
     ref,
     commits,
-    deliveryId: incoming.headers['x-hook-uuid'] ?? incoming.headers['x-request-uuid'],
+    headCommitSha,
+    deliveryId: incoming.headers['x-request-uuid'],
+    webhookId: incoming.headers['x-hook-uuid'],
     raw: payload,
   };
 }

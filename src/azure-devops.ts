@@ -1,4 +1,4 @@
-export { azureDevOps } from './providers/azure-devops/index.ts';
+export { azureDevOps, commitWebUrl } from './providers/azure-devops/index.ts';
 export type { AzureDevOpsProviderOptions } from './providers/azure-devops/index.ts';
 export { parseWebhookEvent, verifyWebhook } from './providers/azure-devops/webhooks.ts';
 export type { VerifyWebhookParams } from './providers/azure-devops/webhooks.ts';
