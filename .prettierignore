@@ -1,6 +1,7 @@
 dist
 coverage
 docs
+*.mdx
 package-lock.json
 CHANGELOG.md
 PLAN.md
