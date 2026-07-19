@@ -14,11 +14,11 @@ throws `unsupported` before any request is made.
 `repo-sdk` normalizes webhook events to three types. Not every provider supports all three — the SDK maps
 each to the provider's native trigger:
 
-| Event      | Meaning                        | GitHub | GitLab | Bitbucket | Azure DevOps |
-| ---------- | ------------------------------ | :----: | :----: | :-------: | :----------: |
-| `push`     | Commits pushed to a branch     |   ✓    |   ✓    |     ✓     |      ✓       |
-| `tag_push` | A tag is created or deleted    |   ✓    |   ✓    |     ✓     |      ✓       |
-| `release`  | A release is published         |   ✓    |   ✓    |     ✗     |      ✗       |
+| Event      | Meaning                        | GitHub | GitLab | Bitbucket | Azure DevOps | Gitea |
+| ---------- | ------------------------------ | :----: | :----: | :-------: | :----------: | :---: |
+| `push`     | Commits pushed to a branch     |   ✓    |   ✓    |     ✓     |      ✓       |   ✓   |
+| `tag_push` | A tag is created or deleted    |   ✓    |   ✓    |     ✓     |      ✓       |   ✓   |
+| `release`  | A release is published         |   ✓    |   ✓    |     ✗     |      ✗       |   ✓   |
 
 ## Creating a webhook
 

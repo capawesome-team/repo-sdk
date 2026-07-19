@@ -20,6 +20,7 @@ passed through verbatim, so it always matches what you see in the provider's own
 | GitLab       | `group/subgroup/project` **or** numeric id | —                     |
 | Bitbucket    | `workspace/repo_slug`                      | —                     |
 | Azure DevOps | `project/repository`                       | `organization` (req.) |
+| Gitea        | `owner/name`                               | —                     |
 
 ```ts
 await client.repos.get({ repo: 'capawesome-team/repo-sdk' }); // GitHub

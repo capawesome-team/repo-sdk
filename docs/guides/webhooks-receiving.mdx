@@ -16,7 +16,7 @@ webhook:
 
 ```ts
 import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
-// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops'
+// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops' | 'repo-sdk/gitea'
 ```
 
 ## A full handler
@@ -66,6 +66,7 @@ returns `false` (never throws) on a missing or mismatched signature, and compari
 | GitLab       | shared token | `x-gitlab-token` compared to the configured secret        |
 | Bitbucket    | HMAC-SHA256  | `x-hub-signature` (no `-256` suffix) over the raw body    |
 | Azure DevOps | basic auth   | `Authorization: Basic` header (hook registered with the secret) |
+| Gitea        | HMAC-SHA256  | `x-gitea-signature` over the raw body (bare hex, no `sha256=` prefix) |
 
 <TypeTable
   type={{

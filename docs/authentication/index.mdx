@@ -42,7 +42,7 @@ instead. See [Error codes](/docs/reference/error-codes) for the full mapping.
 
 ## Self-hosted and enterprise instances
 
-Three of the four providers accept a `baseUrl` so you can target a self-managed deployment. Point it at
+Four of the five providers accept a `baseUrl` so you can target a self-managed deployment. Point it at
 your instance's API root and everything else works unchanged:
 
 | Provider     | Self-hosted product      | `baseUrl` example                   |
@@ -50,6 +50,7 @@ your instance's API root and everything else works unchanged:
 | GitHub       | Enterprise Server (GHES) | `https://ghe.example.com/api/v3`    |
 | GitLab       | Self-managed             | `https://gitlab.example.com/api/v4` |
 | Azure DevOps | Azure DevOps Server      | `https://azure.example.com/tfs`     |
+| Gitea        | Self-hosted / Forgejo    | `https://gitea.example.com/api/v1`  |
 | Bitbucket    | — (Cloud only)           | not supported                       |
 
 :::warning
@@ -71,5 +72,8 @@ Data Center / Server support.
   </Card>
   <Card title="Azure DevOps" icon="git-branch" href="/docs/authentication/azure-devops">
     PAT vs. Entra ID token provider, the required organization, and Server.
+  </Card>
+  <Card title="Gitea" icon="git-branch" href="/docs/authentication/gitea">
+    Personal access token, self-hosted instances, and Forgejo.
   </Card>
 </CardGroup>

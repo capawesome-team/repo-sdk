@@ -6,8 +6,9 @@ sidebar:
 ---
 
 Providers are not identical. GitLab can date tags, GitHub can't; Azure DevOps doesn't support free-text
-repository search; only GitHub and GitLab emit `release` webhooks. Rather than hide these differences and
-silently drop options, `repo-sdk` **advertises** each provider's capabilities and **gates** on them.
+repository search; only GitHub, GitLab, and Gitea emit `release` webhooks. Rather than hide these
+differences and silently drop options, `repo-sdk` **advertises** each provider's capabilities and
+**gates** on them.
 
 ## RepoCapabilities
 
@@ -67,14 +68,14 @@ if (client.capabilities.webhookEvents.includes('release')) {
 
 ## Per-provider differences
 
-| Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     |
-| ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- |
-| Tag dates              | ✗                         | ✓                         | ✓                | ✗                |
-| Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                |
-| Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                |
-| Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   |
-| Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       |
-| Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              |
+| Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     | Gitea                     |
+| ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- | ------------------------- |
+| Tag dates              | ✗                         | ✓                         | ✓                | ✗                | ✗                         |
+| Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
+| Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
+| Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   | push, tag_push, release   |
+| Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       | HMAC-SHA256               |
+| Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              | zip, tar.gz               |
 
 <Card title="See the full matrix" icon="table" href="/docs/reference/capability-matrix">
   The complete per-provider capability reference.

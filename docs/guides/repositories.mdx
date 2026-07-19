@@ -19,6 +19,7 @@ normalizes them to a `Namespace` with a `kind` telling you which one you're look
 | GitLab       | The authenticated user plus their groups (including subgroups) | `user`, `group`            |
 | Bitbucket    | The workspaces the user belongs to                             | `workspace`                |
 | Azure DevOps | The projects in the pinned organization                        | `project`                  |
+| Gitea        | The authenticated user plus their organizations                | `user`, `organization`     |
 
 ```ts
 const { data: namespaces } = await client.namespaces.list();
@@ -84,6 +85,7 @@ repo.raw; // untouched provider payload
 | GitLab       | `group/subgroup/project` **or** numeric id | `acme/backend/api` or `42` |
 | Bitbucket    | `workspace/repo_slug`                      | `acme-workspace/api`       |
 | Azure DevOps | `project/repository`                       | `Payments/checkout`        |
+| Gitea        | `owner/name`                               | `capawesome-team/repo-sdk` |
 
 :::note
 For Azure DevOps the `organization` is fixed on the provider factory, so it is not part of the `repo`

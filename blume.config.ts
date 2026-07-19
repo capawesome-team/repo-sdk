@@ -3,7 +3,7 @@ import { defineConfig } from 'blume';
 export default defineConfig({
   title: 'repo-sdk',
   description:
-    'Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps.',
+    'Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps, Gitea.',
   logo: {
     image: '/logo.svg',
     text: 'repo-sdk',

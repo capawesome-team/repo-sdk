@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/repo-sdk)](https://www.npmjs.com/package/repo-sdk)
 [![license](https://img.shields.io/npm/l/repo-sdk)](https://github.com/capawesome-team/repo-sdk/blob/main/LICENSE)
 
-A unified, normalized, zero-dependency, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps. Write your discovery, commit, tag, download, and webhook logic once against one normalized API — built on raw `fetch` and Web Crypto, so it runs on Node, Cloudflare Workers, and other Web-standard runtimes.
+A unified, normalized, zero-dependency, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea. Write your discovery, commit, tag, download, and webhook logic once against one normalized API — built on raw `fetch` and Web Crypto, so it runs on Node, Cloudflare Workers, and other Web-standard runtimes.
 
 ## Installation
 
@@ -53,8 +53,9 @@ Full documentation lives at **[repo-sdk.dev](https://repo-sdk.dev)** ([docs](htt
 | GitLab       | `repo-sdk/gitlab`       | PAT, group/project, or OAuth token |
 | Bitbucket    | `repo-sdk/bitbucket`    | Bitbucket Cloud                    |
 | Azure DevOps | `repo-sdk/azure-devops` | PAT or Entra ID                    |
+| Gitea        | `repo-sdk/gitea`        | Gitea ≥ 1.20 and Forgejo           |
 
-Self-hosted deployments — GitHub Enterprise Server, GitLab self-managed, and Azure DevOps Server — are supported via `baseUrl`.
+Self-hosted deployments — GitHub Enterprise Server, GitLab self-managed, Azure DevOps Server, and Gitea/Forgejo instances — are supported via `baseUrl`.
 
 ## Development
 

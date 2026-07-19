@@ -1,0 +1,61 @@
+---
+title: Gitea authentication
+description: Authenticate the Gitea provider on gitea.com, a self-hosted instance, or Forgejo.
+sidebar:
+  label: Gitea
+---
+
+The `gitea` provider from `repo-sdk/gitea` authenticates with a personal access token and targets
+self-hosted instances — including Forgejo — via a `baseUrl` that includes `/api/v1`.
+
+## Token auth
+
+Create a personal access token under **Settings → Applications → Manage Access Tokens**. The SDK sends
+it with Gitea's `token` authorization scheme (the literal word `token`, not `Bearer`).
+
+```ts
+import { createClient } from 'repo-sdk';
+import { gitea } from 'repo-sdk/gitea';
+
+const client = createClient({
+  provider: gitea({ auth: { token: process.env.GITEA_TOKEN! } }),
+});
+```
+
+<TypeTable
+  type={{
+    token: { type: 'string', description: 'Personal access token — sent with the token scheme.' },
+  }}
+/>
+
+## Scopes
+
+Pick the token scope for what you'll do:
+
+- **`read:repository`** — required for discovery, commits, tags, archive downloads, and clone access.
+- **`write:repository`** — additionally required to create, update, or delete webhooks.
+- **`read:organization`** — required to list organization namespaces.
+
+## Self-hosted instances and Forgejo
+
+For a self-hosted Gitea, pass the **full** API base URL including the `/api/v1` suffix — it is used
+verbatim. The default is `https://gitea.com/api/v1`.
+
+```ts
+gitea({
+  auth: { token: process.env.GITEA_TOKEN! },
+  baseUrl: 'https://gitea.example.com/api/v1',
+});
+```
+
+[Forgejo](https://forgejo.org) exposes the same `/api/v1` API, accepts the same `token` scheme, and
+sends the same `X-Gitea-*` webhook headers — the provider works against Forgejo unchanged.
+
+:::note
+The provider targets **Gitea ≥ 1.20** (and Forgejo releases based on it). The `repo` string is the
+`owner/name` path, e.g. `capawesome-team/repo-sdk`.
+:::
+
+<Card title="Discover repositories" icon="folder-git" href="/docs/guides/repositories">
+  List namespaces and repositories once you're authenticated.
+</Card>

@@ -7,6 +7,7 @@ export default defineConfig({
     'src/gitlab.ts',
     'src/bitbucket.ts',
     'src/azure-devops.ts',
+    'src/gitea.ts',
     'src/testing.ts',
   ],
   format: 'esm',

@@ -1,14 +1,14 @@
 ---
 title: Introduction
-description: One unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+description: One unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea.
 sidebar:
   label: Introduction
   icon: rocket
 ---
 
-`repo-sdk` gives you a single, normalized API for the four major git providers — **GitHub**, **GitLab**,
-**Bitbucket Cloud**, and **Azure DevOps** — so you write your discovery, commit, tag, download, and
-webhook logic once instead of four times.
+`repo-sdk` gives you a single, normalized API for the five major git providers — **GitHub**, **GitLab**,
+**Bitbucket Cloud**, **Azure DevOps**, and **Gitea** — so you write your discovery, commit, tag, download, and
+webhook logic once instead of five times.
 
 It has **zero runtime dependencies** (raw `fetch` + Web Crypto only) and is **edge-compatible**: it runs
 on Node.js ≥ 20, Cloudflare Workers, and other Web-standard runtimes.
@@ -72,6 +72,9 @@ Switching providers means swapping the `provider` argument — the rest of your 
   </Card>
   <Card title="Azure DevOps" icon="git-branch" href="/docs/authentication/azure-devops">
     PAT, Entra ID, and Server. Import from `repo-sdk/azure-devops`.
+  </Card>
+  <Card title="Gitea" icon="git-branch" href="/docs/authentication/gitea">
+    Personal access token, self-hosted, and Forgejo. Import from `repo-sdk/gitea`.
   </Card>
 </CardGroup>
 

@@ -1,35 +1,35 @@
 ---
 title: Provider support
-description: A feature-by-provider support matrix across GitHub, GitLab, Bitbucket, and Azure DevOps.
+description: A feature-by-provider support matrix across GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea.
 sidebar:
   label: Provider support
 ---
 
 A feature × provider matrix covering authentication methods, `baseUrl`/self-hosted support, discovery,
-downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea.
 
 ## Feature matrix
 
-| Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          |
-| ------------------------------ | -------------------- | -------------------- | -------------------- | --------------------- |
-| Subpath import                 | `repo-sdk/github`    | `repo-sdk/gitlab`    | `repo-sdk/bitbucket` | `repo-sdk/azure-devops` |
-| Token auth                     | ✓ (PAT / OAuth)      | ✓ (PAT / project / group / OAuth) | ✓ (access token, Bearer) | ✓ (PAT / OAuth) |
-| App / alternative auth         | ✓ (GitHub App)       | —                    | ✓ (email + API token, Basic) | ✓ (Entra `tokenProvider`) |
-| Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            |
-| `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  |
-| Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              |
-| Repo search (`query`)          | ✓                    | ✓                    | ✓                    | ✗                     |
-| Owned filter (`owned`)         | ✓                    | ✓                    | ✓                    | ✗                     |
-| Commits list                   | ✓                    | ✓                    | ✓ (client-side filters) | ✓                  |
-| Commits get (resolve ref)      | ✓                    | ✓                    | ✓                    | ✓                     |
-| Tags list                      | ✓                    | ✓                    | ✓                    | ✓                     |
-| Tag dates                      | ✗                    | ✓                    | ✓                    | ✗                     |
-| Archive download               | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz, API token only) | ✓ (zip only)  |
-| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) |
-| Webhooks manage                | ✓                    | ✓                    | ✓                    | ✓                     |
-| Webhook events                 | push, tag_push, release | push, tag_push, release | push, tag_push  | push, tag_push        |
-| Webhook receive/verify         | HMAC-SHA256          | shared token         | HMAC-SHA256          | basic auth            |
-| Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   |
+| Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          | Gitea                 |
+| ------------------------------ | -------------------- | -------------------- | -------------------- | --------------------- | --------------------- |
+| Subpath import                 | `repo-sdk/github`    | `repo-sdk/gitlab`    | `repo-sdk/bitbucket` | `repo-sdk/azure-devops` | `repo-sdk/gitea`    |
+| Token auth                     | ✓ (PAT / OAuth)      | ✓ (PAT / project / group / OAuth) | ✓ (access token, Bearer) | ✓ (PAT / OAuth) | ✓ (PAT, `token` scheme) |
+| App / alternative auth         | ✓ (GitHub App)       | —                    | ✓ (email + API token, Basic) | ✓ (Entra `tokenProvider`) | — |
+| Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            | ✓ (self-hosted / Forgejo) |
+| `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  | `owner/name`       |
+| Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              | user + orgs           |
+| Repo search (`query`)          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
+| Owned filter (`owned`)         | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
+| Commits list                   | ✓                    | ✓                    | ✓ (client-side filters) | ✓                  | ✓ (client-side `author`) |
+| Commits get (resolve ref)      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
+| Tags list                      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
+| Tag dates                      | ✗                    | ✓                    | ✓                    | ✗                     | ✗                     |
+| Archive download               | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz, API token only) | ✓ (zip only)  | ✓ (zip, tar.gz)       |
+| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) | ✓ (embedded)   |
+| Webhooks manage                | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
+| Webhook events                 | push, tag_push, release | push, tag_push, release | push, tag_push  | push, tag_push        | push, tag_push, release |
+| Webhook receive/verify         | HMAC-SHA256          | shared token         | HMAC-SHA256          | basic auth            | HMAC-SHA256           |
+| Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   | ✓                     |
 
 ## Per-provider caveats
 
@@ -53,6 +53,19 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, and Azure DevOps
       `downloadArchive` throws `unsupported`.
     - No `release` webhook event; `push` and `tag_push` both map to the native `repo:push`.
     - `since` / `until` / `author` commit filters are applied client-side per page.
+  </AccordionItem>
+  <AccordionItem title="Gitea" icon="git-branch">
+    - Targets **Gitea ≥ 1.20**; [Forgejo](https://forgejo.org) is API-compatible and works unchanged —
+      including webhook verification, since Forgejo sends the same `X-Gitea-*` delivery headers.
+    - Self-hosted instances need the full `baseUrl` **including `/api/v1`**; the default is
+      `https://gitea.com/api/v1`.
+    - Tag listing carries **no date** (`tagDates: false`) — `Tag.date` is `undefined`.
+    - The `author` commit filter is applied client-side per page.
+    - `tag_push` webhooks map to Gitea's `create`/`delete` events; verification uses the bare-hex
+      `X-Gitea-Signature` header.
+    - Gitea has no built-in API rate limiter — a `rate_limited` error can only come from a fronting proxy.
+    - Private resources you lack permission for often return **404 instead of 403** to avoid leaking
+      their existence.
   </AccordionItem>
   <AccordionItem title="Azure DevOps" icon="git-branch">
     - `organization` is **required** on the factory and is not part of the `repo` string.

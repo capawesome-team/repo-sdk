@@ -53,8 +53,8 @@ for await (const commit of client.commits.listAll({ repo: 'capawesome-team/repo-
 ```
 
 :::note
-Bitbucket has no server-side `since` / `until` / `author` filters, so the SDK applies them client-side to
-each returned page. The other providers filter server-side.
+Bitbucket has no server-side `since` / `until` / `author` filters, and Gitea has no server-side `author`
+filter — the SDK applies those client-side to each returned page. Everything else filters server-side.
 :::
 
 ## Resolving a ref to one commit
@@ -102,8 +102,8 @@ commitWebUrl('https://github.com/capawesome-team/repo-sdk', 'abc123');
 ```
 
 The first argument composes with the normalized `Repository.urls.web`. Each provider applies its own
-path convention (`/commit/` on GitHub and Azure DevOps, `/commits/` on Bitbucket, `/-/commit/` on
-GitLab), so import the helper from the matching provider subpath.
+path convention (`/commit/` on GitHub, Azure DevOps, and Gitea, `/commits/` on Bitbucket, `/-/commit/`
+on GitLab), so import the helper from the matching provider subpath.
 
 <Card title="Next: Working with tags" icon="tag" href="/docs/guides/tags">
   List a repository's tags and read annotation details.

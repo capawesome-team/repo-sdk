@@ -1,7 +1,7 @@
 {
   "name": "repo-sdk",
   "version": "0.0.0",
-  "description": "Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps",
+  "description": "Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps, Gitea",
   "license": "MIT",
   "author": "Robin Genz <mail@robingenz.dev>",
   "type": "module",
@@ -15,6 +15,8 @@
     "gitlab",
     "bitbucket",
     "azure-devops",
+    "gitea",
+    "forgejo",
     "sdk",
     "version-control",
     "webhooks"
@@ -47,6 +49,10 @@
     "./azure-devops": {
       "types": "./dist/azure-devops.d.ts",
       "default": "./dist/azure-devops.js"
+    },
+    "./gitea": {
+      "types": "./dist/gitea.d.ts",
+      "default": "./dist/gitea.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",

@@ -1,4 +1,4 @@
-export type ProviderName = 'github' | 'gitlab' | 'bitbucket' | 'azure-devops';
+export type ProviderName = 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea';
 
 export type WebhookEventType = 'push' | 'tag_push' | 'release';
 

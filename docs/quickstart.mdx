@@ -99,6 +99,14 @@ const client = createClient({
   }),
 });
 ```
+
+```ts Gitea
+import { gitea } from 'repo-sdk/gitea';
+
+const client = createClient({
+  provider: gitea({ auth: { token: process.env.GITEA_TOKEN! } }),
+});
+```
 </CodeGroup>
 
 ## 4. Receive a webhook
