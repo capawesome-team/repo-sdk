@@ -188,7 +188,7 @@ function toGroupNamespace(group: GitLabGroup): Namespace {
   };
 }
 
-function toRepository(project: GitLabProject): Repository {
+function toRepository(project: GitLabProject, webBase: string): Repository {
   return {
     id: String(project.id),
     name: project.name,
@@ -198,7 +198,7 @@ function toRepository(project: GitLabProject): Repository {
     private: project.visibility !== 'public',
     archived: project.archived,
     urls: {
-      web: project.web_url,
+      web: project.web_url ?? `${webBase}/${project.path_with_namespace}`,
       cloneHttp: project.http_url_to_repo,
       cloneSsh: project.ssh_url_to_repo,
     },
@@ -318,6 +318,8 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const tokenSource = createTokenSource(options.auth);
+  const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
+  const mapRepository = (project: GitLabProject): Repository => toRepository(project, webBase);
 
   const http = new HttpClient({
     provider: 'gitlab',
@@ -368,7 +370,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
         const { data, response } = await http.json<GitLabProject[]>(url, { signal: params.signal });
-        return { data: data.map(toRepository), cursor: nextCursor(url, response) };
+        return { data: data.map(mapRepository), cursor: nextCursor(url, response) };
       }
 
       if (params.namespace) {
@@ -385,7 +387,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
             signal: params.signal,
           });
           return {
-            data: data.map(toRepository),
+            data: data.map(mapRepository),
             cursor: nextCursor(reqUrl(groupPath, groupQuery), response),
           };
         } catch (error) {
@@ -398,7 +400,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
           signal: params.signal,
         });
         return {
-          data: data.map(toRepository),
+          data: data.map(mapRepository),
           cursor: nextCursor(reqUrl(userPath, userQuery), response),
         };
       }
@@ -414,7 +416,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         signal: params.signal,
       });
       return {
-        data: data.map(toRepository),
+        data: data.map(mapRepository),
         cursor: nextCursor(reqUrl('/projects', query), response),
       };
     },
@@ -423,7 +425,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       const { data } = await http.json<GitLabProject>(`/projects/${projectId(params.repo)}`, {
         signal: params.signal,
       });
-      return toRepository(data);
+      return mapRepository(data);
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {

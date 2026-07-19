@@ -165,7 +165,7 @@ function toRepository(repo: BitbucketRepo): Repository {
     defaultBranch: repo.mainbranch?.name,
     private: repo.is_private,
     urls: {
-      web: repo.links?.html?.href,
+      web: repo.links?.html?.href ?? `https://bitbucket.org/${repo.full_name}`,
       cloneHttp: clone.find((link) => link.name === 'https')?.href,
       cloneSsh: clone.find((link) => link.name === 'ssh')?.href,
     },

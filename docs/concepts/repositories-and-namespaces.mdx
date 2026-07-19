@@ -72,7 +72,7 @@ for await (const namespace of client.namespaces.listAll()) {
     defaultBranch: { type: 'string', required: false, description: 'Default branch, when available.' },
     private: { type: 'boolean', description: 'Whether the repository is private.' },
     archived: { type: 'boolean', required: false, description: 'Whether the repository is archived.' },
-    urls: { type: '{ web?, cloneHttp?, cloneSsh? }', description: 'Web and clone URLs, when available.' },
+    urls: { type: '{ web, cloneHttp?, cloneSsh? }', description: 'Web and clone URLs. web is always present — constructed from the provider base URL when the API omits it; clone URLs when available.' },
     raw: { type: 'unknown', description: 'The untouched provider response.' },
   }}
 />

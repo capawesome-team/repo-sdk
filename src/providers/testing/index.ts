@@ -67,7 +67,7 @@ export interface InMemoryRepositorySeed {
   defaultBranch?: string;
   private?: boolean;
   archived?: boolean;
-  urls?: Repository['urls'];
+  urls?: Partial<Repository['urls']>;
   /** Marks the repository as owned by the authenticated user (honored by `owned` filter). */
   owned?: boolean;
 }
@@ -172,7 +172,11 @@ function normalizeRepository(path: string, seed: InMemoryRepositorySeed): Reposi
     defaultBranch: seed.defaultBranch ?? 'main',
     private: seed.private ?? false,
     archived: seed.archived ?? false,
-    urls: seed.urls ?? {},
+    urls: {
+      web: seed.urls?.web ?? `https://in-memory.invalid/${resolvedPath}`,
+      cloneHttp: seed.urls?.cloneHttp,
+      cloneSsh: seed.urls?.cloneSsh,
+    },
     raw: seed,
   };
 }

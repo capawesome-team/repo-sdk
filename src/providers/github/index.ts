@@ -236,7 +236,7 @@ function toOrgNamespace(org: GitHubOrg): Namespace {
   };
 }
 
-function toRepository(repo: GitHubRepo): Repository {
+function toRepository(repo: GitHubRepo, webBase: string): Repository {
   return {
     id: String(repo.id),
     name: repo.name,
@@ -246,7 +246,7 @@ function toRepository(repo: GitHubRepo): Repository {
     private: repo.private,
     archived: repo.archived,
     urls: {
-      web: repo.html_url,
+      web: repo.html_url ?? `${webBase}/${repo.full_name}`,
       cloneHttp: repo.clone_url,
       cloneSsh: repo.ssh_url,
     },
@@ -338,6 +338,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
+  const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
+  const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
 
   const http = new HttpClient({
     provider: 'github',
@@ -443,7 +445,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json<unknown>(url, { signal: params.signal });
-        return { data: reposFromBody(data).map(toRepository), cursor: nextCursor(response) };
+        return { data: reposFromBody(data).map(mapRepository), cursor: nextCursor(response) };
       }
 
       if (params.query !== undefined) {
@@ -457,7 +459,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
             signal: params.signal,
           },
         );
-        return { data: data.items.map(toRepository), cursor: nextCursor(response) };
+        return { data: data.items.map(mapRepository), cursor: nextCursor(response) };
       }
 
       if (params.namespace) {
@@ -466,7 +468,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
             `/orgs/${encodeURIComponent(params.namespace)}/repos`,
             { query: { per_page: perPage }, signal: params.signal },
           );
-          return { data: data.map(toRepository), cursor: nextCursor(response) };
+          return { data: data.map(mapRepository), cursor: nextCursor(response) };
         } catch (error) {
           if (!(error instanceof RepoError && error.code === 'not_found')) throw error;
         }
@@ -479,14 +481,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
               query: { affiliation: 'owner', per_page: perPage },
               signal: params.signal,
             });
-            return { data: data.map(toRepository), cursor: nextCursor(response) };
+            return { data: data.map(mapRepository), cursor: nextCursor(response) };
           }
         }
         const { data, response } = await http.json<GitHubRepo[]>(
           `/users/${encodeURIComponent(params.namespace)}/repos`,
           { query: { per_page: perPage }, signal: params.signal },
         );
-        return { data: data.map(toRepository), cursor: nextCursor(response) };
+        return { data: data.map(mapRepository), cursor: nextCursor(response) };
       }
 
       // Default (and owned) listing. Under app auth `/user/repos` 403s; the
@@ -497,7 +499,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
           { query: { per_page: perPage }, signal: params.signal },
         );
         return {
-          data: reposFromBody(data).map(toRepository),
+          data: reposFromBody(data).map(mapRepository),
           cursor: nextCursor(response),
         };
       }
@@ -506,14 +508,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         query: { affiliation: params.owned ? 'owner' : undefined, per_page: perPage },
         signal: params.signal,
       });
-      return { data: data.map(toRepository), cursor: nextCursor(response) };
+      return { data: data.map(mapRepository), cursor: nextCursor(response) };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
       const { data } = await http.json<GitHubRepo>(repoPath(params.repo), {
         signal: params.signal,
       });
-      return toRepository(data);
+      return mapRepository(data);
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {

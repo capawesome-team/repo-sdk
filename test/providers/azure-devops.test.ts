@@ -100,6 +100,18 @@ describe('repo parsing', () => {
     );
   });
 
+  it('constructs urls.web when webUrl is absent, encoding both segments', async () => {
+    const { provider } = setup(() => ({
+      json: {
+        ...repoPayload,
+        webUrl: undefined,
+        project: { ...repoPayload.project, name: 'my project' },
+      },
+    }));
+    const repo = await provider.getRepository({ repo: 'my project/repo-sdk' });
+    expect(repo.urls.web).toBe('https://dev.azure.com/contoso/my%20project/_git/repo-sdk');
+  });
+
   it('splits only at the first slash', async () => {
     const { provider, stub } = setup(() => ({ json: repoPayload }));
     await provider.getRepository({ repo: 'proj/group/repo' });

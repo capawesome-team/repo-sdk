@@ -146,7 +146,7 @@ function toNamespace(project: AzureProjectRef): Namespace {
   return { id: project.id, slug: project.name, name: project.name, kind: 'project', raw: project };
 }
 
-function toRepository(repo: AzureRepo): Repository {
+function toRepository(repo: AzureRepo, orgBaseUrl: string): Repository {
   return {
     id: repo.id,
     name: repo.name,
@@ -155,7 +155,7 @@ function toRepository(repo: AzureRepo): Repository {
     defaultBranch: repo.defaultBranch ? stripPrefix(repo.defaultBranch, 'refs/heads/') : undefined,
     private: repo.project.visibility !== 'public',
     urls: {
-      web: repo.webUrl,
+      web: repo.webUrl ?? `${orgBaseUrl}/${enc(repo.project.name)}/_git/${enc(repo.name)}`,
       cloneHttp: repo.remoteUrl,
       cloneSsh: repo.sshUrl,
     },
@@ -241,6 +241,8 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const auth = options.auth;
+  const orgBaseUrl = `${baseUrl.replace(/\/+$/, '')}/${enc(options.organization)}`;
+  const mapRepository = (repo: AzureRepo): Repository => toRepository(repo, orgBaseUrl);
 
   const secretConsumerInputs = (secret: string) =>
     options.webhookSecretHeader
@@ -249,7 +251,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
 
   const http = new HttpClient({
     provider: 'azure-devops',
-    baseUrl: `${baseUrl.replace(/\/+$/, '')}/${enc(options.organization)}`,
+    baseUrl: orgBaseUrl,
     fetchImpl,
     authHeaders: async () => ({ Authorization: await authHeader(auth) }),
     mapError,
@@ -337,14 +339,14 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       // The Azure DevOps repositories endpoint returns all repos in one response (no server
       // cursor), so `limit` can only be honored client-side.
       const repos = params.limit !== undefined ? data.value.slice(0, params.limit) : data.value;
-      return { data: repos.map(toRepository) };
+      return { data: repos.map(mapRepository) };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
       const { data } = await jsonApi<AzureRepo>(repoBasePath(params.repo), {
         signal: params.signal,
       });
-      return toRepository(data);
+      return mapRepository(data);
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {

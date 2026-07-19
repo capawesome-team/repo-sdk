@@ -32,7 +32,8 @@ export interface Repository {
   private: boolean;
   archived?: boolean;
   urls: {
-    web?: string;
+    /** Always present; constructed from the provider's base URL when the API omits it. */
+    web: string;
     cloneHttp?: string;
     cloneSsh?: string;
   };

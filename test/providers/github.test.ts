@@ -176,6 +176,21 @@ describe('getRepository', () => {
       },
     });
   });
+
+  it('constructs urls.web when html_url is absent', async () => {
+    const { provider } = setup(() => ({ json: { ...repoPayload, html_url: undefined } }));
+    const repo = await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(repo.urls.web).toBe('https://github.com/capawesome-team/repo-sdk');
+  });
+
+  it('constructs urls.web from the enterprise host when html_url is absent', async () => {
+    const { provider } = setup(
+      () => ({ json: { ...repoPayload, html_url: undefined } }),
+      'https://ghe.example.com/api/v3',
+    );
+    const repo = await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(repo.urls.web).toBe('https://ghe.example.com/capawesome-team/repo-sdk');
+  });
 });
 
 describe('listCommits', () => {
