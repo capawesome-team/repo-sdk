@@ -54,6 +54,8 @@ export interface GitHubAppAuth {
   appId: string | number;
   privateKey: string;
   installationId?: string | number;
+  /** Account (org or user) whose installation to act as; alternative to installationId. */
+  owner?: string;
 }
 
 export type GitHubAuth = GitHubTokenAuth | GitHubAppAuth;
@@ -97,6 +99,7 @@ function createTokenSource(
     appId: auth.appId,
     privateKey: auth.privateKey,
     installationId: auth.installationId,
+    owner: auth.owner,
     baseUrl,
     fetchImpl,
     apiVersion: API_VERSION,

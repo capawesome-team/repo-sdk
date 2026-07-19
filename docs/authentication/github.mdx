@@ -50,6 +50,7 @@ const client = createClient({
     appId: { type: 'string | number', description: 'The GitHub App id.' },
     privateKey: { type: 'string', description: 'The app private key, PEM-encoded (PKCS#1 or PKCS#8).' },
     installationId: { type: 'string | number', required: false, description: 'The installation to act as. Optional for single-installation apps.' },
+    owner: { type: 'string', required: false, description: 'Org or user whose installation to act as; alternative to installationId.' },
   }}
 />
 
@@ -63,13 +64,31 @@ Both PEM encodings are accepted as-is — you do not need to convert between the
 
 ### Resolving the installation
 
-`installationId` is optional. How it resolves depends on how many installations the app has:
+`installationId` is optional. Without it, resolution depends on how many installations the app has:
 
 | Installations | Behavior                                                                         |
 | ------------- | -------------------------------------------------------------------------------- |
 | exactly one   | Omit `installationId` — the SDK auto-detects the single installation.            |
 | zero          | Throws `RepoError` with `code: 'unauthorized'` ("not installed anywhere").       |
-| more than one | Throws `RepoError` with `code: 'validation'` — pass `installationId` to pick one. |
+| more than one | Throws `RepoError` with `code: 'validation'` — pass `installationId` or `owner`. |
+
+For apps installed on many accounts (multi-tenant), pass `owner` instead of a numeric installation id
+and the SDK looks the installation up by account name — no need to store installation ids yourself:
+
+```ts
+github({
+  auth: {
+    appId: process.env.GITHUB_APP_ID!,
+    privateKey: process.env.GITHUB_APP_PRIVATE_KEY!,
+    owner: 'capawesome-team',
+  },
+});
+```
+
+The lookup tries `/orgs/{owner}/installation` first and falls back to `/users/{owner}/installation`,
+then caches the resolved id for the lifetime of the provider. If the app is not installed on that
+account, a `RepoError` with `code: 'not_found'` is thrown. `installationId` and `owner` are mutually
+exclusive — passing both throws a `validation` error.
 
 :::warning
 An installation token has **no user identity**, so GitHub App auth cannot call user-scoped endpoints.

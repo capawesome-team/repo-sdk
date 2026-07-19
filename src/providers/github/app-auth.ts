@@ -27,6 +27,7 @@ export interface AppTokenSourceOptions {
   appId: string | number;
   privateKey: string;
   installationId?: string | number;
+  owner?: string;
   baseUrl: string;
   fetchImpl: typeof fetch;
   apiVersion: string;
@@ -138,11 +139,18 @@ export class AppTokenSource implements TokenSource {
   private readonly apiVersion: string;
   private readonly userAgent: string;
   private installationId?: string;
+  private readonly owner?: string;
   private keyPromise?: Promise<CryptoKey>;
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
   constructor(options: AppTokenSourceOptions) {
+    if (options.installationId !== undefined && options.owner !== undefined) {
+      throw new RepoError('GitHub App auth accepts either installationId or owner, not both', {
+        code: 'validation',
+        provider: 'github',
+      });
+    }
     this.appId = String(options.appId);
     this.privateKey = options.privateKey;
     this.baseUrl = options.baseUrl;
@@ -151,6 +159,7 @@ export class AppTokenSource implements TokenSource {
     this.userAgent = options.userAgent;
     this.installationId =
       options.installationId === undefined ? undefined : String(options.installationId);
+    this.owner = options.owner;
   }
 
   async getToken(): Promise<string> {
@@ -193,6 +202,36 @@ export class AppTokenSource implements TokenSource {
 
   private async resolveInstallationId(jwt: string): Promise<string> {
     if (this.installationId !== undefined) return this.installationId;
+    this.installationId =
+      this.owner === undefined
+        ? await this.lookupSingleInstallation(jwt)
+        : await this.lookupOwnerInstallation(jwt, this.owner);
+    return this.installationId;
+  }
+
+  /**
+   * Resolves the installation on a specific account. An owner name alone does
+   * not reveal whether it is an organization or a user, so we probe the org
+   * endpoint first (the common case for GitHub Apps) and fall back to the user
+   * endpoint on 404.
+   */
+  private async lookupOwnerInstallation(jwt: string, owner: string): Promise<string> {
+    const encoded = encodeURIComponent(owner);
+    for (const path of [`/orgs/${encoded}/installation`, `/users/${encoded}/installation`]) {
+      try {
+        const installation = await this.appRequest<Installation>(path, 'GET', jwt);
+        return String(installation.id);
+      } catch (error) {
+        if (!(error instanceof RepoError) || error.code !== 'not_found') throw error;
+      }
+    }
+    throw new RepoError(`GitHub App is not installed for owner "${owner}"`, {
+      code: 'not_found',
+      provider: 'github',
+    });
+  }
+
+  private async lookupSingleInstallation(jwt: string): Promise<string> {
     const installations = await this.appRequest<Installation[]>('/app/installations', 'GET', jwt);
     if (installations.length === 0) {
       throw new RepoError('GitHub App is not installed anywhere', {
@@ -206,8 +245,7 @@ export class AppTokenSource implements TokenSource {
         { code: 'validation', provider: 'github' },
       );
     }
-    this.installationId = String(installations[0]!.id);
-    return this.installationId;
+    return String(installations[0]!.id);
   }
 
   private createAppJwt(): Promise<string> {

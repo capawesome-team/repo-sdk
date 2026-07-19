@@ -107,12 +107,17 @@ function appHandler(options: AppHandlerOptions = {}): StubHandler {
 
 function setup(
   handler: StubHandler,
-  auth: { privateKey: string; installationId?: string | number },
+  auth: { privateKey: string; installationId?: string | number; owner?: string },
   baseUrl?: string,
 ) {
   const stub = createFetchStub(handler);
   const provider = github({
-    auth: { appId: APP_ID, privateKey: auth.privateKey, installationId: auth.installationId },
+    auth: {
+      appId: APP_ID,
+      privateKey: auth.privateKey,
+      installationId: auth.installationId,
+      owner: auth.owner,
+    },
     fetch: stub.fetch,
     baseUrl,
   });
@@ -237,6 +242,87 @@ describe('GitHub App auth', () => {
       (r) => new URL(r.url).pathname === '/app/installations',
     );
     expect(listRequests).toHaveLength(1);
+  });
+
+  it('resolves the installation for an organization owner', async () => {
+    const { provider, stub } = setup(
+      (request) => {
+        const url = new URL(request.url);
+        if (url.pathname === '/orgs/capawesome-team/installation') return { json: { id: 555 } };
+        if (url.pathname.endsWith('/access_tokens')) {
+          return { json: { token: INSTALLATION_TOKEN, expires_at: futureIso(60 * 60 * 1000) } };
+        }
+        return { json: repoPayload };
+      },
+      { privateKey: pkcs8Pem, owner: 'capawesome-team' },
+    );
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+
+    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
+    expect(new URL(mintRequest.url).pathname).toBe('/app/installations/555/access_tokens');
+    const paths = stub.requests.map((r) => new URL(r.url).pathname);
+    expect(paths).not.toContain('/users/capawesome-team/installation');
+    expect(paths).not.toContain('/app/installations');
+  });
+
+  it('falls back to the user installation endpoint when the owner is not an org', async () => {
+    const { provider, stub } = setup(
+      (request) => {
+        const url = new URL(request.url);
+        if (url.pathname === '/orgs/robingenz/installation') return { status: 404, json: {} };
+        if (url.pathname === '/users/robingenz/installation') return { json: { id: 556 } };
+        if (url.pathname.endsWith('/access_tokens')) {
+          return { json: { token: INSTALLATION_TOKEN, expires_at: futureIso(60 * 60 * 1000) } };
+        }
+        return { json: repoPayload };
+      },
+      { privateKey: pkcs8Pem, owner: 'robingenz' },
+    );
+    await provider.getRepository({ repo: 'robingenz/repo-demo' });
+
+    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
+    expect(new URL(mintRequest.url).pathname).toBe('/app/installations/556/access_tokens');
+  });
+
+  it('caches the owner-resolved installation id across re-mints', async () => {
+    const { provider, stub } = setup(
+      (request) => {
+        const url = new URL(request.url);
+        if (url.pathname === '/orgs/capawesome-team/installation') return { json: { id: 555 } };
+        if (url.pathname.endsWith('/access_tokens')) {
+          return { json: { token: INSTALLATION_TOKEN, expires_at: futureIso(60 * 1000) } };
+        }
+        return { json: repoPayload };
+      },
+      { privateKey: pkcs8Pem, owner: 'capawesome-team' },
+    );
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+
+    const lookups = stub.requests.filter(
+      (r) => new URL(r.url).pathname === '/orgs/capawesome-team/installation',
+    );
+    expect(lookups).toHaveLength(1);
+    const mints = stub.requests.filter((r) => r.url.endsWith('/access_tokens'));
+    expect(mints).toHaveLength(2);
+  });
+
+  it('rejects an owner the app is not installed for with a not_found error', async () => {
+    const { provider } = setup(
+      (request) => {
+        const url = new URL(request.url);
+        if (url.pathname.endsWith('/installation')) return { status: 404, json: {} };
+        return { json: repoPayload };
+      },
+      { privateKey: pkcs8Pem, owner: 'nobody' },
+    );
+    await expectRepoError(provider.getRepository({ repo: 'nobody/repo' }), 'not_found');
+  });
+
+  it('rejects passing both installationId and owner', () => {
+    expect(() =>
+      setup(appHandler(), { privateKey: pkcs8Pem, installationId: 99, owner: 'capawesome-team' }),
+    ).toThrowError(RepoError);
   });
 
   it('rejects multiple installations with a validation error', async () => {
