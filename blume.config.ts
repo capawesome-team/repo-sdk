@@ -9,8 +9,8 @@ export default defineConfig({
     text: 'repo-sdk',
   },
   theme: {
-    // Git-brand orange accent, applied to both light and dark modes.
-    accent: '#f05033',
+    // Monochrome accent: black in light mode, white in dark mode.
+    accent: { light: '#000000', dark: '#ffffff' },
     radius: 'md',
     mode: 'system',
   },
