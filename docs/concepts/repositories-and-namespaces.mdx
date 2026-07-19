@@ -1,0 +1,90 @@
+---
+title: Repositories & namespaces
+description: The repo string format per provider, namespaces, and the normalized Repository type.
+sidebar:
+  label: Repositories & namespaces
+---
+
+Every git provider organizes repositories differently — owners, groups, workspaces, projects.
+`repo-sdk` reconciles this with two ideas: a **`repo` string** that addresses a single repository, and
+a normalized **`Namespace`** that describes the containers repositories live in.
+
+## The `repo` string
+
+Every call that targets a repository takes a `repo` string in the **provider's native path form**. It is
+passed through verbatim, so it always matches what you see in the provider's own URLs.
+
+| Provider     | `repo` format                              | Provider config       |
+| ------------ | ------------------------------------------ | --------------------- |
+| GitHub       | `owner/name`                               | —                     |
+| GitLab       | `group/subgroup/project` **or** numeric id | —                     |
+| Bitbucket    | `workspace/repo_slug`                      | —                     |
+| Azure DevOps | `project/repository`                       | `organization` (req.) |
+
+```ts
+await client.repos.get({ repo: 'capawesome-team/repo-sdk' }); // GitHub
+await client.repos.get({ repo: 'acme/backend/api' }); // GitLab subgroup
+await client.repos.get({ repo: 'acme-workspace/api' }); // Bitbucket
+await client.repos.get({ repo: 'Payments/checkout' }); // Azure DevOps (org set on the provider)
+```
+
+:::note
+For Azure DevOps the `organization` is fixed on the provider factory, so it is **not** part of the
+`repo` string — only `project/repository` is.
+:::
+
+## Namespaces
+
+A `Namespace` is the normalized container a repository belongs to. Because providers use different words
+for the same idea, the `kind` field tells you which one you're looking at:
+
+<TypeTable
+  type={{
+    id: { type: 'string', description: 'Provider id of the namespace.' },
+    slug: { type: 'string', description: 'URL/path segment used in the repo string.' },
+    name: { type: 'string', description: 'Human-readable display name.' },
+    kind: { type: "'user' | 'organization' | 'group' | 'workspace' | 'project'", description: 'The provider-native container type.' },
+    parent: { type: 'string', required: false, description: 'Parent namespace slug, for nested groups.' },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+List them with `namespaces.list` / `namespaces.listAll`:
+
+```ts
+for await (const namespace of client.namespaces.listAll()) {
+  console.log(namespace.kind, namespace.slug);
+}
+```
+
+## The Repository type
+
+`repos.get` and the `repos.list` family return the normalized `Repository`:
+
+<TypeTable
+  type={{
+    id: { type: 'string', description: 'Provider id.' },
+    name: { type: 'string', description: 'Repository name.' },
+    path: { type: 'string', description: 'Full path — the same string you pass as repo.' },
+    namespace: { type: 'string', description: 'Slug of the owning namespace.' },
+    defaultBranch: { type: 'string', required: false, description: 'Default branch, when available.' },
+    private: { type: 'boolean', description: 'Whether the repository is private.' },
+    archived: { type: 'boolean', required: false, description: 'Whether the repository is archived.' },
+    urls: { type: '{ web?, cloneHttp?, cloneSsh? }', description: 'Web and clone URLs, when available.' },
+    raw: { type: 'unknown', description: 'The untouched provider response.' },
+  }}
+/>
+
+```ts
+const repo = await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+repo.defaultBranch; // normalized
+repo.urls.cloneHttp; // normalized
+repo.raw; // original provider response — reach for provider-specific fields here
+```
+
+The `raw` escape hatch is present on every normalized object, so you never lose access to a
+provider-specific field the normalized shape doesn't cover.
+
+<Card title="Next: Pagination" icon="list" href="/concepts/pagination">
+  Cursor pages and the listAll iterator.
+</Card>

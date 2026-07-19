@@ -1,0 +1,13 @@
+dist
+coverage
+docs
+package-lock.json
+CHANGELOG.md
+PLAN.md
+
+# Build output and vendored/installed content
+.blume
+.blume-dist
+.astro
+.wrangler
+.agents

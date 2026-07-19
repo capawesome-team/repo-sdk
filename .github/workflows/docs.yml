@@ -1,0 +1,38 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CLOUDFLARE_PROJECT_NAME: repo-sdk
+  NODE_VERSION: 24
+  WRANGLER_VERSION: 4.78.0
+
+jobs:
+  deploy:
+    name: Deploy
+    if: github.repository == 'capawesome-team/repo-sdk'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build docs
+        run: npm run docs:build
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .blume-dist --project-name ${{
+            env.CLOUDFLARE_PROJECT_NAME }} --branch ${{ github.ref_name }}
+          wranglerVersion: ${{ env.WRANGLER_VERSION }}

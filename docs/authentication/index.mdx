@@ -1,0 +1,75 @@
+---
+title: Authentication overview
+description: How repo-sdk consumes provider credentials and surfaces auth failures.
+sidebar:
+  label: Overview
+---
+
+`repo-sdk` **consumes tokens only** — it never runs an OAuth flow or mints credentials for you. You pass
+the provider factory a ready-made token (or a token provider), and the SDK attaches it to every request.
+When a credential is missing or invalid, calls fail with a `RepoError` whose `code` is `unauthorized`.
+
+## The token-only model
+
+`repo-sdk` deliberately does **not** implement OAuth authorization flows, token exchange, or refresh. It
+takes a credential you already hold and attaches it to every request:
+
+- **No OAuth dance.** You obtain the token however you like — a personal access token in an env var, an
+  OAuth token from your own auth layer, or a callback that mints short-lived tokens.
+- **No refresh.** The SDK never rotates a token for you. The one exception is GitHub App auth, where the
+  SDK mints and caches installation access tokens internally from your app credentials.
+- **You re-authenticate.** When a token expires or is revoked, the next call throws a `RepoError` with
+  `code: 'unauthorized'`. Catch it, obtain a fresh credential, and construct a new client.
+
+```ts
+import { createClient, RepoError } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+try {
+  const client = createClient({ provider: github({ auth: { token } }) });
+  await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+} catch (error) {
+  if (error instanceof RepoError && error.code === 'unauthorized') {
+    // Token is missing, expired, or revoked — obtain a new one and retry.
+  }
+}
+```
+
+:::note
+`unauthorized` maps to HTTP `401`. A `403` — authenticated but not permitted — surfaces as `forbidden`
+instead. See [Error codes](/reference/error-codes) for the full mapping.
+:::
+
+## Self-hosted and enterprise instances
+
+Three of the four providers accept a `baseUrl` so you can target a self-managed deployment. Point it at
+your instance's API root and everything else works unchanged:
+
+| Provider     | Self-hosted product      | `baseUrl` example                   |
+| ------------ | ------------------------ | ----------------------------------- |
+| GitHub       | Enterprise Server (GHES) | `https://ghe.example.com/api/v3`    |
+| GitLab       | Self-managed             | `https://gitlab.example.com/api/v4` |
+| Azure DevOps | Azure DevOps Server      | `https://azure.example.com/tfs`     |
+| Bitbucket    | — (Cloud only)           | not supported                       |
+
+:::warning
+Bitbucket is **Cloud only**. The `bitbucket` factory takes no `baseUrl`; there is no Bitbucket
+Data Center / Server support.
+:::
+
+## Per-provider guides
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="/authentication/github">
+    Token (PAT / OAuth) and GitHub App auth, single-installation auto-detect, GHES.
+  </Card>
+  <Card title="GitLab" icon="gitlab" href="/authentication/gitlab">
+    PAT / project / group / OAuth tokens and self-managed instances.
+  </Card>
+  <Card title="Bitbucket Cloud" icon="git-branch" href="/authentication/bitbucket">
+    Atlassian API token vs. access token, and the archive-download caveat.
+  </Card>
+  <Card title="Azure DevOps" icon="git-branch" href="/authentication/azure-devops">
+    PAT vs. Entra ID token provider, the required organization, and Server.
+  </Card>
+</CardGroup>

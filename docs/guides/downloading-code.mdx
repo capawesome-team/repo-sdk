@@ -1,0 +1,97 @@
+---
+title: Downloading code
+description: Download a repository archive as a stream or get an authenticated clone URL.
+sidebar:
+  label: Downloading code
+---
+
+There are two ways to get repository contents: `repos.downloadArchive` streams a `zip` or `tar.gz`
+archive at a ref, and `repos.getCloneUrl` returns an authenticated clone URL. The clone URL embeds
+credentials — treat it as a secret and never log it.
+
+## Downloading an archive
+
+`repos.downloadArchive` resolves a ref to a snapshot and returns an `Archive` whose `stream` is a
+Web-standard `ReadableStream<Uint8Array>`:
+
+<TypeTable
+  type={{
+    repo: { type: 'string', description: 'The repository, in the provider path form.' },
+    ref: { type: 'string', description: 'Branch, tag, or SHA to snapshot.' },
+    format: { type: "'zip' | 'tar.gz'", required: false, description: "Archive format. Defaults to 'zip'. Must be in capabilities.archiveFormats." },
+  }}
+/>
+
+```ts
+const archive = await client.repos.downloadArchive({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'v1.0.0',
+  format: 'zip',
+});
+// archive: { stream: ReadableStream<Uint8Array>, contentType?: string, filename?: string }
+```
+
+Because it's a stream, you can pipe it straight to disk without buffering the whole archive in memory:
+
+```ts
+import { createWriteStream } from 'node:fs';
+import { Writable } from 'node:stream';
+
+const archive = await client.repos.downloadArchive({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'v1.0.0',
+  format: 'tar.gz',
+});
+
+const file = createWriteStream(archive.filename ?? 'archive.tar.gz');
+await archive.stream.pipeTo(Writable.toWeb(file));
+```
+
+:::warning
+**Azure DevOps only supports `zip`** (`capabilities.archiveFormats` is `['zip']`). Requesting `tar.gz`
+throws a `RepoError` with `code: 'unsupported'`. Bitbucket archive downloads additionally require API
+token auth — see [Bitbucket authentication](/authentication/bitbucket).
+:::
+
+## Getting a clone URL
+
+`repos.getCloneUrl` returns a `CloneUrl` you can hand to `git clone`:
+
+<TypeTable
+  type={{
+    url: { type: 'string', description: 'The clone URL. For most providers it embeds the credential.' },
+    headers: { type: 'Record<string, string>', required: false, description: 'Auth headers to pass instead of embedding — used by Azure DevOps Entra auth.' },
+    expiresAt: { type: 'Date', required: false, description: 'When the embedded credential expires (e.g. GitHub App tokens, ~1h).' },
+  }}
+/>
+
+```ts
+const clone = await client.repos.getCloneUrl({ repo: 'capawesome-team/repo-sdk' });
+// clone: { url, headers?, expiresAt? }
+```
+
+:::warning
+`getCloneUrl` embeds credentials in the returned `url` — **treat it as a secret and never log it.**
+Unlike error messages, this value is a credential by design and is not redacted.
+:::
+
+### Expiring credentials
+
+`expiresAt` is set when the embedded token has a lifetime — most notably GitHub App installation tokens
+(~1 hour). Re-fetch the clone URL once it's past `expiresAt` rather than caching it indefinitely.
+
+### Azure DevOps with Entra auth
+
+With an Entra ID `tokenProvider`, the credential is returned in `headers` instead of being embedded in
+the URL. Pass it to git via `http.extraheader`:
+
+```ts
+const clone = await client.repos.getCloneUrl({ repo: 'Payments/checkout' });
+// clone.url has no credential; clone.headers = { Authorization: 'Bearer …' }
+
+// git -c http.extraheader="Authorization: Bearer …" clone <clone.url>
+```
+
+<Card title="Next: Managing webhooks" icon="webhook" href="/guides/webhooks-managing">
+  Register and manage repository webhooks.
+</Card>

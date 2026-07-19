@@ -1,0 +1,58 @@
+---
+title: Working with tags
+description: List a repository's tags and understand annotated vs. lightweight tags.
+sidebar:
+  label: Tags
+---
+
+`tags.list` / `tags.listAll` page through a repository's tags as normalized `Tag` objects. Some providers
+supply a tag `date` and annotation details — check `capabilities.tagDates` before relying on them.
+
+## Listing tags
+
+`tags.list` returns one `Page<Tag>`; `tags.listAll` follows cursors and yields every tag. Both require a
+`repo`:
+
+```ts
+const { data: tags } = await client.tags.list({ repo: 'capawesome-team/repo-sdk' });
+
+for await (const tag of client.tags.listAll({ repo: 'capawesome-team/repo-sdk' })) {
+  console.log(tag.name, tag.sha);
+}
+```
+
+## The normalized Tag
+
+<TypeTable
+  type={{
+    name: { type: 'string', description: 'The tag name (without the refs/tags/ prefix).' },
+    sha: { type: 'string', description: 'The commit SHA the tag points at (annotated tags are peeled to the commit).' },
+    message: { type: 'string', required: false, description: 'The tag message, for annotated tags.' },
+    date: { type: 'Date', required: false, description: 'The tag date — only when the provider supplies one (see below).' },
+    isAnnotated: { type: 'boolean', required: false, description: 'Whether the tag is annotated rather than lightweight.' },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+## Tag dates are provider-dependent
+
+:::warning
+`date` is only populated when the provider exposes it. **GitHub's tag listing carries no date**
+(`capabilities.tagDates` is `false`), so `date` is `undefined` for GitHub tags. GitLab and Bitbucket do
+supply tag dates; Azure DevOps does not. Gate on the capability before relying on `date`:
+:::
+
+```ts
+if (client.capabilities.tagDates) {
+  for (const tag of tags) {
+    console.log(tag.name, tag.date); // a Date on GitLab/Bitbucket
+  }
+}
+```
+
+`isAnnotated` distinguishes annotated tags (which carry their own object and message) from lightweight
+tags. When available it's derived from whether the provider returns an annotation for the tag.
+
+<Card title="Next: Downloading code" icon="download" href="/guides/downloading-code">
+  Stream a repository archive or get an authenticated clone URL.
+</Card>

@@ -1,0 +1,101 @@
+---
+title: Receiving webhooks
+description: Verify webhook signatures and parse incoming events with the standalone helpers.
+sidebar:
+  label: Receiving webhooks
+---
+
+`verifyWebhook` and `parseWebhookEvent` are standalone exports on each provider subpath — no client
+needed. They accept a Web-standard `Request` (or a `{ headers, body }` pair), so they drop straight into
+Next.js route handlers, Hono, and workers.
+
+## Import from the provider subpath
+
+Both helpers live on each provider's subpath — import the pair that matches the provider sending the
+webhook:
+
+```ts
+import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
+// or 'repo-sdk/gitlab' | 'repo-sdk/bitbucket' | 'repo-sdk/azure-devops'
+```
+
+## A full handler
+
+The helpers accept a Web-standard `Request`, so one handler works across Next.js route handlers, Hono, and
+Cloudflare Workers:
+
+```ts
+import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
+
+export async function POST(request: Request): Promise<Response> {
+  const valid = await verifyWebhook({ request, secret: process.env.WEBHOOK_SECRET! });
+  if (!valid) return new Response('invalid signature', { status: 401 });
+
+  const event = await parseWebhookEvent(request);
+  switch (event.type) {
+    case 'push':
+      console.log(`push to ${event.repo} @ ${event.ref}`, event.commits);
+      break;
+    case 'tag_push':
+      console.log(`tag push to ${event.repo} @ ${event.ref}`);
+      break;
+    case 'release':
+      console.log(`release in ${event.repo}`);
+      break;
+    case 'ping':
+      break; // GitHub sends a ping when a hook is created
+  }
+  return new Response('ok');
+}
+```
+
+:::note
+If you've already consumed the request body elsewhere, pass a `{ headers, body }` pair instead of the
+`Request`: `verifyWebhook({ headers, body, secret })`. `verifyWebhook` reads the raw body, so verify
+**before** parsing JSON yourself.
+:::
+
+## Verification per provider
+
+`verifyWebhook` handles each provider's scheme transparently — you always call it the same way. It
+returns `false` (never throws) on a missing or mismatched signature, and comparisons are constant-time.
+
+| Provider     | Method       | How it verifies                                            |
+| ------------ | ------------ | --------------------------------------------------------- |
+| GitHub       | HMAC-SHA256  | `x-hub-signature-256` over the raw body                   |
+| GitLab       | shared token | `x-gitlab-token` compared to the configured secret        |
+| Bitbucket    | HMAC-SHA256  | `x-hub-signature` (no `-256` suffix) over the raw body    |
+| Azure DevOps | basic auth   | `Authorization: Basic` header (hook registered with the secret) |
+
+<TypeTable
+  type={{
+    request: { type: 'Request', required: false, description: 'A Web-standard Request. Provide this or headers + body.' },
+    headers: { type: 'Record<string, string>', required: false, description: 'Header map, when you pass the body separately.' },
+    body: { type: 'string', required: false, description: 'The raw request body — required with headers.' },
+    secret: { type: 'string', description: 'The secret the hook was registered with.' },
+  }}
+/>
+
+## The parsed event
+
+`parseWebhookEvent` normalizes the payload into a `ParsedWebhookEvent`, regardless of provider:
+
+<TypeTable
+  type={{
+    type: { type: "'push' | 'tag_push' | 'release' | 'ping' | 'unknown'", description: 'The normalized event type. Unrecognized events map to unknown.' },
+    repo: { type: 'string', required: false, description: 'The repository path, when present in the payload.' },
+    ref: { type: 'string', required: false, description: 'The git ref (e.g. refs/heads/main or refs/tags/v1.0.0).' },
+    commits: { type: '{ sha: string; message?: string }[]', required: false, description: 'The commits in the delivery, when present.' },
+    deliveryId: { type: 'string', required: false, description: "The provider's delivery id, for de-duplication/logging." },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+:::note
+`parseWebhookEvent` does not verify — call `verifyWebhook` first and reject invalid deliveries before
+acting on the parsed event.
+:::
+
+<Card title="Reference: Provider support" icon="table" href="/reference/provider-support">
+  The full feature-by-provider matrix, including webhooks.
+</Card>

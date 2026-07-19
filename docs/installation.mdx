@@ -1,0 +1,55 @@
+---
+title: Installation
+description: Install repo-sdk, check runtime requirements, and learn the ESM subpath exports.
+sidebar:
+  label: Installation
+  icon: package
+---
+
+Install `repo-sdk` from npm with your package manager of choice.
+
+```package-install
+repo-sdk
+```
+
+## Requirements
+
+`repo-sdk` ships as **ESM only** and depends on nothing but the platform's `fetch` and Web Crypto APIs.
+
+<TypeTable
+  type={{
+    Node: { type: 'string', default: '>= 20', description: 'Also runs on Cloudflare Workers and other Web-standard runtimes.' },
+    Module: { type: 'string', default: 'ESM', description: 'Package "type": "module". No CommonJS build.' },
+    Dependencies: { type: 'string', default: '0', description: 'Zero runtime dependencies.' },
+  }}
+/>
+
+## Subpath exports
+
+The client lives at the package root; each provider factory lives on its own subpath so you only pull in
+the provider you use. The webhook helpers (`verifyWebhook`, `parseWebhookEvent`) are re-exported from each
+provider subpath too.
+
+| Import                    | Exports                                                                 |
+| ------------------------- | ----------------------------------------------------------------------- |
+| `repo-sdk`                | `createClient`, `RepoError`, and all normalized types                   |
+| `repo-sdk/github`         | `github`, `verifyWebhook`, `parseWebhookEvent`                          |
+| `repo-sdk/gitlab`         | `gitlab`, `verifyWebhook`, `parseWebhookEvent`                          |
+| `repo-sdk/bitbucket`      | `bitbucket`, `verifyWebhook`, `parseWebhookEvent`                       |
+| `repo-sdk/azure-devops`   | `azureDevOps`, `listOrganizations`, `verifyWebhook`, `parseWebhookEvent` |
+| `repo-sdk/testing`        | `createInMemoryProvider`                                                 |
+
+## Import the client and a provider
+
+```ts
+import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+```
+
+<Card title="Continue to the Quickstart" icon="zap" href="/quickstart">
+  Create a client, list commits, resolve a ref, and receive a webhook.
+</Card>

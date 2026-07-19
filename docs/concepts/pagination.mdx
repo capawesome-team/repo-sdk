@@ -1,0 +1,69 @@
+---
+title: Pagination
+description: Cursor-based pages, the listAll async iterator, and same-origin cursor safety.
+sidebar:
+  label: Pagination
+---
+
+Every list endpoint in `repo-sdk` is paginated the same way, regardless of how the underlying provider
+does it. You choose between fetching **one page at a time** with an opaque cursor, or letting the client
+**follow the cursors for you** with an async iterator.
+
+## `list` — one page at a time
+
+`list` returns a `Page<T>`: the current page's `data` plus an optional opaque `cursor`. Pass the cursor
+back to fetch the next page. When `cursor` is `undefined`, you've reached the end.
+
+```ts
+const { data, cursor } = await client.repos.list({ namespace: 'capawesome-team' });
+
+if (cursor) {
+  const next = await client.repos.list({ namespace: 'capawesome-team', cursor });
+}
+```
+
+<TypeTable
+  type={{
+    data: { type: 'T[]', description: 'The items on this page.' },
+    cursor: { type: 'string', required: false, description: 'Opaque token for the next page. Absent on the last page.' },
+  }}
+/>
+
+## `listAll` — an async iterator
+
+`listAll` returns an `AsyncGenerator` that transparently follows cursors, yielding one item at a time
+across all pages. It takes the same parameters as `list` minus `cursor`:
+
+```ts
+for await (const repo of client.repos.listAll({ namespace: 'capawesome-team' })) {
+  console.log(repo.path);
+}
+```
+
+This is the ergonomic choice when you want every item and don't care about page boundaries. Because it's
+lazy, you can `break` out early and no further pages are fetched.
+
+## The cursor is opaque
+
+Treat the `cursor` as a **black box**. It is not a page number or a URL you should parse, build, or
+persist across provider changes — its contents are an implementation detail (it may encode a provider
+URL, an offset, or a continuation token, depending on the provider).
+
+:::warning
+Only pass a cursor back to the **same list call on the same client** that produced it. Don't hand-craft
+cursors, and don't move a cursor between providers or between different list endpoints.
+:::
+
+## Same-origin cursor safety
+
+Some providers page by returning a full "next page" URL. To prevent a malicious or malformed response
+from redirecting a follow-up request to an attacker-controlled host, `repo-sdk` validates that a
+URL-bearing cursor points at the **same origin** as the configured provider base URL before following
+it. A cursor that resolves to a different origin is rejected rather than fetched.
+
+This means cursors are safe to round-trip through your own storage or query strings: a tampered cursor
+that tries to change the request's origin will not be honored.
+
+<Card title="Next: Errors" icon="shield-alert" href="/concepts/errors">
+  The RepoError code union, retries, and secret redaction.
+</Card>

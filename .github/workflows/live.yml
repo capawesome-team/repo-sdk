@@ -1,0 +1,30 @@
+name: Live provider tests
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  live:
+    if: github.repository == 'capawesome-team/repo-sdk'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:live
+        env:
+          REPO_SDK_LIVE_GITHUB_TOKEN: ${{ secrets.REPO_SDK_LIVE_GITHUB_TOKEN }}
+          REPO_SDK_LIVE_GITHUB_REPO: ${{ secrets.REPO_SDK_LIVE_GITHUB_REPO }}
+          REPO_SDK_LIVE_GITLAB_TOKEN: ${{ secrets.REPO_SDK_LIVE_GITLAB_TOKEN }}
+          REPO_SDK_LIVE_GITLAB_REPO: ${{ secrets.REPO_SDK_LIVE_GITLAB_REPO }}
+          REPO_SDK_LIVE_BITBUCKET_EMAIL: ${{ secrets.REPO_SDK_LIVE_BITBUCKET_EMAIL }}
+          REPO_SDK_LIVE_BITBUCKET_API_TOKEN: ${{ secrets.REPO_SDK_LIVE_BITBUCKET_API_TOKEN }}
+          REPO_SDK_LIVE_BITBUCKET_REPO: ${{ secrets.REPO_SDK_LIVE_BITBUCKET_REPO }}
+          REPO_SDK_LIVE_AZURE_ORG: ${{ secrets.REPO_SDK_LIVE_AZURE_ORG }}
+          REPO_SDK_LIVE_AZURE_PAT: ${{ secrets.REPO_SDK_LIVE_AZURE_PAT }}
+          REPO_SDK_LIVE_AZURE_REPO: ${{ secrets.REPO_SDK_LIVE_AZURE_REPO }}

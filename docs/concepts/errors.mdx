@@ -1,0 +1,94 @@
+---
+title: Errors
+description: The RepoError class, its normalized code union, retry hints, and secret redaction.
+sidebar:
+  label: Errors
+---
+
+Every failure in `repo-sdk` throws a single error type — **`RepoError`** — with a normalized `code` so
+you can branch on the failure without parsing provider-specific status codes or message strings.
+
+## RepoError
+
+```ts
+import { RepoError } from 'repo-sdk';
+
+try {
+  await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+} catch (error) {
+  if (error instanceof RepoError) {
+    error.code; // normalized failure code (see below)
+    error.provider; // 'github' | 'gitlab' | 'bitbucket' | 'azure-devops'
+    error.status; // HTTP status, when available
+    error.retryable; // whether retrying may succeed
+    error.retryAfter; // seconds, when the provider sent Retry-After
+  }
+}
+```
+
+<TypeTable
+  type={{
+    code: { type: 'RepoErrorCode', description: 'Normalized failure code — the field to branch on.' },
+    provider: { type: 'ProviderName', description: 'Which provider produced the error.' },
+    status: { type: 'number', required: false, description: 'HTTP status, when the failure came from a response.' },
+    retryable: { type: 'boolean', description: 'Whether retrying the operation may succeed.' },
+    retryAfter: { type: 'number', required: false, description: 'Seconds to wait, when a Retry-After header was present.' },
+  }}
+/>
+
+## The code union
+
+`RepoErrorCode` is a closed union. Map provider status codes to these once and your handling works
+across all four providers:
+
+| `code`           | Typical cause                                             | `retryable` |
+| ---------------- | -------------------------------------------------------- | ----------- |
+| `unauthorized`   | Missing or invalid credentials (HTTP 401)                | no          |
+| `forbidden`      | Authenticated but not allowed (HTTP 403)                 | no          |
+| `not_found`      | Repository/resource missing (HTTP 404 / 410)             | no          |
+| `rate_limited`   | Rate limit hit (HTTP 429)                                | yes         |
+| `validation`     | Bad parameters (HTTP 400 / 422, or a client-side check)  | no          |
+| `unsupported`    | The provider can't do what was requested                | no          |
+| `provider_error` | An unclassified provider response                        | no*         |
+| `network_error`  | The request never completed (DNS, connection, timeout)  | yes         |
+
+<small>* `provider_error` is treated as retryable when the HTTP status is `5xx`.</small>
+
+```ts
+switch (error.code) {
+  case 'rate_limited':
+    // back off using error.retryAfter
+    break;
+  case 'unauthorized':
+    // refresh credentials
+    break;
+  case 'unsupported':
+    // the provider lacks this capability — see Capabilities
+    break;
+}
+```
+
+## Retryable & retryAfter
+
+`retryable` is a normalized hint: `rate_limited` and `network_error` are retryable, as are `5xx`
+provider errors. When the provider sent a `Retry-After` header, `retryAfter` carries the number of
+seconds to wait.
+
+The client already performs **one bounded retry** on `rate_limited` when `Retry-After` is small; see
+[retry configuration](/concepts/client-and-providers#retry-configuration). For anything beyond that, use
+`retryable` and `retryAfter` to build your own back-off.
+
+## Secret redaction
+
+`RepoError` **redacts known secrets** from its message before the error is constructed. Tokens, API
+keys, and other credentials the SDK knows about are replaced with `[redacted]`, so an error that bubbles
+up into your logs or an error tracker won't leak the credential that produced it.
+
+:::warning
+Redaction covers the error **message**. Some values that inherently embed credentials — most notably the
+URL returned by `repos.getCloneUrl` — are secrets by design. Never log those directly.
+:::
+
+<Card title="Next: Capabilities" icon="toggle-right" href="/concepts/capabilities">
+  How providers advertise what they can and can't do.
+</Card>

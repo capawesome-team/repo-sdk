@@ -1,0 +1,87 @@
+{
+  "name": "repo-sdk",
+  "version": "0.0.0",
+  "description": "Unified TypeScript SDK for git providers — GitHub, GitLab, Bitbucket, Azure DevOps",
+  "license": "MIT",
+  "author": "Robin Genz <mail@robingenz.dev>",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "git",
+    "github",
+    "gitlab",
+    "bitbucket",
+    "azure-devops",
+    "sdk",
+    "version-control",
+    "webhooks"
+  ],
+  "homepage": "https://github.com/capawesome-team/repo-sdk",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capawesome-team/repo-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/capawesome-team/repo-sdk"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./github": {
+      "types": "./dist/github.d.ts",
+      "default": "./dist/github.js"
+    },
+    "./gitlab": {
+      "types": "./dist/gitlab.d.ts",
+      "default": "./dist/gitlab.js"
+    },
+    "./bitbucket": {
+      "types": "./dist/bitbucket.d.ts",
+      "default": "./dist/bitbucket.js"
+    },
+    "./azure-devops": {
+      "types": "./dist/azure-devops.d.ts",
+      "default": "./dist/azure-devops.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docs:dev": "blume dev",
+    "docs:build": "blume build && rm -rf .blume-dist && cp -R dist .blume-dist",
+    "docs:preview": "blume preview",
+    "docs:check": "blume check"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.1",
+    "astro": "^7.1.1",
+    "blume": "^1.0.4",
+    "eslint": "^10.7.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.5",
+    "tsdown": "^0.22.9",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^4.1.10"
+  }
+}

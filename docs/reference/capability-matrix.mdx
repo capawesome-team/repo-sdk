@@ -1,0 +1,55 @@
+---
+title: Capability matrix
+description: The full per-provider RepoCapabilities reference.
+sidebar:
+  label: Capability matrix
+---
+
+A complete reference of the `RepoCapabilities` values for each provider — tag dates, repo search, owned
+filter, webhook events, webhook verification, and archive formats.
+
+Every provider exposes this object as `capabilities`, also surfaced on `client.capabilities`. The client
+gates on these values and throws `unsupported` rather than silently dropping an option — see
+[Capabilities](/concepts/capabilities).
+
+## Matrix
+
+| Capability            | Type                            | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps  |
+| --------------------- | ------------------------------- | ------------------------- | ------------------------- | ---------------- | ------------- |
+| `tagDates`            | `boolean`                       | `false`                   | `true`                    | `true`           | `false`       |
+| `repoSearch`          | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       |
+| `ownedRepoFilter`     | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       |
+| `webhookEvents`       | `WebhookEventType[]`            | `push, tag_push, release` | `push, tag_push, release` | `push, tag_push` | `push, tag_push` |
+| `webhookVerification` | `WebhookVerificationMethod`     | `hmac-sha256`             | `shared-token`            | `hmac-sha256`    | `basic-auth`  |
+| `archiveFormats`      | `ArchiveFormat[]`               | `zip, tar.gz`             | `zip, tar.gz`             | `zip, tar.gz`    | `zip`         |
+
+## What each field gates
+
+<TypeTable
+  type={{
+    tagDates: { type: 'boolean', description: 'Whether listed tags carry a date. When false, Tag.date is undefined (GitHub, Azure DevOps).' },
+    repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query. Passing query without it throws unsupported.' },
+    ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true. Passing it without support throws unsupported.' },
+    webhookEvents: { type: 'WebhookEventType[]', description: 'The events webhooks.create / update accept. Any other event throws unsupported.' },
+    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How verifyWebhook checks an incoming delivery for this provider.' },
+    archiveFormats: { type: 'ArchiveFormat[]', description: 'The formats downloadArchive can return. Any other format throws unsupported.' },
+  }}
+/>
+
+## Reading capabilities at runtime
+
+Because capabilities are plain data, you can branch on them before offering a feature:
+
+```ts
+if (client.capabilities.repoSearch) {
+  const { data } = await client.repos.list({ query: userInput });
+}
+
+if (client.capabilities.webhookEvents.includes('release')) {
+  // offer release webhooks in the UI
+}
+```
+
+<Card title="Provider support" icon="table" href="/reference/provider-support">
+  The broader feature-by-provider matrix, including auth and self-hosting.
+</Card>

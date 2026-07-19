@@ -1,0 +1,72 @@
+---
+title: Provider support
+description: A feature-by-provider support matrix across GitHub, GitLab, Bitbucket, and Azure DevOps.
+sidebar:
+  label: Provider support
+---
+
+A feature × provider matrix covering authentication methods, `baseUrl`/self-hosted support, discovery,
+downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+
+## Feature matrix
+
+| Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          |
+| ------------------------------ | -------------------- | -------------------- | -------------------- | --------------------- |
+| Subpath import                 | `repo-sdk/github`    | `repo-sdk/gitlab`    | `repo-sdk/bitbucket` | `repo-sdk/azure-devops` |
+| Token auth                     | ✓ (PAT / OAuth)      | ✓ (PAT / project / group / OAuth) | ✓ (access token, Bearer) | ✓ (PAT)         |
+| App / alternative auth         | ✓ (GitHub App)       | —                    | ✓ (email + API token, Basic) | ✓ (Entra `tokenProvider`) |
+| Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            |
+| `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  |
+| Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              |
+| Repo search (`query`)          | ✓                    | ✓                    | ✓                    | ✗                     |
+| Owned filter (`owned`)         | ✓                    | ✓                    | ✓                    | ✗                     |
+| Commits list                   | ✓                    | ✓                    | ✓ (client-side filters) | ✓                  |
+| Commits get (resolve ref)      | ✓                    | ✓                    | ✓                    | ✓                     |
+| Tags list                      | ✓                    | ✓                    | ✓                    | ✓                     |
+| Tag dates                      | ✗                    | ✓                    | ✓                    | ✗                     |
+| Archive download               | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz, API token only) | ✓ (zip only)  |
+| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) |
+| Webhooks manage                | ✓                    | ✓                    | ✓                    | ✓                     |
+| Webhook events                 | push, tag_push, release | push, tag_push, release | push, tag_push  | push, tag_push        |
+| Webhook receive/verify         | HMAC-SHA256          | shared token         | HMAC-SHA256          | basic auth            |
+| Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   |
+
+## Per-provider caveats
+
+<Accordion>
+  <AccordionItem title="GitHub" icon="github">
+    - Tag listing carries **no date** (`tagDates: false`) — `Tag.date` is `undefined`.
+    - **GitHub App** auth uses installation tokens with no user identity: namespace and owned listing use
+      the installation's accessible repositories, and resolving the authenticated user throws
+      `unsupported`. Single-installation apps can omit `installationId`; zero installs throw
+      `unauthorized`, multiple throw `validation`.
+    - Clone URLs from GitHub App auth set `expiresAt` (~1h).
+  </AccordionItem>
+  <AccordionItem title="GitLab" icon="gitlab">
+    - Self-managed instances need the full `baseUrl` **including `/api/v4`**.
+    - The `repo` string accepts the full subgroup path or the numeric project id.
+    - Project hooks are **always active** — `active: false` throws `unsupported`.
+  </AccordionItem>
+  <AccordionItem title="Bitbucket Cloud" icon="git-branch">
+    - **Cloud only** — no `baseUrl`.
+    - **Archive downloads require the email + API token (Basic) auth**; with an access token,
+      `downloadArchive` throws `unsupported`.
+    - No `release` webhook event; `push` and `tag_push` both map to the native `repo:push`.
+    - `since` / `until` / `author` commit filters are applied client-side per page.
+  </AccordionItem>
+  <AccordionItem title="Azure DevOps" icon="git-branch">
+    - `organization` is **required** on the factory and is not part of the `repo` string.
+    - No repo search and no owned filter — passing `query` or `owned` throws `unsupported`.
+    - Archive downloads are **zip only**.
+    - Webhooks: `push` and `tag_push` are delivered by one `git.push` subscription, so `webhooks.create`
+      requires **both** together. No `release` event.
+    - Entra auth returns clone credentials in `headers` instead of embedding them in the URL.
+    - The repositories endpoint returns everything in **one response** — there's no server-side cursor, so
+      `limit` is honored client-side.
+    - `listOrganizations` is a standalone helper (organizations live outside the org-pinned provider).
+  </AccordionItem>
+</Accordion>
+
+<Card title="Capability matrix" icon="toggle-right" href="/reference/capability-matrix">
+  The exact RepoCapabilities values per provider.
+</Card>

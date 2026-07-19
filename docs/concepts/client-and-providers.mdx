@@ -1,0 +1,120 @@
+---
+title: Client & providers
+description: How createClient, provider factories, and the thin-adapter/fat-client split fit together.
+sidebar:
+  label: Client & providers
+---
+
+`repo-sdk` is built on a clean split: **thin provider adapters** translate one provider's REST API into
+a normalized contract, and a **single fat client** layers all the cross-provider behavior on top —
+validation, capability gating, retries, and the `listAll` iterators.
+
+## createClient
+
+`createClient` takes a provider and returns a `RepoClient` with grouped namespaces:
+
+```ts
+import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+
+client.namespaces; // list / listAll
+client.repos; // list / listAll / get / downloadArchive / getCloneUrl
+client.commits; // list / listAll / get
+client.tags; // list / listAll
+client.webhooks; // create / list / get / update / delete
+```
+
+The client also exposes two read-only fields derived from the provider:
+
+<TypeTable
+  type={{
+    providerName: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops'", description: 'Which provider backs this client.' },
+    capabilities: { type: 'RepoCapabilities', description: 'The provider capability object — see Capabilities.' },
+  }}
+/>
+
+## Provider factories
+
+Each provider ships a factory on its own subpath. A factory validates its options and returns a
+`RepoProvider` — the thin adapter the client drives:
+
+```ts
+import { github } from 'repo-sdk/github';
+import { gitlab } from 'repo-sdk/gitlab';
+import { bitbucket } from 'repo-sdk/bitbucket';
+import { azureDevOps } from 'repo-sdk/azure-devops';
+```
+
+Every factory takes an `auth` block; most also accept an optional `baseUrl` for self-hosted or
+enterprise instances. See [Authentication](/authentication) for the per-provider auth shapes.
+
+## Thin adapter, fat client
+
+The `RepoProvider` contract is deliberately minimal — a flat list of methods like `listRepositories`,
+`getCommit`, and `createWebhook`. Everything that should behave identically across providers lives in
+the client, not the adapter:
+
+<CardGroup cols={2}>
+  <Card title="Parameter validation" icon="check-check">
+    Required fields like `repo` and `ref` are checked before a request is ever made.
+  </Card>
+  <Card title="Capability gating" icon="toggle-right">
+    Unsupported options throw `unsupported` instead of being silently dropped.
+  </Card>
+  <Card title="Bounded retries" icon="refresh-cw">
+    One retry on `rate_limited` when `Retry-After` is small (configurable).
+  </Card>
+  <Card title="Pagination" icon="list">
+    The `listAll` async iterators follow cursors for you.
+  </Card>
+</CardGroup>
+
+The payoff: a new provider only has to implement the thin adapter, and it instantly inherits all of the
+client's behavior.
+
+## Injectable fetch
+
+Every factory accepts an optional `fetch` implementation. In production you omit it and the platform's
+global `fetch` is used; in tests you inject a stub so no real network call is made:
+
+```ts
+const provider = github({
+  auth: { token: 'test-token' },
+  fetch: async (input, init) => {
+    // return a Response for the request under test
+    return new Response(JSON.stringify({ sha: 'abc', commit: { message: 'hi' } }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  },
+});
+
+const client = createClient({ provider });
+```
+
+:::tip
+For integration tests that don't target a specific provider's wire format, prefer the in-memory
+provider from `repo-sdk/testing` — see [Testing](/testing).
+:::
+
+## Retry configuration
+
+The client performs one bounded retry on `rate_limited` when the provider's `Retry-After` is small.
+Tune it via `createClient`:
+
+```ts
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+  retry: {
+    rateLimit: true, // default — retry once on rate_limited
+    maxRetryAfterSeconds: 10, // default — only if Retry-After ≤ 10s
+  },
+});
+```
+
+<Card title="Next: Repositories & namespaces" icon="folder-git" href="/concepts/repositories-and-namespaces">
+  How repositories are addressed and discovered.
+</Card>

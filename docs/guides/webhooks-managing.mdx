@@ -1,0 +1,86 @@
+---
+title: Managing webhooks
+description: Create, list, update, and delete repository webhooks.
+sidebar:
+  label: Managing webhooks
+---
+
+`client.webhooks` provides full CRUD over a repository's webhooks — `create`, `list`, `get`, `update`,
+and `delete`. Requested events are gated against `capabilities.webhookEvents`, so an unsupported event
+throws `unsupported` before any request is made.
+
+## Normalized events
+
+`repo-sdk` normalizes webhook events to three types. Not every provider supports all three — the SDK maps
+each to the provider's native trigger:
+
+| Event      | Meaning                        | GitHub | GitLab | Bitbucket | Azure DevOps |
+| ---------- | ------------------------------ | :----: | :----: | :-------: | :----------: |
+| `push`     | Commits pushed to a branch     |   ✓    |   ✓    |     ✓     |      ✓       |
+| `tag_push` | A tag is created or deleted    |   ✓    |   ✓    |     ✓     |      ✓       |
+| `release`  | A release is published         |   ✓    |   ✓    |     ✗     |      ✗       |
+
+## Creating a webhook
+
+```ts
+const hook = await client.webhooks.create({
+  repo: 'capawesome-team/repo-sdk',
+  url: 'https://example.com/hooks/repo',
+  secret: process.env.WEBHOOK_SECRET,
+  events: ['push', 'tag_push', 'release'],
+});
+```
+
+<TypeTable
+  type={{
+    repo: { type: 'string', description: 'The repository, in the provider path form.' },
+    url: { type: 'string', description: 'The endpoint the provider will POST events to.' },
+    events: { type: 'WebhookEventType[]', description: "Events to subscribe to — 'push' | 'tag_push' | 'release'." },
+    secret: { type: 'string', required: false, description: 'Signing/verification secret. Store it — you need the same value to verify incoming deliveries.' },
+    active: { type: 'boolean', required: false, description: 'Whether the hook is active. Defaults to true.' },
+  }}
+/>
+
+## Listing, reading, updating, deleting
+
+```ts
+const { data: hooks } = await client.webhooks.list({ repo: 'capawesome-team/repo-sdk' });
+const hook = await client.webhooks.get({ repo: 'capawesome-team/repo-sdk', id: hooks[0].id });
+
+await client.webhooks.update({ repo: 'capawesome-team/repo-sdk', id: hook.id, active: false });
+await client.webhooks.delete({ repo: 'capawesome-team/repo-sdk', id: hook.id });
+```
+
+A normalized `Webhook` is `{ id, url, events, active, raw }`. On `update`, omitted fields are preserved:
+the SDK reads the existing hook and merges, so you can change just `active` or just `events` without
+wiping the URL or stored secret.
+
+## Secret handling
+
+The `secret` is write-only. Providers never return it on read, so:
+
+- Store the secret yourself when you create the hook — you need the same value to
+  [verify incoming deliveries](/guides/webhooks-receiving).
+- On `update`, omit `secret` to keep the stored one; pass it again only to rotate it.
+
+:::warning
+Azure DevOps registers the secret as HTTP Basic auth and never returns it on read. If you update a
+secret-protected Azure hook **without** passing `secret`, the SDK refuses with a `validation` error
+rather than silently clearing it — pass `secret` again on update.
+:::
+
+## Per-provider caveats
+
+:::warning
+- **Bitbucket and Azure DevOps have no `release` event.** Requesting it throws `unsupported`.
+- **Azure DevOps delivers branch and tag pushes through a single `git.push` subscription** and cannot
+  filter to a subset, so `webhooks.create` requires **both** `push` and `tag_push` together — a strict
+  subset like `['push']` throws `unsupported`.
+- **GitLab hooks are always active.** GitLab's API has no flag to create or set a hook inactive, so
+  passing `active: false` throws `unsupported`.
+- An empty `events` array throws `validation` ("at least one webhook event is required").
+:::
+
+<Card title="Next: Receiving webhooks" icon="antenna" href="/guides/webhooks-receiving">
+  Verify signatures and parse incoming events.
+</Card>

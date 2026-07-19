@@ -1,0 +1,81 @@
+---
+title: Capabilities
+description: RepoCapabilities, capability gating, and how providers differ.
+sidebar:
+  label: Capabilities
+---
+
+Providers are not identical. GitLab can date tags, GitHub can't; Azure DevOps doesn't support free-text
+repository search; only GitHub and GitLab emit `release` webhooks. Rather than hide these differences and
+silently drop options, `repo-sdk` **advertises** each provider's capabilities and **gates** on them.
+
+## RepoCapabilities
+
+Every provider exposes a `capabilities` object, also surfaced on `client.capabilities`:
+
+<TypeTable
+  type={{
+    tagDates: { type: 'boolean', description: 'Whether listed tags carry a date.' },
+    repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query.' },
+    ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true.' },
+    webhookEvents: { type: 'WebhookEventType[]', description: 'The webhook events the provider can register.' },
+    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How incoming webhooks are verified.' },
+    archiveFormats: { type: 'ArchiveFormat[]', description: 'The archive formats downloadArchive can return.' },
+  }}
+/>
+
+```ts
+const client = createClient({ provider: github({ auth: { token } }) });
+
+client.capabilities.tagDates; // false for GitHub
+client.capabilities.archiveFormats; // ['zip', 'tar.gz']
+client.capabilities.webhookEvents; // ['push', 'tag_push', 'release']
+```
+
+## Capability gating
+
+When you pass an option a provider can't honor, the client throws a `RepoError` with code `unsupported`
+**before making a request** — it never silently ignores it:
+
+```ts
+// Azure DevOps has no free-text repo search.
+await client.repos.list({ query: 'checkout' });
+// → RepoError { code: 'unsupported', provider: 'azure-devops' }
+```
+
+The same gating applies to:
+
+- `repos.list({ query })` — requires `repoSearch`
+- `repos.list({ owned: true })` — requires `ownedRepoFilter`
+- `repos.downloadArchive({ format })` — the `format` must be in `archiveFormats`
+- `webhooks.create` / `webhooks.update` — every event must be in `webhookEvents`
+
+## Gate at runtime
+
+Because capabilities are plain data, you can check them before offering a feature — for example, to hide
+a "search repositories" box when the active provider can't search:
+
+```ts
+if (client.capabilities.repoSearch) {
+  const { data } = await client.repos.list({ query: userInput });
+}
+
+if (client.capabilities.webhookEvents.includes('release')) {
+  // offer release webhooks in the UI
+}
+```
+
+## Per-provider differences
+
+| Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     |
+| ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- |
+| Tag dates              | ✗                         | ✓                         | ✓                | ✗                |
+| Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                |
+| Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                |
+| Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   |
+| Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       |
+| Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              |
+
+<Card title="See the full matrix" icon="table" href="/reference/capability-matrix">
+  The complete per-provider capability reference.
+</Card>

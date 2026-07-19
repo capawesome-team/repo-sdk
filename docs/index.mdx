@@ -1,0 +1,90 @@
+---
+title: Introduction
+description: One unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+sidebar:
+  label: Introduction
+  icon: rocket
+---
+
+`repo-sdk` gives you a single, normalized API for the four major git providers — **GitHub**, **GitLab**,
+**Bitbucket Cloud**, and **Azure DevOps** — so you write your discovery, commit, tag, download, and
+webhook logic once instead of four times.
+
+It has **zero runtime dependencies** (raw `fetch` + Web Crypto only) and is **edge-compatible**: it runs
+on Node.js ≥ 20, Cloudflare Workers, and other Web-standard runtimes.
+
+:::note
+`repo-sdk` is `0.x` — the API may change between minor releases.
+:::
+
+## Why repo-sdk
+
+<CardGroup cols={2}>
+  <Card title="One unified API" icon="git-merge">
+    Swap the `provider` and the rest of your code stays the same. No per-provider branching.
+  </Card>
+  <Card title="Normalized types" icon="shapes">
+    Every result maps to a provider-agnostic shape — `Namespace`, `Repository`, `Commit`, `Tag`,
+    `Webhook` — with the untouched payload on a `raw` escape hatch.
+  </Card>
+  <Card title="Zero dependencies" icon="feather">
+    Just `fetch` and Web Crypto. Nothing to audit, nothing to bloat your bundle.
+  </Card>
+  <Card title="Edge-compatible" icon="cloud">
+    Runs on Node.js, Cloudflare Workers, and any Web-standard runtime.
+  </Card>
+  <Card title="Typed errors" icon="shield-alert">
+    Every failure is a `RepoError` with a stable `code` union, retry hints, and redacted secrets.
+  </Card>
+  <Card title="Capability gating" icon="toggle-right">
+    Providers differ. The client throws `unsupported` instead of silently dropping an option.
+  </Card>
+</CardGroup>
+
+## A first look
+
+```ts
+import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+
+// Resolve a ref (branch, tag, or SHA) to a single commit.
+const head = await client.commits.get({ repo: 'capawesome-team/repo-sdk', ref: 'main' });
+console.log(head.sha, head.message);
+```
+
+Switching providers means swapping the `provider` argument — the rest of your code stays the same.
+
+## Supported providers
+
+<CardGroup cols={2}>
+  <Card title="GitHub" icon="github" href="/authentication/github">
+    Token, GitHub App, and Enterprise Server. Import from `repo-sdk/github`.
+  </Card>
+  <Card title="GitLab" icon="gitlab" href="/authentication/gitlab">
+    gitlab.com and self-managed. Import from `repo-sdk/gitlab`.
+  </Card>
+  <Card title="Bitbucket Cloud" icon="git-branch" href="/authentication/bitbucket">
+    Atlassian API token or access token. Import from `repo-sdk/bitbucket`.
+  </Card>
+  <Card title="Azure DevOps" icon="git-branch" href="/authentication/azure-devops">
+    PAT, Entra ID, and Server. Import from `repo-sdk/azure-devops`.
+  </Card>
+</CardGroup>
+
+## Where to next
+
+<CardGroup cols={3}>
+  <Card title="Installation" icon="package" href="/installation">
+    Install the package and understand the subpath exports.
+  </Card>
+  <Card title="Quickstart" icon="zap" href="/quickstart">
+    Create a client, list commits, and receive your first webhook.
+  </Card>
+  <Card title="Core concepts" icon="book-open" href="/concepts/client-and-providers">
+    Clients, providers, the `repo` string, pagination, errors, and capabilities.
+  </Card>
+</CardGroup>

@@ -1,0 +1,93 @@
+---
+title: Working with commits
+description: List commits on a ref and resolve a ref to a single commit.
+sidebar:
+  label: Commits
+---
+
+`commits.list` / `commits.listAll` page through a repository's history with optional `ref`, `since`,
+`until`, `path`, and `author` filters, while `commits.get` resolves a branch, tag, or SHA to one
+normalized `Commit`.
+
+## Listing commits
+
+`commits.list` returns one `Page<Commit>`; `commits.listAll` follows cursors and yields every commit.
+Both require a `repo` and accept optional filters:
+
+<TypeTable
+  type={{
+    repo: { type: 'string', description: 'The repository, in the provider path form.' },
+    ref: { type: 'string', required: false, description: 'Branch, tag, or SHA to list history from. Defaults to the default branch.' },
+    since: { type: 'Date', required: false, description: 'Only commits at or after this date.' },
+    until: { type: 'Date', required: false, description: 'Only commits at or before this date.' },
+    path: { type: 'string', required: false, description: 'Only commits touching this file path.' },
+    author: { type: 'string', required: false, description: 'Filter by author.' },
+    limit: { type: 'number', required: false, description: 'Page size hint.' },
+    cursor: { type: 'string', required: false, description: 'Opaque token from a previous page.' },
+  }}
+/>
+
+```ts
+const { data: commits, cursor } = await client.commits.list({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'main',
+  since: new Date('2024-01-01'),
+  limit: 20,
+});
+
+if (cursor) {
+  const next = await client.commits.list({
+    repo: 'capawesome-team/repo-sdk',
+    ref: 'main',
+    cursor,
+  });
+}
+```
+
+Or iterate the whole history lazily and `break` when you've seen enough:
+
+```ts
+for await (const commit of client.commits.listAll({ repo: 'capawesome-team/repo-sdk', ref: 'main' })) {
+  console.log(commit.sha, commit.message);
+}
+```
+
+:::note
+Bitbucket has no server-side `since` / `until` / `author` filters, so the SDK applies them client-side to
+each returned page. The other providers filter server-side.
+:::
+
+## Resolving a ref to one commit
+
+`commits.get` resolves a **branch, tag, or full SHA** to a single normalized `Commit`:
+
+```ts
+const head = await client.commits.get({ repo: 'capawesome-team/repo-sdk', ref: 'main' });
+console.log(head.sha, head.message);
+
+await client.commits.get({ repo: 'capawesome-team/repo-sdk', ref: 'v1.0.0' }); // tag
+await client.commits.get({ repo: 'capawesome-team/repo-sdk', ref: 'a1b2c3d…' }); // SHA
+```
+
+When the ref is an **annotated tag**, it is dereferenced to the commit it points at, so `sha` is always a
+commit SHA. A ref that doesn't exist throws a `RepoError` with `code: 'not_found'`.
+
+## The normalized Commit
+
+<TypeTable
+  type={{
+    sha: { type: 'string', description: 'The commit SHA.' },
+    message: { type: 'string', description: 'The full commit message.' },
+    author: { type: 'GitActor', description: 'Author name, optional email, and date.' },
+    committer: { type: 'GitActor', required: false, description: 'Committer, when the provider distinguishes it from the author.' },
+    parents: { type: 'string[]', description: 'Parent commit SHAs.' },
+    url: { type: 'string', required: false, description: 'Web URL of the commit, when available.' },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+A `GitActor` is `{ name: string; email?: string; date: Date }`.
+
+<Card title="Next: Working with tags" icon="tag" href="/guides/tags">
+  List a repository's tags and read annotation details.
+</Card>

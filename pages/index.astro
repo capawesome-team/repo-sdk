@@ -1,0 +1,158 @@
+---
+import PageLayout from 'blume/components/layout/PageLayout.astro';
+import data from 'blume:data';
+
+const { config } = data;
+
+const features = [
+  {
+    title: 'One unified API',
+    description: 'Discovery, commits, tags, downloads, and webhooks over four providers — one interface.',
+  },
+  {
+    title: 'Zero dependencies',
+    description: 'Just fetch and Web Crypto. Nothing to audit, nothing to bloat your bundle.',
+  },
+  {
+    title: 'Edge-compatible',
+    description: 'Runs on Node.js ≥ 20, Cloudflare Workers, and any Web-standard runtime.',
+  },
+  {
+    title: 'Normalized types',
+    description: 'Namespace, Repository, Commit, Tag, Webhook — with a raw escape hatch on every object.',
+  },
+  {
+    title: 'Typed errors',
+    description: 'Every failure is a RepoError with a stable code union, retry hints, and redacted secrets.',
+  },
+  {
+    title: 'Webhook verify & parse',
+    description: 'Standalone helpers that take a Web-standard Request — no client needed.',
+  },
+  {
+    title: 'Capability gating',
+    description: 'Providers differ. Unsupported options throw instead of being silently dropped.',
+  },
+  {
+    title: 'In-memory testing provider',
+    description: 'Exercise your integration end to end without hitting a real provider.',
+  },
+];
+
+const providers = ['GitHub', 'GitLab', 'Bitbucket Cloud', 'Azure DevOps'];
+
+const codeSample = `import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+
+// Resolve a ref (branch, tag, or SHA) to a single commit.
+const head = await client.commits.get({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'main',
+});
+console.log(head.sha, head.message);`;
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  page={{ title: 'repo-sdk — one unified API over four git providers', description: config.description }}
+>
+  <main class="mx-auto w-full max-w-5xl px-6">
+    <!-- Hero -->
+    <section class="py-20 sm:py-28 text-center">
+      <span class="inline-flex items-center rounded-blume border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
+        Zero dependencies · Edge-compatible
+      </span>
+      <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-6xl">repo-sdk</h1>
+      <p class="mx-auto mt-5 max-w-2xl text-lg text-muted-foreground">
+        One unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps.
+        Write your discovery, commit, tag, download, and webhook logic once — not four times.
+      </p>
+
+      <div class="mx-auto mt-8 flex max-w-md items-center justify-center">
+        <code class="w-full rounded-blume border border-border bg-code-background px-4 py-3 text-left font-mono text-sm">
+          <span class="text-muted-foreground select-none">$ </span>npm install repo-sdk
+        </code>
+      </div>
+
+      <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <a
+          href="/docs"
+          class="inline-flex items-center rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+        >
+          Get started
+        </a>
+        <a
+          href="/docs/quickstart"
+          class="inline-flex items-center rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          Quickstart
+        </a>
+        <a
+          href="https://github.com/capawesome-team/repo-sdk"
+          class="inline-flex items-center rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+        >
+          GitHub
+        </a>
+      </div>
+    </section>
+
+    <!-- Providers -->
+    <section class="pb-8 text-center">
+      <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Supported providers</p>
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
+        {
+          providers.map((provider) => (
+            <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider}</span>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="py-16">
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          features.map((feature) => (
+            <div class="rounded-blume border border-border p-5 text-left">
+              <h3 class="text-sm font-semibold">{feature.title}</h3>
+              <p class="mt-2 text-sm text-muted-foreground">{feature.description}</p>
+            </div>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Code sample -->
+    <section class="pb-24">
+      <div class="mx-auto max-w-3xl">
+        <h2 class="text-center text-2xl font-semibold tracking-tight">Swap the provider, keep your code</h2>
+        <p class="mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
+          One client, one shape. Switching providers means swapping the <code class="font-mono">provider</code> argument.
+        </p>
+        <pre class="mt-6 overflow-x-auto rounded-blume border border-border bg-code-background p-5 text-left font-mono text-sm"><code>{codeSample}</code></pre>
+        <div class="mt-6 text-center">
+          <a
+            href="/docs/concepts/client-and-providers"
+            class="inline-flex items-center rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+          >
+            Explore the core concepts
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+</PageLayout>

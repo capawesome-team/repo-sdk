@@ -1,0 +1,95 @@
+---
+title: GitHub authentication
+description: Authenticate the GitHub provider with a token or a GitHub App.
+sidebar:
+  label: GitHub
+---
+
+The `github` provider from `repo-sdk/github` authenticates with either a token (classic/fine-grained PAT
+or OAuth token) or GitHub App credentials, and supports GitHub Enterprise Server via `baseUrl`.
+
+## Token auth
+
+Pass a token — a classic or fine-grained personal access token, or an OAuth token — and the SDK sends it
+as a `Bearer` credential on every request.
+
+```ts
+import { createClient } from 'repo-sdk';
+import { github } from 'repo-sdk/github';
+
+const client = createClient({
+  provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
+});
+```
+
+<TypeTable
+  type={{
+    token: { type: 'string', description: 'Classic/fine-grained PAT or OAuth token, sent as Bearer.' },
+  }}
+/>
+
+## GitHub App auth
+
+Supply your app's credentials and the SDK signs a short-lived RS256 JWT, resolves the installation, and
+mints (and caches/refreshes) an installation access token for you.
+
+```ts
+const client = createClient({
+  provider: github({
+    auth: {
+      appId: process.env.GITHUB_APP_ID!,
+      privateKey: process.env.GITHUB_APP_PRIVATE_KEY!,
+      installationId: process.env.GITHUB_INSTALLATION_ID, // optional — see below
+    },
+  }),
+});
+```
+
+<TypeTable
+  type={{
+    appId: { type: 'string | number', description: 'The GitHub App id.' },
+    privateKey: { type: 'string', description: 'The app private key, PEM-encoded (PKCS#1 or PKCS#8).' },
+    installationId: { type: 'string | number', required: false, description: 'The installation to act as. Optional for single-installation apps.' },
+  }}
+/>
+
+### Private key formats
+
+Both PEM encodings are accepted as-is — you do not need to convert between them:
+
+- **PKCS#8** — `-----BEGIN PRIVATE KEY-----`
+- **PKCS#1** — `-----BEGIN RSA PRIVATE KEY-----` (the format GitHub downloads by default; the SDK wraps
+  it in a PKCS#8 envelope internally)
+
+### Resolving the installation
+
+`installationId` is optional. How it resolves depends on how many installations the app has:
+
+| Installations | Behavior                                                                         |
+| ------------- | -------------------------------------------------------------------------------- |
+| exactly one   | Omit `installationId` — the SDK auto-detects the single installation.            |
+| zero          | Throws `RepoError` with `code: 'unauthorized'` ("not installed anywhere").       |
+| more than one | Throws `RepoError` with `code: 'validation'` — pass `installationId` to pick one. |
+
+:::warning
+An installation token has **no user identity**, so GitHub App auth cannot call user-scoped endpoints.
+Namespace and owned-repository listing fall back to the installation's accessible repositories
+(`/installation/repositories`) rather than `/user`. Attempting to resolve the authenticated user throws
+`unsupported`.
+:::
+
+## GitHub Enterprise Server
+
+Point `baseUrl` at your GHES API root (`/api/v3`). It applies to both token and GitHub App auth, and the
+SDK derives the matching git host for clone URLs automatically.
+
+```ts
+github({
+  auth: { token: process.env.GITHUB_TOKEN! },
+  baseUrl: 'https://ghe.example.com/api/v3',
+});
+```
+
+<Card title="Discover repositories" icon="folder-git" href="/guides/repositories">
+  List namespaces and repositories once you're authenticated.
+</Card>

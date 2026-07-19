@@ -1,0 +1,95 @@
+---
+title: Discovering repositories
+description: List namespaces and repositories, and fetch a single repository.
+sidebar:
+  label: Repositories
+---
+
+Use `namespaces.list` to enumerate the containers you can access, then `repos.list` / `repos.listAll` to
+walk their repositories, and `repos.get` to fetch a single normalized `Repository`.
+
+## Namespaces
+
+A **namespace** is the container a repository lives in. Each provider names them differently; `repo-sdk`
+normalizes them to a `Namespace` with a `kind` telling you which one you're looking at.
+
+| Provider     | What `namespaces.list` returns                                  | `kind`                     |
+| ------------ | -------------------------------------------------------------- | -------------------------- |
+| GitHub       | The authenticated user plus their organizations                | `user`, `organization`     |
+| GitLab       | The authenticated user plus their groups (including subgroups) | `user`, `group`            |
+| Bitbucket    | The workspaces the user belongs to                             | `workspace`                |
+| Azure DevOps | The projects in the pinned organization                        | `project`                  |
+
+```ts
+const { data: namespaces } = await client.namespaces.list();
+
+// Or iterate every namespace across all pages:
+for await (const namespace of client.namespaces.listAll()) {
+  console.log(namespace.kind, namespace.slug);
+}
+```
+
+## Listing repositories
+
+`repos.list` returns one `Page<Repository>`; `repos.listAll` follows cursors and yields every repository.
+Both accept the same filters:
+
+<TypeTable
+  type={{
+    namespace: { type: 'string', required: false, description: 'Restrict to one namespace (owner, group, workspace, or project).' },
+    owned: { type: 'boolean', required: false, description: 'Only repositories owned by the authenticated user. Requires the ownedRepoFilter capability.' },
+    query: { type: 'string', required: false, description: 'Free-text search over repository names. Requires the repoSearch capability.' },
+    limit: { type: 'number', required: false, description: 'Page size hint.' },
+    cursor: { type: 'string', required: false, description: 'Opaque token from a previous page.' },
+  }}
+/>
+
+```ts
+// Everything you can access:
+for await (const repo of client.repos.listAll()) {
+  console.log(repo.path);
+}
+
+// Scoped to one namespace:
+const { data } = await client.repos.list({ namespace: 'capawesome-team' });
+
+// Search by name (where supported):
+const { data: hits } = await client.repos.list({ query: 'sdk' });
+```
+
+:::warning
+`query` and `owned` are **gated on capabilities**. Azure DevOps supports neither `repoSearch` nor
+`ownedRepoFilter`, so passing `query` or `owned: true` throws a `RepoError` with `code: 'unsupported'`
+before any request is made. Check `client.capabilities.repoSearch` / `client.capabilities.ownedRepoFilter`
+first — see [Capabilities](/concepts/capabilities).
+:::
+
+## Fetching a single repository
+
+`repos.get` takes a `repo` string in the provider's native path form and returns the normalized
+`Repository`:
+
+```ts
+const repo = await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+repo.defaultBranch; // normalized
+repo.urls.cloneHttp; // normalized
+repo.raw; // untouched provider payload
+```
+
+### The `repo` string per provider
+
+| Provider     | `repo` format                              | Example                    |
+| ------------ | ------------------------------------------ | -------------------------- |
+| GitHub       | `owner/name`                               | `capawesome-team/repo-sdk` |
+| GitLab       | `group/subgroup/project` **or** numeric id | `acme/backend/api` or `42` |
+| Bitbucket    | `workspace/repo_slug`                      | `acme-workspace/api`       |
+| Azure DevOps | `project/repository`                       | `Payments/checkout`        |
+
+:::note
+For Azure DevOps the `organization` is fixed on the provider factory, so it is not part of the `repo`
+string — only `project/repository` is. See [Repositories & namespaces](/concepts/repositories-and-namespaces).
+:::
+
+<Card title="Next: Working with commits" icon="git-commit" href="/guides/commits">
+  List a repository's history and resolve refs to commits.
+</Card>

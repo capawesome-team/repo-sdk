@@ -1,0 +1,135 @@
+---
+title: Testing
+description: Exercise your integration with the in-memory provider from repo-sdk/testing.
+sidebar:
+  label: Testing
+  icon: flask-conical
+---
+
+`repo-sdk/testing` ships `createInMemoryProvider`, an in-memory `RepoProvider` you can drive with
+`createClient` to test your integration without hitting a real provider. It uses a small page size, so
+cursor pagination is exercised too, and it accepts an optional seed of namespaces, repos, commits, tags,
+and webhooks.
+
+## Basic usage
+
+Create the provider, hand it to `createClient`, and drive it exactly like a real client:
+
+```ts
+import { createClient } from 'repo-sdk';
+import { createInMemoryProvider } from 'repo-sdk/testing';
+
+const provider = createInMemoryProvider({
+  namespaces: [{ id: '1', slug: 'acme', name: 'Acme', kind: 'organization' }],
+  repositories: {
+    'acme/app': { name: 'app', namespace: 'acme', defaultBranch: 'main' },
+  },
+  commits: {
+    'acme/app': [{ sha: 'abc123', message: 'Initial commit' }],
+  },
+});
+
+const client = createClient({ provider });
+const { data } = await client.repos.list({ namespace: 'acme' });
+```
+
+The seed is optional — `createInMemoryProvider()` starts empty.
+
+## The seed shape
+
+`namespaces` is an **array**; `repositories`, `commits`, `tags`, and `webhooks` are **records keyed by
+repository path** (e.g. `acme/app`).
+
+<TypeTable
+  type={{
+    namespaces: { type: 'InMemoryNamespaceSeed[]', required: false, description: 'Namespaces, as an array of { id, slug, name, kind, parent? }.' },
+    repositories: { type: 'Record<string, InMemoryRepositorySeed>', required: false, description: 'Repositories keyed by path. Fields default sensibly (e.g. defaultBranch → main).' },
+    commits: { type: 'Record<string, InMemoryCommitSeed[]>', required: false, description: 'Commits keyed by repo path, newest first.' },
+    tags: { type: 'Record<string, InMemoryTagSeed[]>', required: false, description: 'Tags keyed by repo path.' },
+    webhooks: { type: 'Record<string, InMemoryWebhookSeed[]>', required: false, description: 'Webhooks keyed by repo path.' },
+  }}
+/>
+
+A fuller seed:
+
+```ts
+const provider = createInMemoryProvider({
+  namespaces: [{ id: '1', slug: 'acme', name: 'Acme', kind: 'organization' }],
+  repositories: {
+    'acme/app': { name: 'app', namespace: 'acme', defaultBranch: 'main', owned: true },
+  },
+  commits: {
+    'acme/app': [
+      { sha: 'c2', message: 'Second', refs: ['main'] },
+      { sha: 'c1', message: 'First', refs: ['main', 'v1.0.0'] },
+    ],
+  },
+  tags: {
+    'acme/app': [{ name: 'v1.0.0', sha: 'c1', isAnnotated: true, date: new Date('2024-01-01') }],
+  },
+  webhooks: {
+    'acme/app': [{ url: 'https://example.com/hook', events: ['push'] }],
+  },
+});
+```
+
+:::note
+Seed helpers accept lightweight shapes — most fields are optional and normalized for you. A repository
+seed's `owned: true` makes it match the `owned` filter; a commit seed's `refs` scopes which refs it
+appears under (omit to match any ref).
+:::
+
+## Asserting against state
+
+The provider exposes its data on `provider.state` as `Map`s (plus a `namespaces` array), so you can
+assert on the effects of your code — for example, that a webhook was created:
+
+```ts
+import { expect, test } from 'vitest';
+
+test('registers a webhook', async () => {
+  const provider = createInMemoryProvider({
+    repositories: { 'acme/app': { name: 'app', namespace: 'acme' } },
+  });
+  const client = createClient({ provider });
+
+  await client.webhooks.create({
+    repo: 'acme/app',
+    url: 'https://example.com/hook',
+    events: ['push'],
+  });
+
+  expect(provider.state.webhooks.get('acme/app')).toHaveLength(1);
+});
+```
+
+`provider.state` is `{ namespaces: Namespace[], repositories: Map, commits: Map, tags: Map, webhooks: Map }`.
+
+## Pagination is exercised
+
+The in-memory provider uses a deliberately small **page size of 2**, so a seed with three or more items
+returns a `cursor` and your cursor-following code (`list` with `cursor`, or `listAll`) is exercised
+rather than always fitting in one page.
+
+```ts
+const provider = createInMemoryProvider({
+  namespaces: [
+    { id: '1', slug: 'a', name: 'A', kind: 'organization' },
+    { id: '2', slug: 'b', name: 'B', kind: 'organization' },
+    { id: '3', slug: 'c', name: 'C', kind: 'organization' },
+  ],
+});
+const client = createClient({ provider });
+
+const first = await client.namespaces.list();
+first.data.length; // 2
+first.cursor; // defined — there's a third item
+
+let count = 0;
+for await (const _ of client.namespaces.listAll()) count++;
+count; // 3
+```
+
+<Card title="Reference: Provider support" icon="table" href="/reference/provider-support">
+  Compare the real providers feature by feature.
+</Card>

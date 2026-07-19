@@ -1,0 +1,101 @@
+---
+title: Error codes
+description: The full RepoErrorCode union with causes and retry semantics.
+sidebar:
+  label: Error codes
+---
+
+A complete reference of the `RepoErrorCode` union — `unauthorized`, `forbidden`, `not_found`,
+`rate_limited`, `validation`, `unsupported`, `provider_error`, and `network_error` — with typical causes
+and retry semantics.
+
+Every failure throws a single type — **`RepoError`** — with a normalized `code`, so you branch on the
+failure without parsing provider-specific statuses or messages. For the conceptual overview see
+[Errors](/concepts/errors); this page is the exhaustive reference.
+
+## The RepoError model
+
+<TypeTable
+  type={{
+    code: { type: 'RepoErrorCode', description: 'Normalized failure code — the field to branch on.' },
+    provider: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops'", description: 'Which provider produced the error.' },
+    status: { type: 'number', required: false, description: 'The HTTP status, when the failure came from a response.' },
+    retryable: { type: 'boolean', description: 'Whether retrying the operation may succeed.' },
+    retryAfter: { type: 'number', required: false, description: 'Seconds to wait, when a Retry-After header was present.' },
+  }}
+/>
+
+## The code union
+
+`RepoErrorCode` is a closed union of eight values:
+
+| `code`           | Typical cause                                            | HTTP        | `retryable`   |
+| ---------------- | -------------------------------------------------------- | ----------- | ------------- |
+| `unauthorized`   | Missing or invalid credentials                           | `401`       | no            |
+| `forbidden`      | Authenticated but not allowed                            | `403`       | no            |
+| `not_found`      | Repository/resource missing                              | `404` / `410` | no          |
+| `rate_limited`   | Rate limit hit                                           | `429`       | yes           |
+| `validation`     | Bad parameters (or a client-side check)                  | `400` / `422` | no          |
+| `unsupported`    | The provider can't do what was requested                 | —           | no            |
+| `provider_error` | An unclassified provider response                        | other       | only when `5xx` |
+| `network_error`  | The request never completed (DNS, connection, timeout)   | —           | yes           |
+
+`unsupported` and `validation` are frequently raised **before any request is made** — capability gating
+(`query`/`owned`/`format`/webhook events) and required-parameter checks (`repo`, `ref`, `url`, `id`) are
+enforced client-side.
+
+## retryable & retryAfter
+
+`retryable` is a normalized hint. It defaults to `true` for `rate_limited` and `network_error`, and for
+`provider_error` when the HTTP `status` is `5xx`. When the provider sent a `Retry-After` header,
+`retryAfter` carries the number of seconds to wait.
+
+The client already performs **one bounded retry** on `rate_limited` when `Retry-After` is small (≤ 10s by
+default) — tune it via `createClient({ provider, retry: { rateLimit, maxRetryAfterSeconds } })`. For
+anything beyond that, build your own back-off from `retryable` and `retryAfter`.
+
+## Secret redaction
+
+`RepoError` **redacts known secrets** from its message before construction — tokens and API keys the SDK
+knows about are replaced with `[redacted]` so they don't leak into logs or error trackers.
+
+:::warning
+Redaction covers the error **message** only. Some values embed credentials by design — most notably the
+URL from `repos.getCloneUrl` — and are not redacted. Never log those.
+:::
+
+## Handling errors
+
+```ts
+import { RepoError } from 'repo-sdk';
+
+try {
+  await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+} catch (error) {
+  if (error instanceof RepoError) {
+    switch (error.code) {
+      case 'rate_limited':
+        // back off using error.retryAfter
+        break;
+      case 'unauthorized':
+        // refresh credentials and retry
+        break;
+      case 'not_found':
+        // repository or resource doesn't exist
+        break;
+      case 'unsupported':
+        // the active provider lacks this capability
+        break;
+      default:
+        if (error.retryable) {
+          // transient — safe to retry with back-off
+        }
+    }
+  }
+  throw error;
+}
+```
+
+<Card title="Provider support" icon="table" href="/reference/provider-support">
+  The feature-by-provider matrix, including per-provider caveats.
+</Card>

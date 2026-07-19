@@ -1,0 +1,68 @@
+---
+title: Bitbucket authentication
+description: Authenticate the Bitbucket Cloud provider with an API token or an access token.
+sidebar:
+  label: Bitbucket
+---
+
+The `bitbucket` provider from `repo-sdk/bitbucket` authenticates with an Atlassian API token (HTTP Basic)
+or a workspace/repo access token (Bearer). Bitbucket Cloud only — there is no `baseUrl`.
+
+## API token auth (recommended)
+
+Provide an Atlassian account email and an [API token](https://id.atlassian.com/manage-profile/security/api-tokens).
+The SDK combines them into an HTTP `Basic` credential.
+
+```ts
+import { createClient } from 'repo-sdk';
+import { bitbucket } from 'repo-sdk/bitbucket';
+
+const client = createClient({
+  provider: bitbucket({
+    auth: {
+      email: process.env.BITBUCKET_EMAIL!,
+      apiToken: process.env.BITBUCKET_API_TOKEN!,
+    },
+  }),
+});
+```
+
+<TypeTable
+  type={{
+    email: { type: 'string', description: 'The Atlassian account email.' },
+    apiToken: { type: 'string', description: 'An Atlassian API token — combined with email into HTTP Basic auth.' },
+  }}
+/>
+
+## Access token auth
+
+Alternatively, provide a workspace or repository access token (or an OAuth token). The SDK sends it as a
+`Bearer` credential.
+
+```ts
+bitbucket({ auth: { accessToken: process.env.BITBUCKET_ACCESS_TOKEN! } });
+```
+
+<TypeTable
+  type={{
+    accessToken: { type: 'string', description: 'Workspace/repo access token or OAuth token — sent as Bearer.' },
+  }}
+/>
+
+## Archive downloads require an API token
+
+:::warning
+`repos.downloadArchive` only works with the **email + API token** form. Bitbucket's archive endpoint does
+not accept access-token / OAuth auth, so with `accessToken` auth `downloadArchive` throws a `RepoError`
+with `code: 'unsupported'`. Everything else (discovery, commits, tags, clone URLs, webhooks) works with
+both auth forms.
+:::
+
+## Cloud only
+
+The `bitbucket` factory takes **no `baseUrl`**. Only Bitbucket Cloud (`bitbucket.org`) is supported;
+there is no Bitbucket Data Center / Server support. The `repo` string is `workspace/repo_slug`.
+
+<Card title="Discover repositories" icon="folder-git" href="/guides/repositories">
+  List workspaces and repositories once you're authenticated.
+</Card>

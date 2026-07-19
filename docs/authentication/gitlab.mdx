@@ -1,0 +1,58 @@
+---
+title: GitLab authentication
+description: Authenticate the GitLab provider on gitlab.com or a self-managed instance.
+sidebar:
+  label: GitLab
+---
+
+The `gitlab` provider from `repo-sdk/gitlab` authenticates with a personal, project, or group access
+token (or an OAuth token), and targets self-managed instances via a `baseUrl` that includes `/api/v4`.
+
+## Token auth
+
+GitLab has one token shape. A personal access token, a project access token, a group access token, and
+an OAuth token all work the same way — the SDK sends whichever you pass as a `Bearer` credential.
+
+```ts
+import { createClient } from 'repo-sdk';
+import { gitlab } from 'repo-sdk/gitlab';
+
+const client = createClient({
+  provider: gitlab({ auth: { token: process.env.GITLAB_TOKEN! } }),
+});
+```
+
+<TypeTable
+  type={{
+    token: { type: 'string', description: 'PAT, project token, group token, or OAuth token — sent as Bearer.' },
+  }}
+/>
+
+## Scopes
+
+Pick the token scope for what you'll do:
+
+- **`read_api`** — required for the REST operations the client uses (discovery, commits, tags,
+  webhooks, archive downloads). Use `api` if you also create or update webhooks.
+- **`read_repository`** — required for git clone access via `repos.getCloneUrl`.
+
+## Self-managed instances
+
+For a self-managed GitLab, pass the **full** API base URL including the `/api/v4` suffix — it is used
+verbatim. The default is `https://gitlab.com/api/v4`.
+
+```ts
+gitlab({
+  auth: { token: process.env.GITLAB_TOKEN! },
+  baseUrl: 'https://gitlab.example.com/api/v4',
+});
+```
+
+:::note
+The `repo` string accepts either the full project path — including subgroups, e.g. `acme/backend/api` —
+or the numeric project id.
+:::
+
+<Card title="Discover repositories" icon="folder-git" href="/guides/repositories">
+  List namespaces and repositories once you're authenticated.
+</Card>
