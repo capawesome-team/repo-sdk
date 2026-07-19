@@ -34,7 +34,7 @@ export interface AppTokenSourceOptions {
   userAgent: string;
 }
 
-interface InstallationToken {
+export interface InstallationToken {
   token: string;
   expiresAt: Date;
 }
@@ -167,6 +167,12 @@ export class AppTokenSource implements TokenSource {
   }
 
   async getTokenWithExpiry(): Promise<TokenWithExpiry> {
+    const { token, expiresAt } = await this.resolveToken();
+    return { token, expiresAt };
+  }
+
+  /** Current installation token (minted on demand), for use outside the SDK. */
+  async getInstallationToken(): Promise<InstallationToken> {
     const { token, expiresAt } = await this.resolveToken();
     return { token, expiresAt };
   }

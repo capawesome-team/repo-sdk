@@ -1,4 +1,4 @@
-import { AppTokenSource, type TokenSource } from './app-auth.ts';
+import { AppTokenSource, type InstallationToken, type TokenSource } from './app-auth.ts';
 import { codeFromStatus, RepoError, type RepoErrorCode } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
@@ -64,6 +64,17 @@ export interface GitHubProviderOptions {
   auth: GitHubAuth;
   baseUrl?: string;
   fetch?: typeof fetch;
+}
+
+export type GitHubInstallationToken = InstallationToken;
+
+export interface GitHubRepoProvider extends RepoProvider {
+  /**
+   * The current GitHub App installation token (minted or refreshed on demand),
+   * for handing to tools outside the SDK such as the `git` CLI. Requires
+   * GitHub App auth; throws `unsupported` under token auth.
+   */
+  getInstallationToken(): Promise<GitHubInstallationToken>;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -323,7 +334,7 @@ function mapError(status: number, body: unknown, response: Response): ProviderEr
  */
 export const commitWebUrl = commitWebUrlBuilder('commit');
 
-export function github(options: GitHubProviderOptions): RepoProvider {
+export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
@@ -391,6 +402,18 @@ export function github(options: GitHubProviderOptions): RepoProvider {
   return {
     name: 'github',
     capabilities: CAPABILITIES,
+
+    getInstallationToken(): Promise<GitHubInstallationToken> {
+      if (!(tokenSource instanceof AppTokenSource)) {
+        return Promise.reject(
+          new RepoError('getInstallationToken requires GitHub App authentication', {
+            code: 'unsupported',
+            provider: 'github',
+          }),
+        );
+      }
+      return tokenSource.getInstallationToken();
+    },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       if (tokenSource.kind === 'app') {

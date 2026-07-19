@@ -343,6 +343,31 @@ describe('GitHub App auth', () => {
     );
   });
 
+  it('exposes the installation token with its expiry via getInstallationToken', async () => {
+    const expiresAt = futureIso(60 * 60 * 1000);
+    const { provider } = setup(appHandler({ expiresAt }), {
+      privateKey: pkcs8Pem,
+      installationId: 99,
+    });
+    const installationToken = await provider.getInstallationToken();
+    expect(installationToken.token).toBe(INSTALLATION_TOKEN);
+    expect(installationToken.expiresAt.toISOString()).toBe(expiresAt);
+  });
+
+  it('shares the token cache between getInstallationToken and API calls', async () => {
+    const { provider, stub } = setup(appHandler(), { privateKey: pkcs8Pem, installationId: 99 });
+    await provider.getInstallationToken();
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    const mints = stub.requests.filter((r) => r.url.endsWith('/access_tokens'));
+    expect(mints).toHaveLength(1);
+  });
+
+  it('rejects getInstallationToken under token auth with unsupported', async () => {
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = github({ auth: { token: 'ghp_token' }, fetch: stub.fetch });
+    await expectRepoError(provider.getInstallationToken(), 'unsupported');
+  });
+
   it('embeds the installation token and expiry in the clone URL', async () => {
     const expiresAt = futureIso(60 * 60 * 1000);
     const { provider } = setup(appHandler({ expiresAt }), {

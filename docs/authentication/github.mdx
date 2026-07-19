@@ -97,6 +97,21 @@ Namespace and owned-repository listing fall back to the installation's accessibl
 `unsupported`.
 :::
 
+### Using the installation token outside the SDK
+
+`getInstallationToken()` on the GitHub provider returns the current installation token (minting or
+refreshing it on demand) together with its expiry, so the SDK can act as your single GitHub App token
+manager — hand the token to the `git` CLI, Octokit, or any other tool:
+
+```ts
+const provider = github({ auth: { appId, privateKey, owner: 'capawesome-team' } });
+const { token, expiresAt } = await provider.getInstallationToken();
+// e.g. git clone https://x-access-token:<token>@github.com/owner/repo.git
+```
+
+The token is the same cached one the SDK uses for its own API calls. Under token auth the method
+throws `RepoError` with `code: 'unsupported'`.
+
 ## GitHub Enterprise Server
 
 Point `baseUrl` at your GHES API root (`/api/v3`). It applies to both token and GitHub App auth, and the
