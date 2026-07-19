@@ -15,11 +15,12 @@ When a credential is missing or invalid, calls fail with a `RepoError` whose `co
 takes a credential you already hold and attaches it to every request:
 
 - **No OAuth dance.** You obtain the token however you like — a personal access token in an env var, an
-  OAuth token from your own auth layer, or a callback that mints short-lived tokens.
-- **No refresh.** The SDK never rotates a token for you. The one exception is GitHub App auth, where the
-  SDK mints and caches installation access tokens internally from your app credentials.
-- **You re-authenticate.** When a token expires or is revoked, the next call throws a `RepoError` with
-  `code: 'unauthorized'`. Catch it, obtain a fresh credential, and construct a new client.
+  OAuth token from your own auth layer, or a `tokenProvider` callback that mints short-lived tokens.
+- **No token minting.** The SDK never obtains a credential on its own. The one exception is GitHub App
+  auth, where the SDK mints and caches installation access tokens internally from your app credentials.
+- **You re-authenticate.** With a static token, an expired or revoked credential makes the next call
+  throw a `RepoError` with `code: 'unauthorized'` — catch it, obtain a fresh token, and construct a new
+  client. With a `tokenProvider`, refresh is handled for you (see below).
 
 ```ts
 import { createClient, RepoError } from 'repo-sdk';
@@ -39,6 +40,37 @@ try {
 `unauthorized` maps to HTTP `401`. A `403` — authenticated but not permitted — surfaces as `forbidden`
 instead. See [Error codes](/docs/reference/error-codes) for the full mapping.
 :::
+
+## Expiring tokens: `tokenProvider`
+
+Every provider also accepts `auth: { tokenProvider }` — an async callback the SDK invokes on **every
+request** to obtain the current bearer token. It's built for OAuth-style expiring credentials: cache
+inside the callback and return the cached token while it's valid.
+
+```ts
+import type { TokenProvider } from 'repo-sdk';
+
+const tokenProvider: TokenProvider = async ({ forceRefresh }) => {
+  if (forceRefresh || cachedTokenExpired()) {
+    return refreshAndCacheToken();
+  }
+  return cachedToken();
+};
+
+const client = createClient({ provider: github({ auth: { tokenProvider } }) });
+```
+
+When a request comes back `401`, the SDK re-invokes the callback once with `forceRefresh: true` and
+retries that request a single time. `forceRefresh` means the previous token was rejected — **bypass
+your cache** and mint a fresh token, otherwise the retry replays the same stale credential and the
+call fails with `unauthorized`. There is no second retry.
+
+Two caveats:
+
+- `repos.getCloneUrl` embeds the current token in the returned URL (or `headers` on Azure DevOps with
+  Entra auth), so the URL stops working when that token expires — fetch a fresh one per use.
+- Gitea sends a `tokenProvider` token with the `Bearer` scheme (OAuth2 tokens), while a static
+  `{ token }` uses Gitea's `token` scheme for personal access tokens.
 
 ## Who is this token?
 

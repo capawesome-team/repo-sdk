@@ -689,3 +689,27 @@ describe('getAuthenticatedUser', () => {
     expect(new URL(stub.requests[0]!.url).pathname).toBe('/2.0/user');
   });
 });
+
+describe('tokenProvider auth', () => {
+  it('sends the minted token and retries once with forceRefresh on a 401', async () => {
+    const contexts: boolean[] = [];
+    const stub = createFetchStub((request) =>
+      request.headers.authorization === 'Bearer fresh'
+        ? { json: { uuid: '{u1}', username: 'robin' } }
+        : { status: 401, json: {} },
+    );
+    const provider = bitbucket({
+      auth: {
+        tokenProvider: ({ forceRefresh }) => {
+          contexts.push(forceRefresh);
+          return Promise.resolve(forceRefresh ? 'fresh' : 'stale');
+        },
+      },
+      fetch: stub.fetch,
+    });
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.username).toBe('robin');
+    expect(contexts).toEqual([false, true]);
+    expect(stub.requests).toHaveLength(2);
+  });
+});

@@ -1,3 +1,5 @@
+import type { TokenProvider } from '../../types.ts';
+
 export const API_VERSION = '7.1';
 
 /**
@@ -11,19 +13,23 @@ export const BASIC_AUTH_USERNAME = 'repo-sdk';
  * Azure DevOps supports three credential shapes: a Personal Access Token
  * (encoded into HTTP Basic auth internally), an OAuth access token (sent as a
  * bearer token), or a pluggable Entra ID `tokenProvider` that mints short-lived
- * bearer tokens. Callers pass whichever they have.
+ * bearer tokens (re-invoked with `forceRefresh` after a 401, then retried
+ * once). Callers pass whichever they have.
  */
 export type AzureDevOpsAuth =
-  { pat: string } | { accessToken: string } | { tokenProvider: () => Promise<string> };
+  { pat: string } | { accessToken: string } | { tokenProvider: TokenProvider };
 
-export function authHeader(auth: AzureDevOpsAuth): Promise<string> {
+export function authHeader(
+  auth: AzureDevOpsAuth,
+  context: { forceRefresh: boolean } = { forceRefresh: false },
+): Promise<string> {
   if ('pat' in auth) {
     return Promise.resolve(`Basic ${btoa(':' + auth.pat)}`);
   }
   if ('accessToken' in auth) {
     return Promise.resolve(`Bearer ${auth.accessToken}`);
   }
-  return auth.tokenProvider().then((token) => `Bearer ${token}`);
+  return auth.tokenProvider(context).then((token) => `Bearer ${token}`);
 }
 
 export function authSecrets(auth: AzureDevOpsAuth): string[] {

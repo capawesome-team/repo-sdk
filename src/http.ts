@@ -17,13 +17,23 @@ export interface ProviderErrorInfo {
   message?: string;
 }
 
+export interface AuthContext {
+  forceRefresh: boolean;
+}
+
 export interface HttpClientOptions {
   provider: ProviderName;
   baseUrl: string;
   fetchImpl?: typeof fetch;
-  authHeaders: () => Record<string, string> | Promise<Record<string, string>>;
+  authHeaders: (context: AuthContext) => Record<string, string> | Promise<Record<string, string>>;
   mapError?: (status: number, body: unknown, response: Response) => ProviderErrorInfo;
   secrets?: () => readonly string[];
+  /**
+   * Retry a 401 exactly once after re-invoking `authHeaders` with
+   * `forceRefresh: true`. Enabled by providers configured with a
+   * `tokenProvider`, whose tokens can expire mid-session.
+   */
+  retryUnauthorized?: boolean;
 }
 
 export class HttpClient {
@@ -51,31 +61,37 @@ export class HttpClient {
   async raw(path: string, options: HttpRequestOptions = {}): Promise<Response> {
     const url = this.buildUrl(path, options.query);
     const fetchImpl = this.options.fetchImpl ?? fetch;
-    const headers: Record<string, string> = {
-      ...(await this.options.authHeaders()),
-      ...options.headers,
+    const body = options.body === undefined ? undefined : JSON.stringify(options.body);
+
+    const attempt = async (forceRefresh: boolean): Promise<Response> => {
+      const headers: Record<string, string> = {
+        ...(await this.options.authHeaders({ forceRefresh })),
+        ...options.headers,
+      };
+      if (body !== undefined) {
+        headers['Content-Type'] ??= 'application/json';
+      }
+      try {
+        return await fetchImpl(url, {
+          method: options.method ?? 'GET',
+          headers,
+          body,
+          signal: options.signal,
+          redirect: options.redirect,
+        });
+      } catch (error) {
+        throw new RepoError(`Request to ${url.origin}${url.pathname} failed`, {
+          code: 'network_error',
+          provider: this.options.provider,
+          cause: error,
+          secrets: this.options.secrets?.() ?? [],
+        });
+      }
     };
-    let body: string | undefined;
-    if (options.body !== undefined) {
-      body = JSON.stringify(options.body);
-      headers['Content-Type'] ??= 'application/json';
-    }
-    let response: Response;
-    try {
-      response = await fetchImpl(url, {
-        method: options.method ?? 'GET',
-        headers,
-        body,
-        signal: options.signal,
-        redirect: options.redirect,
-      });
-    } catch (error) {
-      throw new RepoError(`Request to ${url.origin}${url.pathname} failed`, {
-        code: 'network_error',
-        provider: this.options.provider,
-        cause: error,
-        secrets: this.options.secrets?.() ?? [],
-      });
+
+    let response = await attempt(false);
+    if (response.status === 401 && this.options.retryUnauthorized) {
+      response = await attempt(true);
     }
     if (
       !response.ok &&

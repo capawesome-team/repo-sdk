@@ -37,6 +37,7 @@ import type {
   RefMatch,
   Repository,
   Tag,
+  TokenProvider,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -60,7 +61,12 @@ export interface GitHubAppAuth {
   owner?: string;
 }
 
-export type GitHubAuth = GitHubTokenAuth | GitHubAppAuth;
+export interface GitHubTokenProviderAuth {
+  /** Mints a bearer token per request; re-invoked with `forceRefresh` after a 401, then retried once. */
+  tokenProvider: TokenProvider;
+}
+
+export type GitHubAuth = GitHubTokenAuth | GitHubAppAuth | GitHubTokenProviderAuth;
 
 export interface GitHubProviderOptions {
   auth: GitHubAuth;
@@ -100,6 +106,20 @@ function createStaticTokenSource(auth: GitHubTokenAuth): TokenSource {
   };
 }
 
+function createProviderTokenSource(auth: GitHubTokenProviderAuth): TokenSource {
+  let lastToken: string | undefined;
+  const fetchToken = async (forceRefresh: boolean): Promise<string> => {
+    lastToken = await auth.tokenProvider({ forceRefresh });
+    return lastToken;
+  };
+  return {
+    kind: 'token',
+    getToken: (forceRefresh = false) => fetchToken(forceRefresh),
+    getTokenWithExpiry: async () => ({ token: await fetchToken(false) }),
+    getSecrets: () => (lastToken === undefined ? [] : [lastToken]),
+  };
+}
+
 function createTokenSource(
   auth: GitHubAuth,
   baseUrl: string,
@@ -107,6 +127,9 @@ function createTokenSource(
 ): TokenSource {
   if ('token' in auth) {
     return createStaticTokenSource(auth);
+  }
+  if ('tokenProvider' in auth) {
+    return createProviderTokenSource(auth);
   }
   return new AppTokenSource({
     appId: auth.appId,
@@ -349,8 +372,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     provider: 'github',
     baseUrl,
     fetchImpl,
-    authHeaders: async () => {
-      const token = await tokenSource.getToken();
+    authHeaders: async ({ forceRefresh }) => {
+      const token = await tokenSource.getToken(forceRefresh);
       return {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
@@ -360,6 +383,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     },
     mapError,
     secrets: () => tokenSource.getSecrets(),
+    retryUnauthorized: 'tokenProvider' in options.auth,
   });
 
   let cachedLogin: string | undefined;

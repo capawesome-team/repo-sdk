@@ -59,7 +59,9 @@ azureDevOps({
 ## Entra ID token provider
 
 Instead of a PAT, supply a `tokenProvider` callback that returns a short-lived bearer token. The SDK
-calls it whenever it needs a credential, so you keep full control of minting and caching.
+calls it whenever it needs a credential, so you keep full control of minting and caching. On a `401`
+the callback is re-invoked once with `forceRefresh: true` and the request retried — see
+[Expiring tokens](/docs/authentication#expiring-tokens-tokenprovider).
 
 ```ts
 azureDevOps({
@@ -70,7 +72,7 @@ azureDevOps({
 
 <TypeTable
   type={{
-    tokenProvider: { type: '() => Promise<string>', description: 'Async callback that mints a short-lived Entra ID bearer token.' },
+    tokenProvider: { type: 'TokenProvider', description: 'Async callback minting a short-lived Entra ID bearer token; receives { forceRefresh } — bypass your cache when it is true.' },
   }}
 />
 

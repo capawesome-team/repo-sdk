@@ -127,3 +127,10 @@ github({
 <Card title="Discover repositories" icon="folder-git" href="/docs/guides/repositories">
   List namespaces and repositories once you're authenticated.
 </Card>
+
+## Expiring tokens
+
+`auth: { tokenProvider }` accepts an async callback minting the bearer token per request — for
+OAuth-style credentials that expire. On a `401` the callback is re-invoked once with
+`forceRefresh: true` and the request retried. See
+[Expiring tokens](/docs/authentication#expiring-tokens-tokenprovider) for the contract.

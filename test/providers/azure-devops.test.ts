@@ -913,3 +913,34 @@ describe('getAuthenticatedUser', () => {
     expect(user.email).toBeUndefined();
   });
 });
+
+describe('tokenProvider refresh', () => {
+  it('re-invokes the tokenProvider with forceRefresh and retries once on a 401', async () => {
+    const contexts: boolean[] = [];
+    const stub = createFetchStub((request) =>
+      request.headers.authorization === 'Bearer fresh'
+        ? { json: repoPayload }
+        : { status: 401, json: {} },
+    );
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: {
+        tokenProvider: ({ forceRefresh }: { forceRefresh: boolean }) => {
+          contexts.push(forceRefresh);
+          return Promise.resolve(forceRefresh ? 'fresh' : 'stale');
+        },
+      },
+      fetch: stub.fetch,
+    });
+    const repo = await provider.getRepository({ repo: 'core/repo-sdk' });
+    expect(repo.path).toBe('core/repo-sdk');
+    expect(contexts).toEqual([false, true]);
+    expect(stub.requests).toHaveLength(2);
+  });
+
+  it('does not retry a 401 under PAT auth', async () => {
+    const { provider, stub } = setup(() => ({ status: 401, json: {} }));
+    await expectRepoError(provider.getRepository({ repo: 'core/repo-sdk' }), 'unauthorized');
+    expect(stub.requests).toHaveLength(1);
+  });
+});

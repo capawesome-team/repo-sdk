@@ -684,3 +684,37 @@ describe('getAuthenticatedUser', () => {
     expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v1/user');
   });
 });
+
+describe('tokenProvider auth', () => {
+  it('uses the Bearer scheme (not token) and retries once on a 401', async () => {
+    const contexts: boolean[] = [];
+    const stub = createFetchStub((request) =>
+      request.headers.authorization === 'Bearer fresh'
+        ? { json: { id: 3, login: 'robin' } }
+        : { status: 401, json: { message: 'unauthorized' } },
+    );
+    const provider = gitea({
+      auth: {
+        tokenProvider: ({ forceRefresh }) => {
+          contexts.push(forceRefresh);
+          return Promise.resolve(forceRefresh ? 'fresh' : 'stale');
+        },
+      },
+      fetch: stub.fetch,
+    });
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.username).toBe('robin');
+    expect(stub.requests[0]!.headers.authorization).toBe('Bearer stale');
+    expect(contexts).toEqual([false, true]);
+  });
+
+  it('embeds the minted token in the clone URL', async () => {
+    const stub = createFetchStub(() => ({ status: 500, json: {} }));
+    const provider = gitea({
+      auth: { tokenProvider: () => Promise.resolve('minted-token') },
+      fetch: stub.fetch,
+    });
+    const clone = await provider.getCloneUrl({ repo: 'acme/app' });
+    expect(clone.url).toBe('https://minted-token@gitea.com/acme/app.git');
+  });
+});

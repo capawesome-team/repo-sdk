@@ -676,3 +676,27 @@ describe('getAuthenticatedUser', () => {
     expect(user.email).toBe('public@example.com');
   });
 });
+
+describe('tokenProvider auth', () => {
+  it('sends the minted token and retries once with forceRefresh on a 401', async () => {
+    const contexts: boolean[] = [];
+    const stub = createFetchStub((request) =>
+      request.headers.authorization === 'Bearer fresh'
+        ? { json: { id: 5, username: 'robin' } }
+        : { status: 401, json: { message: 'unauthorized' } },
+    );
+    const provider = gitlab({
+      auth: {
+        tokenProvider: ({ forceRefresh }) => {
+          contexts.push(forceRefresh);
+          return Promise.resolve(forceRefresh ? 'fresh' : 'stale');
+        },
+      },
+      fetch: stub.fetch,
+    });
+    const user = await provider.getAuthenticatedUser({});
+    expect(user.username).toBe('robin');
+    expect(contexts).toEqual([false, true]);
+    expect(stub.requests).toHaveLength(2);
+  });
+});

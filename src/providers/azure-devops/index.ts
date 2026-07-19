@@ -265,9 +265,10 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     provider: 'azure-devops',
     baseUrl: orgBaseUrl,
     fetchImpl,
-    authHeaders: async () => ({ Authorization: await authHeader(auth) }),
+    authHeaders: async (context) => ({ Authorization: await authHeader(auth, context) }),
     mapError,
     secrets: () => authSecrets(auth),
+    retryUnauthorized: 'tokenProvider' in auth,
   });
 
   // Every Azure DevOps request must carry `api-version`; bake it into one place.
@@ -561,7 +562,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           url: `https://oauth2:${encodeURIComponent(auth.accessToken)}@${host}/${repoPath}`,
         };
       }
-      const token = await auth.tokenProvider();
+      const token = await auth.tokenProvider({ forceRefresh: false });
       return { url: `https://${host}/${repoPath}`, headers: { Authorization: `Bearer ${token}` } };
     },
 

@@ -36,6 +36,7 @@ import type {
   RefMatch,
   Repository,
   Tag,
+  TokenProvider,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -46,7 +47,8 @@ import type {
 const DEFAULT_BASE_URL = 'https://gitea.com/api/v1';
 
 export interface GiteaProviderOptions {
-  auth: { token: string };
+  /** A static token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
+  auth: { token: string } | { tokenProvider: TokenProvider };
   /**
    * Full API base URL. Defaults to `https://gitea.com/api/v1`. For self-hosted
    * instances (including Forgejo) pass the complete base including `/api/v1`
@@ -302,19 +304,31 @@ export const commitWebUrl = commitWebUrlBuilder('commit');
 export function gitea(options: GiteaProviderOptions): RepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
-  const { token } = options.auth;
+  const auth = options.auth;
   const webBase = new URL(baseUrl).origin;
   const mapRepository = (repo: GiteaRepo): Repository => toRepository(repo, webBase);
+
+  let lastToken: string | undefined = 'token' in auth ? auth.token : undefined;
+  async function currentToken(forceRefresh: boolean): Promise<string> {
+    if ('token' in auth) return auth.token;
+    lastToken = await auth.tokenProvider({ forceRefresh });
+    return lastToken;
+  }
 
   const http = new HttpClient({
     provider: 'gitea',
     baseUrl,
     fetchImpl,
-    // Gitea requires the literal `token` scheme for personal access tokens;
-    // `Bearer` only works for OAuth2-issued tokens.
-    authHeaders: () => ({ Authorization: `token ${token}` }),
+    // Gitea requires the literal `token` scheme for personal access tokens,
+    // while `Bearer` is for OAuth2-issued tokens — which is what a
+    // tokenProvider mints.
+    authHeaders: async ({ forceRefresh }) => ({
+      Authorization:
+        'token' in auth ? `token ${auth.token}` : `Bearer ${await currentToken(forceRefresh)}`,
+    }),
     mapError,
-    secrets: () => [token],
+    secrets: () => (lastToken === undefined ? [] : [lastToken]),
+    retryUnauthorized: 'tokenProvider' in auth,
   });
 
   let cachedUid: number | undefined;
@@ -568,12 +582,13 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
       };
     },
 
-    getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
+    async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
       const host = new URL(baseUrl).host;
       // Gitea accepts the access token as the basic-auth username with no password.
-      return Promise.resolve({
+      const token = await currentToken(false);
+      return {
         url: `https://${encodeURIComponent(token)}@${host}/${params.repo}.git`,
-      });
+      };
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

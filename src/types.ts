@@ -8,6 +8,12 @@ export type NamespaceKind = 'user' | 'organization' | 'group' | 'workspace' | 'p
 
 export type WebhookVerificationMethod = 'hmac-sha256' | 'shared-token' | 'basic-auth';
 
+/**
+ * Mints a bearer token for each request. `forceRefresh` is true only on the
+ * single retry after a 401 — bypass any cache and mint a fresh token then.
+ */
+export type TokenProvider = (context: { forceRefresh: boolean }) => Promise<string>;
+
 export interface Page<T> {
   data: T[];
   cursor?: string;

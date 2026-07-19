@@ -34,6 +34,7 @@ import type {
   RefMatch,
   Repository,
   Tag,
+  TokenProvider,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -46,7 +47,11 @@ const GIT_HOST = 'bitbucket.org';
 const HOOK_DESCRIPTION = 'repo-sdk';
 
 export interface BitbucketProviderOptions {
-  auth: { email: string; apiToken: string } | { accessToken: string };
+  /** Atlassian API token, a static access token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
+  auth:
+    | { email: string; apiToken: string }
+    | { accessToken: string }
+    | { tokenProvider: TokenProvider };
   fetch?: typeof fetch;
 }
 
@@ -284,22 +289,35 @@ export const commitWebUrl = commitWebUrlBuilder('commits');
 export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   const { auth } = options;
   const fetchImpl = options.fetch ?? fetch;
-  const usesApiToken = isApiTokenAuth(auth);
-  const authorization = usesApiToken
-    ? `Basic ${btoa(`${auth.email}:${auth.apiToken}`)}`
-    : `Bearer ${auth.accessToken}`;
-  const secret = usesApiToken ? auth.apiToken : auth.accessToken;
+
+  let lastToken: string | undefined = isApiTokenAuth(auth)
+    ? auth.apiToken
+    : 'accessToken' in auth
+      ? auth.accessToken
+      : undefined;
+  async function currentToken(forceRefresh: boolean): Promise<string> {
+    if (isApiTokenAuth(auth)) return auth.apiToken;
+    if ('accessToken' in auth) return auth.accessToken;
+    lastToken = await auth.tokenProvider({ forceRefresh });
+    return lastToken;
+  }
+  async function authorizationHeader(forceRefresh: boolean): Promise<string> {
+    return isApiTokenAuth(auth)
+      ? `Basic ${btoa(`${auth.email}:${auth.apiToken}`)}`
+      : `Bearer ${await currentToken(forceRefresh)}`;
+  }
 
   const http = new HttpClient({
     provider: 'bitbucket',
     baseUrl: BASE_URL,
     fetchImpl,
-    authHeaders: () => ({
-      Authorization: authorization,
+    authHeaders: async ({ forceRefresh }) => ({
+      Authorization: await authorizationHeader(forceRefresh),
       Accept: 'application/json',
     }),
     mapError,
-    secrets: () => [secret],
+    secrets: () => (lastToken === undefined ? [] : [lastToken]),
+    retryUnauthorized: 'tokenProvider' in auth,
   });
 
   function repoPath(repo: string): string {
@@ -471,7 +489,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {
-      if (!usesApiToken) {
+      if (!isApiTokenAuth(auth)) {
         throw new RepoError(
           'Bitbucket archive downloads require an API token (Basic auth); access-token/OAuth auth is not supported by the archive endpoint',
           { code: 'unsupported', provider: 'bitbucket' },
@@ -493,11 +511,16 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       };
     },
 
-    getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const url = usesApiToken
-        ? `https://x-bitbucket-api-token-auth:${encodeURIComponent(auth.apiToken)}@${GIT_HOST}/${params.repo}.git`
-        : `https://x-token-auth:${encodeURIComponent(auth.accessToken)}@${GIT_HOST}/${params.repo}.git`;
-      return Promise.resolve({ url });
+    async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
+      if (isApiTokenAuth(auth)) {
+        return {
+          url: `https://x-bitbucket-api-token-auth:${encodeURIComponent(auth.apiToken)}@${GIT_HOST}/${params.repo}.git`,
+        };
+      }
+      const token = await currentToken(false);
+      return {
+        url: `https://x-token-auth:${encodeURIComponent(token)}@${GIT_HOST}/${params.repo}.git`,
+      };
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

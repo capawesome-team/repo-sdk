@@ -13,7 +13,8 @@ export interface TokenSource {
    * tokens cannot access.
    */
   readonly kind: 'token' | 'app';
-  getToken(): Promise<string>;
+  /** `forceRefresh` bypasses any cache; set on the single retry after a 401. */
+  getToken(forceRefresh?: boolean): Promise<string>;
   getTokenWithExpiry(): Promise<TokenWithExpiry>;
   getSecrets(): string[];
 }

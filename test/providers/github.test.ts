@@ -792,3 +792,57 @@ describe('commitWebUrl', () => {
     );
   });
 });
+
+describe('tokenProvider auth', () => {
+  it('sends the minted token as a bearer token', async () => {
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = github({
+      auth: { tokenProvider: () => Promise.resolve('minted-token') },
+      fetch: stub.fetch,
+    });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(stub.requests[0]!.headers.authorization).toBe('Bearer minted-token');
+  });
+
+  it('refreshes once with forceRefresh and retries on a 401', async () => {
+    const contexts: boolean[] = [];
+    const stub = createFetchStub((request) =>
+      request.headers.authorization === 'Bearer fresh'
+        ? { json: repoPayload }
+        : { status: 401, json: { message: 'Bad credentials' } },
+    );
+    const provider = github({
+      auth: {
+        tokenProvider: ({ forceRefresh }) => {
+          contexts.push(forceRefresh);
+          return Promise.resolve(forceRefresh ? 'fresh' : 'stale');
+        },
+      },
+      fetch: stub.fetch,
+    });
+    const repo = await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(repo.path).toBe('capawesome-team/repo-sdk');
+    expect(contexts).toEqual([false, true]);
+    expect(stub.requests).toHaveLength(2);
+    expect(stub.requests[1]!.headers.authorization).toBe('Bearer fresh');
+  });
+
+  it('fails with unauthorized after a single refresh attempt', async () => {
+    const stub = createFetchStub(() => ({ status: 401, json: { message: 'Bad credentials' } }));
+    const provider = github({
+      auth: { tokenProvider: () => Promise.resolve('always-stale') },
+      fetch: stub.fetch,
+    });
+    await expectRepoError(provider.getRepository({ repo: 'o/r' }), 'unauthorized');
+    expect(stub.requests).toHaveLength(2);
+  });
+
+  it('does not retry a 401 under static token auth', async () => {
+    const { provider, stub } = setup(() => ({
+      status: 401,
+      json: { message: 'Bad credentials' },
+    }));
+    await expectRepoError(provider.getRepository({ repo: 'o/r' }), 'unauthorized');
+    expect(stub.requests).toHaveLength(1);
+  });
+});

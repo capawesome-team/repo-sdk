@@ -35,6 +35,7 @@ import type {
   RefMatch,
   Repository,
   Tag,
+  TokenProvider,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -45,7 +46,8 @@ import type {
 const DEFAULT_BASE_URL = 'https://gitlab.com/api/v4';
 
 export interface GitLabProviderOptions {
-  auth: { token: string };
+  /** A static token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
+  auth: { token: string } | { tokenProvider: TokenProvider };
   /**
    * Full API base URL. Defaults to `https://gitlab.com/api/v4`. For self-managed
    * instances pass the complete base including `/api/v4` (used verbatim).
@@ -68,15 +70,26 @@ const CAPABILITIES: RepoCapabilities = {
 };
 
 interface TokenSource {
-  getToken(): Promise<string>;
+  /** `forceRefresh` bypasses any cache; set on the single retry after a 401. */
+  getToken(forceRefresh?: boolean): Promise<string>;
   getSecrets(): string[];
 }
 
-function createTokenSource(auth: { token: string }): TokenSource {
-  const { token } = auth;
+function createTokenSource(auth: GitLabProviderOptions['auth']): TokenSource {
+  if ('token' in auth) {
+    const { token } = auth;
+    return {
+      getToken: () => Promise.resolve(token),
+      getSecrets: () => [token],
+    };
+  }
+  let lastToken: string | undefined;
   return {
-    getToken: () => Promise.resolve(token),
-    getSecrets: () => [token],
+    getToken: async (forceRefresh = false) => {
+      lastToken = await auth.tokenProvider({ forceRefresh });
+      return lastToken;
+    },
+    getSecrets: () => (lastToken === undefined ? [] : [lastToken]),
   };
 }
 
@@ -330,12 +343,13 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     provider: 'gitlab',
     baseUrl,
     fetchImpl,
-    authHeaders: async () => {
-      const token = await tokenSource.getToken();
+    authHeaders: async ({ forceRefresh }) => {
+      const token = await tokenSource.getToken(forceRefresh);
       return { Authorization: `Bearer ${token}` };
     },
     mapError,
     secrets: tokenSource.getSecrets,
+    retryUnauthorized: 'tokenProvider' in options.auth,
   });
 
   const reqUrl = (path: string, query?: Record<string, QueryValue>): string =>
