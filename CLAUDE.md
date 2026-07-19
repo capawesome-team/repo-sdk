@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, and Azure DevOps REST APIs (discovery, commits, tags, archive/clone-URL, webhooks). It is **not** a git wire-protocol implementation. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
+`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea REST APIs (discovery, commits, tags, archive/clone-URL, webhooks). It is **not** a git wire-protocol implementation. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
 
 ## Commands
 
@@ -25,7 +25,7 @@ Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip t
 
 ## Architecture: thin adapter, fat client
 
-- **Entry points** map 1:1 to package subpath exports: `src/index.ts` (core), `src/{github,gitlab,bitbucket,azure-devops,testing}.ts` are re-export barrels over `src/providers/<name>/`.
+- **Entry points** map 1:1 to package subpath exports: `src/index.ts` (core), `src/{github,gitlab,bitbucket,azure-devops,gitea,testing}.ts` are re-export barrels over `src/providers/<name>/`.
 - **Fat client** (`src/client.ts`, `createClient`): input validation, capability gating, `listAll` async generators, bounded rate-limit retry (honors `Retry-After`), `AbortSignal` threading. **Thin adapters**: each provider implements the `RepoProvider` interface (`src/types.ts`) over the shared `HttpClient` (`src/http.ts`) with per-provider `authHeaders`/`mapError`/`secrets` hooks.
 - **Capability gating over silent degradation**: providers declare `RepoCapabilities`; anything a provider can't do throws `RepoError` with `code: 'unsupported'` — never silently drop an option. Follow this when adding features.
 - **Error model**: every failure is a `RepoError` (`src/errors.ts`) with a fixed code taxonomy; token values are redacted from messages via each provider's `secrets` hook. Exception by design: `getCloneUrl` returns credential-bearing URLs.
@@ -40,3 +40,7 @@ Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip t
 - Plain vitest with the `createFetchStub` helper (`test/helpers/fetch-stub.ts`) for provider contract tests; `repo-sdk/testing` exposes an in-memory provider (page size 2 to force cursor pagination in consumer tests).
 - Releases via release-please: **Conventional Commit messages determine the changelog and version** (`feat:`/`fix:`/`docs:`/etc.).
 - The Blume docs site lives in `docs/` (guides, authentication, reference) — user-facing behavior changes should update the matching page; the reference section includes a per-provider capability matrix that must stay in sync with `RepoCapabilities`.
+- **Docs drift checklist** — these spots hardcode API facts and have gone stale before; sweep them whenever the corresponding code changes:
+  - New provider: the inline `ProviderName` unions written out in prose/TypeTables (`grep -r "azure-devops'" docs/` finds them), the subpath-exports table in `docs/installation.mdx`, the factory-import block in `docs/concepts/client-and-providers.mdx`, an `docs/authentication/<name>.mdx` page (must include a Scopes section), and this file's provider lists.
+  - New client namespace or method: the namespace overview in `docs/concepts/client-and-providers.mdx`, the capability-gating list in `docs/concepts/capabilities.mdx` if gated, and the in-memory provider docs in `docs/testing.mdx` (seed TypeTable + `provider.state` shape).
+  - New `RepoCapabilities` field: the TypeTable in `docs/concepts/capabilities.mdx` and `docs/reference/capability-matrix.mdx`. Capability-gated facts live ONLY in the capability matrix — don't re-add per-capability rows to `docs/reference/provider-support.mdx` (that page covers what flags can't express).

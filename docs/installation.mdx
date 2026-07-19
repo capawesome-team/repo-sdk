@@ -32,11 +32,12 @@ provider subpath too.
 
 | Import                    | Exports                                                                 |
 | ------------------------- | ----------------------------------------------------------------------- |
-| `repo-sdk`                | `createClient`, `RepoError`, and all normalized types                   |
+| `repo-sdk`                | `createClient`, `RepoError`, `detectWebhookProvider`, and all normalized types |
 | `repo-sdk/github`         | `github`, `verifyWebhook`, `parseWebhookEvent`                          |
 | `repo-sdk/gitlab`         | `gitlab`, `verifyWebhook`, `parseWebhookEvent`                          |
 | `repo-sdk/bitbucket`      | `bitbucket`, `verifyWebhook`, `parseWebhookEvent`                       |
 | `repo-sdk/azure-devops`   | `azureDevOps`, `listOrganizations`, `verifyWebhook`, `parseWebhookEvent` |
+| `repo-sdk/gitea`          | `gitea`, `verifyWebhook`, `parseWebhookEvent`                           |
 | `repo-sdk/testing`        | `createInMemoryProvider`                                                 |
 
 ## Import the client and a provider

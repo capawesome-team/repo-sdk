@@ -8,8 +8,8 @@ sidebar:
 
 `repo-sdk/testing` ships `createInMemoryProvider`, an in-memory `RepoProvider` you can drive with
 `createClient` to test your integration without hitting a real provider. It uses a small page size, so
-cursor pagination is exercised too, and it accepts an optional seed of namespaces, repos, commits, tags,
-and webhooks.
+cursor pagination is exercised too, and it accepts an optional seed of namespaces, repos, commits,
+branches, tags, and webhooks.
 
 ## Basic usage
 
@@ -58,8 +58,8 @@ real provider supports.
 
 ## The seed shape
 
-`namespaces` is an **array**; `repositories`, `commits`, `tags`, and `webhooks` are **records keyed by
-repository path** (e.g. `acme/app`).
+`namespaces` is an **array**; `repositories`, `commits`, `branches`, `tags`, and `webhooks` are
+**records keyed by repository path** (e.g. `acme/app`).
 
 <TypeTable
   type={{
@@ -67,6 +67,7 @@ repository path** (e.g. `acme/app`).
     namespaces: { type: 'InMemoryNamespaceSeed[]', required: false, description: 'Namespaces, as an array of { id, slug, name, kind, parent? }.' },
     repositories: { type: 'Record<string, InMemoryRepositorySeed>', required: false, description: 'Repositories keyed by path. Fields default sensibly (e.g. defaultBranch → main).' },
     commits: { type: 'Record<string, InMemoryCommitSeed[]>', required: false, description: 'Commits keyed by repo path, newest first.' },
+    branches: { type: 'Record<string, InMemoryBranchSeed[]>', required: false, description: 'Branches keyed by repo path, as { name, sha }. Drives branches.list and refs.search.' },
     tags: { type: 'Record<string, InMemoryTagSeed[]>', required: false, description: 'Tags keyed by repo path.' },
     webhooks: { type: 'Record<string, InMemoryWebhookSeed[]>', required: false, description: 'Webhooks keyed by repo path.' },
   }}
@@ -85,6 +86,9 @@ const provider = createInMemoryProvider({
       { sha: 'c2', message: 'Second', refs: ['main'] },
       { sha: 'c1', message: 'First', refs: ['main', 'v1.0.0'] },
     ],
+  },
+  branches: {
+    'acme/app': [{ name: 'main', sha: 'c2' }],
   },
   tags: {
     'acme/app': [{ name: 'v1.0.0', sha: 'c1', isAnnotated: true, date: new Date('2024-01-01') }],
@@ -125,7 +129,7 @@ test('registers a webhook', async () => {
 });
 ```
 
-`provider.state` is `{ namespaces: Namespace[], repositories: Map, commits: Map, tags: Map, webhooks: Map }`.
+`provider.state` is `{ namespaces: Namespace[], repositories: Map, commits: Map, branches: Map, tags: Map, webhooks: Map }`.
 
 ## Pagination is exercised
 

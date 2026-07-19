@@ -81,6 +81,16 @@ With Entra auth, `repos.getCloneUrl` returns the credential in `headers` (a `Bea
 header) rather than embedded in the URL — see [Downloading code](/docs/guides/downloading-code).
 :::
 
+## Scopes
+
+Pick the PAT scope for what you'll do:
+
+- **Code (read)** (`vso.code`) — required for repository discovery, commits, tags, branches, ref
+  search, and archive downloads. Per Azure's documented scope inheritance it also grants the profile
+  and service-hook access the SDK relies on, so `users.me`, `listOrganizations`, and webhook
+  management need no additional scope.
+- **Project and Team (read)** (`vso.project`) — required to list project namespaces.
+
 ## Listing organizations
 
 Organizations live outside the org-pinned provider, so `listOrganizations` is a standalone helper. Pass

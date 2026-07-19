@@ -112,6 +112,29 @@ const { token, expiresAt } = await provider.getInstallationToken();
 The token is the same cached one the SDK uses for its own API calls. Under token auth the method
 throws `RepoError` with `code: 'unsupported'`.
 
+## Scopes
+
+Pick the token scope for what you'll do.
+
+**Classic personal access tokens:**
+
+- **`repo`** — required for repository read access (private and public) and for repository webhook
+  management. For public repositories only, `public_repo` covers the reads — add `admin:repo_hook` if
+  you also manage webhooks.
+- **`read:org`** — required to list organization namespaces.
+- **`user:email`** — required only for `users.me({ includeEmail: true })` when the account hides its
+  public email.
+
+**Fine-grained personal access tokens** (repository permissions unless noted):
+
+- **Metadata** — read: the mandatory baseline; covers discovery, tags, branches, and ref search.
+- **Contents** — read: required for commits, archive downloads, and clone access.
+- **Webhooks** — read and write: required to create, update, or delete webhooks.
+- **Email addresses** — read (an account permission): required for `users.me({ includeEmail: true })`.
+
+GitHub App auth uses the installation's **permissions** rather than token scopes — grant the app the
+equivalent Contents (read), Metadata (read), and Webhooks (read and write) repository permissions.
+
 ## GitHub Enterprise Server
 
 Point `baseUrl` at your GHES API root (`/api/v3`). It applies to both token and GitHub App auth, and the

@@ -16,6 +16,7 @@ Every provider exposes a `capabilities` object, also surfaced on `client.capabil
 
 <TypeTable
   type={{
+    userProfile: { type: 'boolean', description: 'Whether users.me can resolve the authenticated user profile. False e.g. for GitHub App installation tokens.' },
     tagDates: { type: 'boolean', description: 'Whether listed tags carry a date.' },
     repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query.' },
     ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true.' },
@@ -48,6 +49,7 @@ await client.repos.list({ query: 'checkout' });
 
 The same gating applies to:
 
+- `users.me()` — requires `userProfile`
 - `repos.list({ query })` — requires `repoSearch`
 - `repos.list({ owned: true })` — requires `ownedRepoFilter`
 - `repos.downloadArchive({ format })` — the `format` must be in `archiveFormats`

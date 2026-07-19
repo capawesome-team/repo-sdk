@@ -21,10 +21,13 @@ const client = createClient({
   provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
 });
 
+client.users; // me
 client.namespaces; // list / listAll
 client.repos; // list / listAll / get / downloadArchive / getCloneUrl
 client.commits; // list / listAll / get
 client.tags; // list / listAll
+client.branches; // list / listAll
+client.refs; // search
 client.webhooks; // create / list / get / update / delete
 ```
 
@@ -32,7 +35,7 @@ The client also exposes two read-only fields derived from the provider:
 
 <TypeTable
   type={{
-    providerName: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops'", description: 'Which provider backs this client.' },
+    providerName: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'", description: 'Which provider backs this client.' },
     capabilities: { type: 'RepoCapabilities', description: 'The provider capability object — see Capabilities.' },
   }}
 />
@@ -47,6 +50,7 @@ import { github } from 'repo-sdk/github';
 import { gitlab } from 'repo-sdk/gitlab';
 import { bitbucket } from 'repo-sdk/bitbucket';
 import { azureDevOps } from 'repo-sdk/azure-devops';
+import { gitea } from 'repo-sdk/gitea';
 ```
 
 Every factory takes an `auth` block; most also accept an optional `baseUrl` for self-hosted or
@@ -99,6 +103,21 @@ const client = createClient({ provider });
 For integration tests that don't target a specific provider's wire format, prefer the in-memory
 provider from `repo-sdk/testing` — see [Testing](/docs/testing).
 :::
+
+## Cancellation
+
+Every request method accepts an optional `signal` — a standard `AbortSignal` threaded through to
+`fetch`. Use it to time out or cancel in-flight requests:
+
+```ts
+const { data } = await client.commits.list({
+  repo: 'octocat/hello-world',
+  signal: AbortSignal.timeout(5_000),
+});
+```
+
+An aborted request rejects like any failed fetch: a `RepoError` with code `network_error`, carrying
+the original abort error as `cause`.
 
 ## Retry configuration
 

@@ -18,7 +18,7 @@ try {
 } catch (error) {
   if (error instanceof RepoError) {
     error.code; // normalized failure code (see below)
-    error.provider; // 'github' | 'gitlab' | 'bitbucket' | 'azure-devops'
+    error.provider; // 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'
     error.status; // HTTP status, when available
     error.retryable; // whether retrying may succeed
     error.retryAfter; // seconds, when the provider sent Retry-After

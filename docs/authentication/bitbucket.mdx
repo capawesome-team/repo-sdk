@@ -49,6 +49,28 @@ bitbucket({ auth: { accessToken: process.env.BITBUCKET_ACCESS_TOKEN! } });
   }}
 />
 
+## Scopes
+
+Pick the token scope for what you'll do. A scoped Atlassian API token — or a workspace/repository
+access token — needs these; an **unscoped** Atlassian API token inherits your full account access and
+needs none.
+
+**Atlassian API tokens** (granular scopes):
+
+- **`read:repository:bitbucket`** — required for discovery, commits, tags, branches, ref search, and
+  archive downloads.
+- **`read:workspace:bitbucket`** — required to list workspace namespaces.
+- **`read:user:bitbucket`** — required for `users.me` (and its email, with `includeEmail`).
+- **`read:webhook:bitbucket`** and **`write:webhook:bitbucket`** — required to read, and to
+  create/update/delete, webhooks.
+
+**Workspace/repository access tokens and OAuth** (classic scopes):
+
+- **`repository`** — required for discovery, commits, tags, branches, ref search, and clone access.
+- **`account`** — required to list workspace namespaces and for `users.me`.
+- **`email`** — required for the primary email in `users.me({ includeEmail: true })`.
+- **`webhook`** — required to read and write webhooks (a single scope grants both).
+
 ## Archive downloads require an API token
 
 :::warning

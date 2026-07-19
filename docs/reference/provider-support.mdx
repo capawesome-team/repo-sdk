@@ -8,6 +8,12 @@ sidebar:
 A feature × provider matrix covering authentication methods, `baseUrl`/self-hosted support, discovery,
 downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea.
 
+:::note
+Everything gated by a capability flag — repo search, the owned filter, tag dates, commit author
+identity, ref search, webhook events and verification, archive formats, and `users.me` — lives in the
+[capability matrix](/docs/reference/capability-matrix). This page covers what the flags can't express.
+:::
+
 ## Feature matrix
 
 | Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          | Gitea                 |
@@ -18,21 +24,10 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, an
 | Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            | ✓ (self-hosted / Forgejo) |
 | `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  | `owner/name`       |
 | Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              | user + orgs           |
-| Repo search (`query`)          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
-| Owned filter (`owned`)         | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
-| Commits list                   | ✓                    | ✓                    | ✓ (client-side filters) | ✓                  | ✓ (client-side `author`) |
-| Commits get (resolve ref)      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
-| Tags list                      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
-| Branches list                  | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
-| Ref search (prefix)            | ✓ (unpaginated)      | ✓                    | ✓ (case-insensitive) | ✓                     | ✓ (unpaginated)       |
-| Tag dates                      | ✗                    | ✓                    | ✓                    | ✗                     | ✗                     |
-| Commit author identity (`author.user`) | ✓            | ✗                    | ✓                    | ✗                     | ✓                     |
+| Commit filters (`since` / `until` / `author`) | server-side | server-side     | client-side per page | server-side           | client-side `author`  |
 | Namespace `avatarUrl`          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
-| Archive download               | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz)      | ✓ (zip, tar.gz, API token only) | ✓ (zip only)  | ✓ (zip, tar.gz)       |
+| Archive download               | ✓                    | ✓                    | ✓ (API token auth only) | ✓                  | ✓                     |
 | Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) | ✓ (embedded)   |
-| Webhooks manage                | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
-| Webhook events                 | push, tag_push, release | push, tag_push, release | push, tag_push  | push, tag_push        | push, tag_push, release |
-| Webhook receive/verify         | HMAC-SHA256          | shared token         | HMAC-SHA256          | basic auth            | HMAC-SHA256           |
 | Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   | ✓                     |
 
 ## Per-provider caveats
