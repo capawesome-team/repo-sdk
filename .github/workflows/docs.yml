@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 
 env:
@@ -28,11 +29,24 @@ jobs:
         run: npm ci
       - name: Build docs
         run: npm run docs:build
+        env:
+          # Lets the github-releases content source populate the /changelog timeline.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
+        id: cloudflare-deployment
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy .blume-dist --project-name ${{
             env.CLOUDFLARE_PROJECT_NAME }} --branch ${{ github.ref_name }}
           wranglerVersion: ${{ env.WRANGLER_VERSION }}
+      - name: Comment the preview url
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.number }}
+          body: |
+            Deploy preview available at: ${{ steps.cloudflare-deployment.outputs.deployment-url }}.
+
+            Built with commit ${{ github.event.pull_request.head.sha }}.
