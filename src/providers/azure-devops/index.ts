@@ -466,7 +466,9 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         return { url: `https://pat:${encodeURIComponent(auth.pat)}@${host}/${repoPath}` };
       }
       if ('accessToken' in auth) {
-        return { url: `https://oauth2:${encodeURIComponent(auth.accessToken)}@${host}/${repoPath}` };
+        return {
+          url: `https://oauth2:${encodeURIComponent(auth.accessToken)}@${host}/${repoPath}`,
+        };
       }
       const token = await auth.tokenProvider();
       return { url: `https://${host}/${repoPath}`, headers: { Authorization: `Bearer ${token}` } };

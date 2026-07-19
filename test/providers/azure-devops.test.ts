@@ -385,7 +385,9 @@ describe('getCloneUrl', () => {
       fetch: stub.fetch,
     });
     const clone = await provider.getCloneUrl({ repo: 'core/repo-sdk' });
-    expect(clone.url).toBe('https://oauth2:oauth-access-token@dev.azure.com/contoso/core/_git/repo-sdk');
+    expect(clone.url).toBe(
+      'https://oauth2:oauth-access-token@dev.azure.com/contoso/core/_git/repo-sdk',
+    );
     expect(clone.headers).toBeUndefined();
   });
 
@@ -632,12 +634,12 @@ describe('verifyWebhook', () => {
   it('compares the named custom header when header is set', async () => {
     const secret = 'topsecret';
     const params = { body: '{}', secret, header: 'X-Capawesome-Secret' };
-    expect(
-      await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': secret } }),
-    ).toBe(true);
-    expect(
-      await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': 'wrong' } }),
-    ).toBe(false);
+    expect(await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': secret } })).toBe(
+      true,
+    );
+    expect(await verifyWebhook({ ...params, headers: { 'x-capawesome-secret': 'wrong' } })).toBe(
+      false,
+    );
     expect(await verifyWebhook({ ...params, headers: {} })).toBe(false);
     // With header set, a valid Basic auth header alone must not pass.
     expect(

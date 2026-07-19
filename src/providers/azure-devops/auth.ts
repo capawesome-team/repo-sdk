@@ -14,9 +14,7 @@ export const BASIC_AUTH_USERNAME = 'repo-sdk';
  * bearer tokens. Callers pass whichever they have.
  */
 export type AzureDevOpsAuth =
-  | { pat: string }
-  | { accessToken: string }
-  | { tokenProvider: () => Promise<string> };
+  { pat: string } | { accessToken: string } | { tokenProvider: () => Promise<string> };
 
 export function authHeader(auth: AzureDevOpsAuth): Promise<string> {
   if ('pat' in auth) {
