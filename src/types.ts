@@ -79,6 +79,22 @@ export interface Tag {
   raw: unknown;
 }
 
+export interface Branch {
+  name: string;
+  sha: string;
+  raw: unknown;
+}
+
+export type RefType = 'branch' | 'tag' | 'commit';
+
+export interface RefMatch {
+  type: RefType;
+  name: string;
+  /** SHA the ref points to; the tag object rather than the commit for annotated tags on GitHub and Gitea. */
+  sha: string;
+  raw: unknown;
+}
+
 export interface Webhook {
   id: string;
   url: string;
@@ -154,6 +170,27 @@ export interface ListTagsParams extends BaseParams {
   limit?: number;
 }
 
+export interface ListBranchesParams extends BaseParams {
+  repo: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface SearchRefsParams extends BaseParams {
+  repo: string;
+  /** Prefix to match ref names against; an empty string lists the first refs unfiltered. */
+  query: string;
+  types?: RefType[];
+  limit?: number;
+}
+
+export interface ProviderSearchRefsParams extends BaseParams {
+  repo: string;
+  query: string;
+  types: Exclude<RefType, 'commit'>[];
+  limit: number;
+}
+
 export interface DownloadArchiveParams extends BaseParams {
   repo: string;
   ref: string;
@@ -202,6 +239,7 @@ export interface RepoCapabilities {
   repoSearch: boolean;
   ownedRepoFilter: boolean;
   commitUserRef: boolean;
+  refSearch: boolean;
   webhookEvents: WebhookEventType[];
   webhookVerification: WebhookVerificationMethod;
   archiveFormats: ArchiveFormat[];
@@ -216,6 +254,9 @@ export interface RepoProvider {
   listCommits(params: ListCommitsParams): Promise<Page<Commit>>;
   getCommit(params: GetCommitParams): Promise<Commit>;
   listTags(params: ListTagsParams): Promise<Page<Tag>>;
+  listBranches(params: ListBranchesParams): Promise<Page<Branch>>;
+  /** Prefix-match refs of the requested types, branches before tags, at most `limit` results. */
+  searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]>;
   downloadArchive(params: DownloadArchiveParams): Promise<Archive>;
   getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl>;
   createWebhook(params: CreateWebhookParams): Promise<Webhook>;

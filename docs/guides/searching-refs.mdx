@@ -1,0 +1,82 @@
+---
+title: Searching refs
+description: Prefix-match branches, tags, and commit SHAs with refs.search — built for autocompletion.
+sidebar:
+  label: Searching refs
+---
+
+`refs.search` matches a query against a repository's branch names, tag names, and — when the input looks
+like a SHA — its commits, returning one merged suggestion list. It's designed for ref pickers and
+autocompletion inputs: one call per keystroke, server-side filtering on every provider.
+
+## Searching
+
+```ts
+const matches = await client.refs.search({
+  repo: 'capawesome-team/repo-sdk',
+  query: 'feat',
+});
+// [
+//   { type: 'branch', name: 'feature/login', sha: '4f2a…', raw: {…} },
+//   { type: 'branch', name: 'feature/logout', sha: '9c81…', raw: {…} },
+//   { type: 'tag', name: 'feat-preview', sha: 'd0be…', raw: {…} },
+// ]
+```
+
+Matching is by **prefix** on the ref name. Results are ordered branches → tags → commit, truncated to
+`limit` (default 20). Requires the `refSearch` capability — all current providers support it, but gate
+on `client.capabilities.refSearch` if you accept arbitrary providers.
+
+## Parameters
+
+<TypeTable
+  type={{
+    repo: { type: 'string', description: 'The repository to search in.' },
+    query: { type: 'string', description: 'The prefix to match ref names against. An empty string returns the first branches and tags unfiltered.' },
+    types: { type: "RefType[]", required: false, description: "Which ref types to match: 'branch', 'tag', 'commit'. Defaults to all three." },
+    limit: { type: 'number', required: false, description: 'Maximum number of results (default 20).' },
+  }}
+/>
+
+## The RefMatch result
+
+<TypeTable
+  type={{
+    type: { type: "'branch' | 'tag' | 'commit'", description: 'What kind of ref matched.' },
+    name: { type: 'string', description: 'The ref name without its refs/heads/ or refs/tags/ prefix; the full SHA for commit matches.' },
+    sha: { type: 'string', description: 'The SHA the ref points to. For annotated tags on GitHub and Gitea this is the tag object, not the peeled commit.' },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+## Commit SHA input
+
+When `query` is 4–40 hex characters and `types` includes `'commit'`, the SDK additionally tries to
+resolve it as a (possibly abbreviated) commit SHA via the provider. A resolved commit is appended as a
+`type: 'commit'` match; an unresolvable SHA is simply omitted — other errors (auth, rate limits)
+propagate as usual.
+
+```ts
+await client.refs.search({ repo: 'o/r', query: 'a1b2c3d' });
+// [ …matching branches/tags…, { type: 'commit', name: 'a1b2c3d4…', sha: 'a1b2c3d4…', raw: {…} } ]
+```
+
+## Empty input
+
+An empty `query` is served from the paginated branch and tag list endpoints instead of the search
+endpoints, so it stays cheap on every provider — useful for showing initial suggestions before the user
+types. Pin `repos.get(...).defaultBranch` to the top of that list for a typical ref picker.
+
+## Provider semantics
+
+:::note
+The prefix contract holds everywhere, with two variations. **Case sensitivity varies**: Bitbucket
+matches case-insensitively, Gitea case-sensitively, and the remaining providers leave it undocumented —
+don't rely on either behavior. **GitHub and Gitea search unpaginated**: all matches transfer in one
+response before the SDK truncates to `limit`, so very broad prefixes on huge repos are the one case
+where a keystroke can be expensive.
+:::
+
+<Card title="Provider support" icon="table" href="/docs/reference/provider-support">
+  Per-provider ref-search caveats in the feature matrix.
+</Card>

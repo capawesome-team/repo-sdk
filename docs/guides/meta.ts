@@ -7,6 +7,8 @@ export default defineMeta({
     'repositories',
     'commits',
     'tags',
+    'branches',
+    'searching-refs',
     'downloading-code',
     'webhooks-managing',
     'webhooks-receiving',

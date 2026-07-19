@@ -3,6 +3,7 @@ import { decodeCursor, encodeCursor } from '../../pagination.ts';
 import type {
   Archive,
   ArchiveFormat,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -12,6 +13,7 @@ import type {
   GetCommitParams,
   GetRepositoryParams,
   GetWebhookParams,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -20,6 +22,8 @@ import type {
   Namespace,
   NamespaceKind,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -39,6 +43,7 @@ const CAPABILITIES: RepoCapabilities = {
   repoSearch: true,
   ownedRepoFilter: true,
   commitUserRef: true,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -92,6 +97,11 @@ export interface InMemoryTagSeed {
   isAnnotated?: boolean;
 }
 
+export interface InMemoryBranchSeed {
+  name: string;
+  sha: string;
+}
+
 export interface InMemoryWebhookSeed {
   id?: string;
   url: string;
@@ -107,6 +117,8 @@ export interface InMemorySeed {
   commits?: Record<string, InMemoryCommitSeed[]>;
   /** Tags keyed by repository path. */
   tags?: Record<string, InMemoryTagSeed[]>;
+  /** Branches keyed by repository path. */
+  branches?: Record<string, InMemoryBranchSeed[]>;
   /** Webhooks keyed by repository path. */
   webhooks?: Record<string, InMemoryWebhookSeed[]>;
 }
@@ -116,6 +128,7 @@ export interface InMemoryState {
   repositories: Map<string, Repository>;
   commits: Map<string, Commit[]>;
   tags: Map<string, Tag[]>;
+  branches: Map<string, Branch[]>;
   webhooks: Map<string, Webhook[]>;
 }
 
@@ -183,6 +196,14 @@ function normalizeTag(seed: InMemoryTagSeed): Tag {
   };
 }
 
+function normalizeBranch(seed: InMemoryBranchSeed): Branch {
+  return {
+    name: seed.name,
+    sha: seed.sha,
+    raw: seed,
+  };
+}
+
 function paginate<T>(items: T[], cursor: string | undefined): Page<T> {
   const offset = cursor ? decodeCursor<{ offset: number }>('github', cursor).offset : 0;
   const nextOffset = offset + PAGE_SIZE;
@@ -238,6 +259,12 @@ export function createInMemoryProvider(
     ),
     tags: new Map(
       Object.entries(seed.tags ?? {}).map(([path, tags]) => [path, tags.map(normalizeTag)]),
+    ),
+    branches: new Map(
+      Object.entries(seed.branches ?? {}).map(([path, branches]) => [
+        path,
+        branches.map(normalizeBranch),
+      ]),
     ),
     webhooks: new Map(
       Object.entries(seed.webhooks ?? {}).map(([path, webhooks]) => [
@@ -337,6 +364,31 @@ export function createInMemoryProvider(
     listTags(params: ListTagsParams): Promise<Page<Tag>> {
       requireRepository(params.repo);
       return Promise.resolve(paginate(state.tags.get(params.repo) ?? [], params.cursor));
+    },
+
+    listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      requireRepository(params.repo);
+      return Promise.resolve(paginate(state.branches.get(params.repo) ?? [], params.cursor));
+    },
+
+    searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      requireRepository(params.repo);
+      const matches: RefMatch[] = [];
+      if (params.types.includes('branch')) {
+        for (const branch of state.branches.get(params.repo) ?? []) {
+          if (branch.name.startsWith(params.query)) {
+            matches.push({ type: 'branch', name: branch.name, sha: branch.sha, raw: branch.raw });
+          }
+        }
+      }
+      if (params.types.includes('tag')) {
+        for (const tag of state.tags.get(params.repo) ?? []) {
+          if (tag.name.startsWith(params.query)) {
+            matches.push({ type: 'tag', name: tag.name, sha: tag.sha, raw: tag.raw });
+          }
+        }
+      }
+      return Promise.resolve(matches.slice(0, params.limit));
     },
 
     downloadArchive(params: DownloadArchiveParams): Promise<Archive> {

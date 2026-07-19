@@ -1,6 +1,7 @@
 import { RepoError } from './errors.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -10,6 +11,7 @@ import type {
   GetCommitParams,
   GetRepositoryParams,
   GetWebhookParams,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -18,7 +20,10 @@ import type {
   Namespace,
   Page,
   ProviderName,
+  RefMatch,
+  RefType,
   Repository,
+  SearchRefsParams,
   Tag,
   UpdateWebhookParams,
   RepoCapabilities,
@@ -60,6 +65,13 @@ export interface RepoClient {
     list(params: ListTagsParams): Promise<Page<Tag>>;
     listAll(params: Omit<ListTagsParams, 'cursor'>): AsyncGenerator<Tag, void>;
   };
+  branches: {
+    list(params: ListBranchesParams): Promise<Page<Branch>>;
+    listAll(params: Omit<ListBranchesParams, 'cursor'>): AsyncGenerator<Branch, void>;
+  };
+  refs: {
+    search(params: SearchRefsParams): Promise<RefMatch[]>;
+  };
   webhooks: {
     create(params: CreateWebhookParams): Promise<Webhook>;
     list(params: ListWebhooksParams): Promise<Page<Webhook>>;
@@ -72,6 +84,10 @@ export interface RepoClient {
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
+
+const DEFAULT_REF_SEARCH_LIMIT = 20;
+const ALL_REF_TYPES: RefType[] = ['branch', 'tag', 'commit'];
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{4,40}$/i;
 
 export function createClient(options: CreateClientOptions): RepoClient {
   const { provider } = options;
@@ -206,6 +222,78 @@ export function createClient(options: CreateClientOptions): RepoClient {
           requireNonEmpty(p.repo, 'repo');
           return provider.listTags(p);
         }),
+    },
+    branches: {
+      list: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        return withRetry(() => provider.listBranches(params));
+      },
+      listAll: (params) =>
+        listAllOf(params, (p) => {
+          requireNonEmpty(p.repo, 'repo');
+          return provider.listBranches(p);
+        }),
+    },
+    refs: {
+      search: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        if (!provider.capabilities.refSearch) {
+          fail('unsupported', `${provider.name} does not support ref search`);
+        }
+        const types = params.types ?? ALL_REF_TYPES;
+        if (types.length === 0) {
+          fail('validation', 'At least one ref type is required');
+        }
+        const { repo, query, signal } = params;
+        const limit = params.limit ?? DEFAULT_REF_SEARCH_LIMIT;
+        if (query === '') {
+          const [branches, tags] = await Promise.all([
+            types.includes('branch')
+              ? withRetry(() => provider.listBranches({ repo, limit, signal }))
+              : { data: [] as Branch[] },
+            types.includes('tag')
+              ? withRetry(() => provider.listTags({ repo, limit, signal }))
+              : { data: [] as Tag[] },
+          ]);
+          return [
+            ...branches.data.map((b): RefMatch => ({
+              type: 'branch',
+              name: b.name,
+              sha: b.sha,
+              raw: b.raw,
+            })),
+            ...tags.data.map((t): RefMatch => ({
+              type: 'tag',
+              name: t.name,
+              sha: t.sha,
+              raw: t.raw,
+            })),
+          ].slice(0, limit);
+        }
+        const refTypes = types.filter((t): t is Exclude<RefType, 'commit'> => t !== 'commit');
+        const [refMatches, commitMatches] = await Promise.all([
+          refTypes.length > 0
+            ? withRetry(() => provider.searchRefs({ repo, query, types: refTypes, limit, signal }))
+            : ([] as RefMatch[]),
+          types.includes('commit') && COMMIT_SHA_PATTERN.test(query)
+            ? withRetry(() => provider.getCommit({ repo, ref: query, signal })).then(
+                (commit): RefMatch[] => [
+                  { type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw },
+                ],
+                (error) => {
+                  if (
+                    error instanceof RepoError &&
+                    (error.code === 'not_found' || error.code === 'validation')
+                  ) {
+                    return [];
+                  }
+                  throw error;
+                },
+              )
+            : ([] as RefMatch[]),
+        ]);
+        return [...refMatches, ...commitMatches].slice(0, limit);
+      },
     },
     webhooks: {
       create: async (params) => {

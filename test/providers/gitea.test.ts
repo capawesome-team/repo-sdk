@@ -311,6 +311,118 @@ describe('listTags', () => {
   });
 });
 
+describe('listBranches', () => {
+  it('normalizes branches and round-trips the Link cursor', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get('page') === '2') {
+        return { json: [{ name: 'develop', commit: { id: 'sha2' } }] };
+      }
+      return {
+        json: [{ name: 'main', commit: { id: 'sha1' } }],
+        headers: { link: '<https://gitea.com/api/v1/repos/o/r/branches?page=2>; rel="next"' },
+      };
+    });
+    const page = await provider.listBranches({ repo: 'o/r', limit: 50 });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.pathname).toBe('/api/v1/repos/o/r/branches');
+    expect(url.searchParams.get('limit')).toBe('50');
+    expect(page.data[0]).toMatchObject({ name: 'main', sha: 'sha1' });
+    expect(page.cursor).toBeDefined();
+
+    const next = await provider.listBranches({ repo: 'o/r', cursor: page.cursor });
+    expect(next.data[0]).toMatchObject({ name: 'develop', sha: 'sha2' });
+    expect(new URL(stub.requests.at(-1)!.url).searchParams.get('page')).toBe('2');
+    expect(next.cursor).toBeUndefined();
+  });
+});
+
+describe('searchRefs', () => {
+  const headsPayload = [
+    { ref: 'refs/heads/feature/login', object: { sha: 'sha1', type: 'commit' } },
+    { ref: 'refs/heads/feature/logout', object: { sha: 'sha2', type: 'commit' } },
+  ];
+  const tagsPayload = [{ ref: 'refs/tags/feat-tag', object: { sha: 'tagobj', type: 'tag' } }];
+
+  it('queries both ref namespaces and maps branches before tags', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/v1/repos/o/r/git/refs/heads/feat') return { json: headsPayload };
+      if (url.pathname === '/api/v1/repos/o/r/git/refs/tags/feat') return { json: tagsPayload };
+      return { status: 404, json: { message: 'not found' } };
+    });
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'feat',
+      types: ['branch', 'tag'],
+      limit: 20,
+    });
+    expect(stub.requests.map((r) => new URL(r.url).pathname).sort()).toEqual([
+      '/api/v1/repos/o/r/git/refs/heads/feat',
+      '/api/v1/repos/o/r/git/refs/tags/feat',
+    ]);
+    expect(matches).toEqual([
+      { type: 'branch', name: 'feature/login', sha: 'sha1', raw: headsPayload[0] },
+      { type: 'branch', name: 'feature/logout', sha: 'sha2', raw: headsPayload[1] },
+      { type: 'tag', name: 'feat-tag', sha: 'tagobj', raw: tagsPayload[0] },
+    ]);
+  });
+
+  it('keeps slashes in the query as a path', async () => {
+    const { provider, stub } = setup(() => ({ json: [] }));
+    await provider.searchRefs({ repo: 'o/r', query: 'feature/x', types: ['branch'], limit: 20 });
+    expect(stub.requests).toHaveLength(1);
+    expect(new URL(stub.requests[0]!.url).pathname).toBe(
+      '/api/v1/repos/o/r/git/refs/heads/feature/x',
+    );
+  });
+
+  it('treats a 404 on one namespace as no matches, not an error', async () => {
+    const { provider } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/v1/repos/o/r/git/refs/heads/feat') {
+        return { status: 404, json: { message: 'not found' } };
+      }
+      return { json: tagsPayload };
+    });
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'feat',
+      types: ['branch', 'tag'],
+      limit: 20,
+    });
+    expect(matches).toEqual([
+      { type: 'tag', name: 'feat-tag', sha: 'tagobj', raw: tagsPayload[0] },
+    ]);
+  });
+
+  it('normalizes a single-object response to one match', async () => {
+    const single = { ref: 'refs/heads/main', object: { sha: 'mainsha', type: 'commit' } };
+    const { provider } = setup(() => ({ json: single }));
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'main',
+      types: ['branch'],
+      limit: 20,
+    });
+    expect(matches).toEqual([{ type: 'branch', name: 'main', sha: 'mainsha', raw: single }]);
+  });
+
+  it('only queries the requested types and truncates to the limit', async () => {
+    const { provider, stub } = setup(() => ({ json: headsPayload }));
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'feat',
+      types: ['branch'],
+      limit: 1,
+    });
+    expect(stub.requests).toHaveLength(1);
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v1/repos/o/r/git/refs/heads/feat');
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.name).toBe('feature/login');
+  });
+});
+
 describe('downloadArchive', () => {
   it('requests the zip archive and preserves slashes in the ref', async () => {
     const { provider, stub } = setup(() => ({
@@ -426,6 +538,13 @@ describe('cursor origin guard', () => {
     const { provider, stub } = setup(() => ({ json: [] }));
     const foreign = encodeCursor('github', { url: 'https://gitea.com/api/v1/repos/o/r/commits' });
     await expectRepoError(provider.listTags({ repo: 'o/r', cursor: foreign }), 'validation');
+    expect(stub.requests).toHaveLength(0);
+  });
+
+  it('rejects a forged listBranches cursor pointing to another host', async () => {
+    const { provider, stub } = setup(() => ({ json: [] }));
+    const forged = encodeCursor('gitea', { url: 'https://attacker.example/x' });
+    await expectRepoError(provider.listBranches({ repo: 'o/r', cursor: forged }), 'validation');
     expect(stub.requests).toHaveLength(0);
   });
 });

@@ -4,12 +4,14 @@ import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../paginatio
 import {
   clampPerPage,
   commitWebUrlBuilder,
+  encodeRefPath,
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
 } from '../shared.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -20,6 +22,7 @@ import type {
   GetRepositoryParams,
   GetWebhookParams,
   GitActor,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -27,6 +30,8 @@ import type {
   ListWebhooksParams,
   Namespace,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -54,6 +59,7 @@ const CAPABILITIES: RepoCapabilities = {
   repoSearch: true,
   ownedRepoFilter: true,
   commitUserRef: true,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -113,6 +119,16 @@ interface GiteaTag {
   /** SHA of the tag object; equals the commit SHA for lightweight tags. */
   id?: string;
   commit?: { sha?: string };
+}
+
+interface GiteaBranch {
+  name: string;
+  commit: { id: string };
+}
+
+interface GiteaRef {
+  ref: string;
+  object: { sha: string; type: string };
 }
 
 interface GiteaHookConfig {
@@ -219,6 +235,10 @@ function toTag(tag: GiteaTag): Tag {
     isAnnotated: tag.id != null && commitSha != null ? tag.id !== commitSha : undefined,
     raw: tag,
   };
+}
+
+function toBranch(branch: GiteaBranch): Branch {
+  return { name: branch.name, sha: branch.commit.id, raw: branch };
 }
 
 // Gitea has no server-side author filter — filter the returned page locally.
@@ -456,6 +476,56 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         signal: params.signal,
       });
       return { data: data.map(toTag), cursor: nextCursor(response) };
+    },
+
+    async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      if (params.cursor) {
+        const { url } = decodeCursor<{ url: string }>('gitea', params.cursor);
+        assertSameOriginUrl('gitea', baseUrl, url);
+        const { data, response } = await http.json<GiteaBranch[]>(url, { signal: params.signal });
+        return { data: data.map(toBranch), cursor: nextCursor(response) };
+      }
+      const { data, response } = await http.json<GiteaBranch[]>(
+        `${repoPath(params.repo)}/branches`,
+        {
+          query: { limit: clampPerPage(params.limit) },
+          signal: params.signal,
+        },
+      );
+      return { data: data.map(toBranch), cursor: nextCursor(response) };
+    },
+
+    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      const namespaces = { branch: 'heads', tag: 'tags' } as const;
+      // Gitea's ref endpoint prefix-matches (case-sensitive) and is unpaginated;
+      // truncate to `limit` client-side.
+      const matches = await Promise.all(
+        (['branch', 'tag'] as const)
+          .filter((type) => params.types.includes(type))
+          .map(async (type) => {
+            const prefix = `refs/${namespaces[type]}/`;
+            let refs: GiteaRef[];
+            try {
+              const { data } = await http.json<GiteaRef | GiteaRef[]>(
+                `${repoPath(params.repo)}/git/refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
+                { signal: params.signal },
+              );
+              // A single exact match is returned as one object rather than an array.
+              refs = Array.isArray(data) ? data : [data];
+            } catch (error) {
+              // Zero matches surface as a 404; normalize to an empty result.
+              if (error instanceof RepoError && error.code === 'not_found') return [];
+              throw error;
+            }
+            return refs.map((ref): RefMatch => ({
+              type,
+              name: ref.ref.slice(prefix.length),
+              sha: ref.object.sha,
+              raw: ref,
+            }));
+          }),
+      );
+      return matches.flat().slice(0, params.limit);
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {

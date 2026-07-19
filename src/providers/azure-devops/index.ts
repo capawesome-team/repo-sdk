@@ -3,6 +3,7 @@ import { HttpClient, type HttpRequestOptions, type ProviderErrorInfo } from '../
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -13,6 +14,7 @@ import type {
   GetRepositoryParams,
   GetWebhookParams,
   GitActor,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -20,6 +22,8 @@ import type {
   ListWebhooksParams,
   Namespace,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -59,6 +63,7 @@ const CAPABILITIES: RepoCapabilities = {
   ownedRepoFilter: false,
   // Azure DevOps commit payloads carry only name/email/date for authors.
   commitUserRef: false,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push'],
   webhookVerification: 'basic-auth',
   archiveFormats: ['zip'],
@@ -185,6 +190,10 @@ function toTag(ref: AzureRef): Tag {
     isAnnotated: ref.peeledObjectId != null,
     raw: ref,
   };
+}
+
+function toBranch(ref: AzureRef): Branch {
+  return { name: stripPrefix(ref.name, 'refs/heads/'), sha: ref.objectId, raw: ref };
 }
 
 function fromAzureEvents(eventType: string | undefined): WebhookEventType[] {
@@ -424,6 +433,54 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         data: data.value.map(toTag),
         cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
       };
+    },
+
+    async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      const query: HttpRequestOptions['query'] = { filter: 'heads/', $top: params.limit };
+      if (params.cursor) {
+        query.continuationToken = decodeCursor<{ token: string }>(
+          'azure-devops',
+          params.cursor,
+        ).token;
+      }
+      const { data, response } = await jsonApi<AzureList<AzureRef>>(
+        `${repoBasePath(params.repo)}/refs`,
+        { query, signal: params.signal },
+      );
+      const token = response.headers.get('x-ms-continuationtoken');
+      return {
+        data: data.value.map(toBranch),
+        cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
+      };
+    },
+
+    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      // Azure's refs endpoint prefix-matches via `filter`; a single request per type
+      // is enough since `$top` caps the results — never follow continuation tokens here.
+      const refsPath = `${repoBasePath(params.repo)}/refs`;
+      const matches = await Promise.all(
+        (['branch', 'tag'] as const)
+          .filter((type) => params.types.includes(type))
+          .map(async (type) => {
+            const isTag = type === 'tag';
+            const { data } = await jsonApi<AzureList<AzureRef>>(refsPath, {
+              query: {
+                filter: `${isTag ? 'tags/' : 'heads/'}${params.query}`,
+                ...(isTag ? { peelTags: true } : {}),
+                $top: params.limit,
+              },
+              signal: params.signal,
+            });
+            const prefix = isTag ? 'refs/tags/' : 'refs/heads/';
+            return data.value.map((ref): RefMatch => ({
+              type,
+              name: stripPrefix(ref.name, prefix),
+              sha: isTag ? (ref.peeledObjectId ?? ref.objectId) : ref.objectId,
+              raw: ref,
+            }));
+          }),
+      );
+      return matches.flat().slice(0, params.limit);
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {

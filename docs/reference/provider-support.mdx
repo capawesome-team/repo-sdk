@@ -23,6 +23,8 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, an
 | Commits list                   | ✓                    | ✓                    | ✓ (client-side filters) | ✓                  | ✓ (client-side `author`) |
 | Commits get (resolve ref)      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
 | Tags list                      | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
+| Branches list                  | ✓                    | ✓                    | ✓                    | ✓                     | ✓                     |
+| Ref search (prefix)            | ✓ (unpaginated)      | ✓                    | ✓ (case-insensitive) | ✓                     | ✓ (unpaginated)       |
 | Tag dates                      | ✗                    | ✓                    | ✓                    | ✗                     | ✗                     |
 | Commit author identity (`author.user`) | ✓            | ✗                    | ✓                    | ✗                     | ✓                     |
 | Namespace `avatarUrl`          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
@@ -43,6 +45,9 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, an
       `unsupported`. Single-installation apps can omit `installationId`; zero installs throw
       `unauthorized`, multiple throw `validation`.
     - Clone URLs from GitHub App auth set `expiresAt` (~1h).
+    - Ref search (`refs.search`) is served by the unpaginated `matching-refs` endpoint — a very broad
+      prefix on a huge repo transfers all matches in one response before the SDK truncates to `limit`.
+      Annotated tag matches carry the **tag object** SHA, not the peeled commit.
   </AccordionItem>
   <AccordionItem title="GitLab" icon="gitlab">
     - Self-managed instances need the full `baseUrl` **including `/api/v4`**.
@@ -55,6 +60,9 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, an
       `downloadArchive` throws `unsupported`.
     - No `release` webhook event; `push` and `tag_push` both map to the native `repo:push`.
     - `since` / `until` / `author` commit filters are applied client-side per page.
+    - Ref search matches **case-insensitively** (Bitbucket's filter only supports contains matching; the
+      SDK narrows the first page to prefix matches, so a page full of mid-name hits can return fewer
+      than `limit` results).
   </AccordionItem>
   <AccordionItem title="Gitea" icon="git-branch">
     - Targets **Gitea ≥ 1.20**; [Forgejo](https://forgejo.org) is API-compatible and works unchanged —
@@ -68,6 +76,8 @@ downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, an
     - Gitea has no built-in API rate limiter — a `rate_limited` error can only come from a fronting proxy.
     - Private resources you lack permission for often return **404 instead of 403** to avoid leaking
       their existence.
+    - Ref search is **case-sensitive** and unpaginated (all matches transfer before the SDK truncates
+      to `limit`). Annotated tag matches carry the **tag object** SHA, not the peeled commit.
   </AccordionItem>
   <AccordionItem title="Azure DevOps" icon="git-branch">
     - `organization` is **required** on the factory and is not part of the `repo` string.

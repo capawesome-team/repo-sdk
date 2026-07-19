@@ -1,6 +1,7 @@
 export { createInMemoryProvider } from './providers/testing/index.ts';
 export type {
   InMemoryActorSeed,
+  InMemoryBranchSeed,
   InMemoryCommitSeed,
   InMemoryNamespaceSeed,
   InMemoryRepositorySeed,

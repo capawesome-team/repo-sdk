@@ -16,6 +16,11 @@ export function parseLinkNext(header: string | null): string | undefined {
   return undefined;
 }
 
+/** Percent-encodes a ref path while keeping its `/` separators intact. */
+export function encodeRefPath(ref: string): string {
+  return ref.split('/').map(encodeURIComponent).join('/');
+}
+
 export function commitWebUrlBuilder(pathSegment: string) {
   return function commitWebUrl(repoWebUrl: string, sha: string): string {
     return `${repoWebUrl.replace(/\/+$/, '')}/${pathSegment}/${sha}`;

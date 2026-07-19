@@ -1,0 +1,44 @@
+---
+title: Working with branches
+description: List a repository's branches as normalized Branch objects.
+sidebar:
+  label: Branches
+---
+
+`branches.list` / `branches.listAll` page through a repository's branches as normalized `Branch`
+objects, on every provider.
+
+## Listing branches
+
+`branches.list` returns one `Page<Branch>`; `branches.listAll` follows cursors and yields every branch.
+Both require a `repo`:
+
+```ts
+const { data: branches } = await client.branches.list({ repo: 'capawesome-team/repo-sdk' });
+
+for await (const branch of client.branches.listAll({ repo: 'capawesome-team/repo-sdk' })) {
+  console.log(branch.name, branch.sha);
+}
+```
+
+## The normalized Branch
+
+<TypeTable
+  type={{
+    name: { type: 'string', description: 'The branch name (without the refs/heads/ prefix).' },
+    sha: { type: 'string', description: 'The commit SHA the branch currently points at.' },
+    raw: { type: 'unknown', description: 'The untouched provider payload.' },
+  }}
+/>
+
+The model is intentionally minimal — provider-specific extras such as protection flags are available on
+`raw`. To find the default branch, use the repository itself:
+
+```ts
+const repo = await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
+console.log(repo.defaultBranch); // e.g. 'main' (undefined for an empty repository)
+```
+
+<Card title="Next: Searching refs" icon="search" href="/docs/guides/searching-refs">
+  Prefix-match branches, tags, and commit SHAs — built for autocompletion.
+</Card>

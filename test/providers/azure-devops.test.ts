@@ -329,6 +329,133 @@ describe('listTags', () => {
   });
 });
 
+describe('listBranches', () => {
+  it('normalizes branches and round-trips the continuation-token cursor', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get('continuationToken')) {
+        return { json: { count: 1, value: [{ name: 'refs/heads/dev', objectId: 'devsha' }] } };
+      }
+      return {
+        json: { count: 1, value: [{ name: 'refs/heads/main', objectId: 'mainsha' }] },
+        headers: { 'x-ms-continuationtoken': 'ct-branch' },
+      };
+    });
+
+    const first = await provider.listBranches({ repo: 'core/repo-sdk', limit: 1 });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.pathname).toBe('/contoso/core/_apis/git/repositories/repo-sdk/refs');
+    expect(url.searchParams.get('filter')).toBe('heads/');
+    expect(url.searchParams.get('peelTags')).toBeNull();
+    expect(url.searchParams.get('$top')).toBe('1');
+    expect(first.data[0]).toEqual({
+      name: 'main',
+      sha: 'mainsha',
+      raw: { name: 'refs/heads/main', objectId: 'mainsha' },
+    });
+    expect(first.cursor).toBeDefined();
+
+    const second = await provider.listBranches({ repo: 'core/repo-sdk', cursor: first.cursor });
+    expect(second.data[0]?.name).toBe('dev');
+    expect(second.cursor).toBeUndefined();
+    expect(new URL(stub.requests[1]!.url).searchParams.get('continuationToken')).toBe('ct-branch');
+  });
+});
+
+describe('searchRefs', () => {
+  function refsSetup() {
+    return setup((request) => {
+      const filter = new URL(request.url).searchParams.get('filter') ?? '';
+      if (filter.startsWith('heads/')) {
+        return {
+          json: { count: 1, value: [{ name: 'refs/heads/feature', objectId: 'branchsha' }] },
+        };
+      }
+      return {
+        json: {
+          count: 1,
+          value: [{ name: 'refs/tags/feature-1', objectId: 'tagobj', peeledObjectId: 'tagcommit' }],
+        },
+      };
+    });
+  }
+
+  it('prefix-filters both types and strips the ref name prefixes', async () => {
+    const { provider, stub } = refsSetup();
+    const matches = await provider.searchRefs({
+      repo: 'core/repo-sdk',
+      query: 'feat',
+      types: ['branch', 'tag'],
+      limit: 10,
+    });
+
+    const branchReq = stub.requests.find(
+      (r) => new URL(r.url).searchParams.get('filter') === 'heads/feat',
+    )!;
+    const tagReq = stub.requests.find(
+      (r) => new URL(r.url).searchParams.get('filter') === 'tags/feat',
+    )!;
+    expect(new URL(branchReq.url).searchParams.get('$top')).toBe('10');
+    expect(new URL(branchReq.url).searchParams.get('peelTags')).toBeNull();
+    expect(new URL(tagReq.url).searchParams.get('$top')).toBe('10');
+    expect(new URL(tagReq.url).searchParams.get('peelTags')).toBe('true');
+
+    // Branches precede tags; annotated tag sha uses peeledObjectId.
+    expect(matches).toEqual([
+      {
+        type: 'branch',
+        name: 'feature',
+        sha: 'branchsha',
+        raw: { name: 'refs/heads/feature', objectId: 'branchsha' },
+      },
+      {
+        type: 'tag',
+        name: 'feature-1',
+        sha: 'tagcommit',
+        raw: { name: 'refs/tags/feature-1', objectId: 'tagobj', peeledObjectId: 'tagcommit' },
+      },
+    ]);
+  });
+
+  it('fetches only the requested types', async () => {
+    const { provider, stub } = refsSetup();
+    const matches = await provider.searchRefs({
+      repo: 'core/repo-sdk',
+      query: 'feat',
+      types: ['branch'],
+      limit: 10,
+    });
+    expect(matches.every((m) => m.type === 'branch')).toBe(true);
+    expect(stub.requests).toHaveLength(1);
+    expect(new URL(stub.requests[0]!.url).searchParams.get('filter')).toBe('heads/feat');
+  });
+
+  it('truncates the concatenated result to the limit', async () => {
+    const { provider } = setup((request) => {
+      const filter = new URL(request.url).searchParams.get('filter') ?? '';
+      const objectId = filter.startsWith('heads/') ? 'bsha' : 'tsha';
+      return {
+        json: {
+          count: 2,
+          value: [
+            { name: `refs/${filter}a`, objectId },
+            { name: `refs/${filter}b`, objectId },
+          ],
+        },
+      };
+    });
+    const matches = await provider.searchRefs({
+      repo: 'core/repo-sdk',
+      query: '',
+      types: ['branch', 'tag'],
+      limit: 3,
+    });
+    expect(matches).toHaveLength(3);
+    // Branches come first, so the truncated set is 2 branches + 1 tag.
+    expect(matches.map((m) => m.type)).toEqual(['branch', 'branch', 'tag']);
+  });
+});
+
 describe('downloadArchive', () => {
   it('sends the expected query params and Accept header', async () => {
     const { provider, stub } = setup(() => ({

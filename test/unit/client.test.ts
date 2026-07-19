@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createClient } from '../../src/client.ts';
 import { RepoError } from '../../src/errors.ts';
-import type { Commit, Page, RepoProvider } from '../../src/types.ts';
+import type { Branch, Commit, Page, RefMatch, RepoProvider, Tag } from '../../src/types.ts';
 
 function fakeCommit(sha: string): Commit {
   return {
@@ -25,6 +25,7 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
       repoSearch: true,
       ownedRepoFilter: true,
       commitUserRef: true,
+      refSearch: true,
       webhookEvents: ['push', 'tag_push'],
       webhookVerification: 'hmac-sha256',
       archiveFormats: ['zip', 'tar.gz'],
@@ -35,6 +36,8 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
     listCommits: notImplemented,
     getCommit: notImplemented,
     listTags: notImplemented,
+    listBranches: notImplemented,
+    searchRefs: notImplemented,
     downloadArchive: notImplemented,
     getCloneUrl: notImplemented,
     createWebhook: notImplemented,
@@ -122,6 +125,127 @@ describe('listAll', () => {
       shas.push(commit.sha);
     }
     expect(shas).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('refs.search', () => {
+  function branch(name: string): Branch {
+    return { name, sha: `sha-${name}`, raw: {} };
+  }
+  function tag(name: string): Tag {
+    return { name, sha: `sha-${name}`, raw: {} };
+  }
+  function match(type: RefMatch['type'], name: string): RefMatch {
+    return { type, name, sha: `sha-${name}`, raw: {} };
+  }
+
+  it('rejects when the provider lacks the refSearch capability', async () => {
+    const provider = fakeProvider();
+    provider.capabilities.refSearch = false;
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.search({ repo: 'a/b', query: 'feat' }), 'unsupported');
+  });
+
+  it('rejects an empty types array', async () => {
+    const client = createClient({ provider: fakeProvider() });
+    await expectRepoError(
+      client.refs.search({ repo: 'a/b', query: 'feat', types: [] }),
+      'validation',
+    );
+  });
+
+  it('passes defaulted types and limit to the provider', async () => {
+    let seen: unknown;
+    const provider = fakeProvider({
+      searchRefs: (params) => {
+        seen = params;
+        return Promise.resolve([match('branch', 'feature-x')]);
+      },
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: 'feat' });
+    expect(seen).toMatchObject({ repo: 'a/b', query: 'feat', types: ['branch', 'tag'], limit: 20 });
+    expect(matches).toEqual([match('branch', 'feature-x')]);
+  });
+
+  it('serves an empty query from the list endpoints instead of searchRefs', async () => {
+    const provider = fakeProvider({
+      listBranches: () => Promise.resolve({ data: [branch('main'), branch('develop')] }),
+      listTags: () => Promise.resolve({ data: [tag('v1.0.0')] }),
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: '' });
+    expect(matches).toEqual([
+      match('branch', 'main'),
+      match('branch', 'develop'),
+      match('tag', 'v1.0.0'),
+    ]);
+  });
+
+  it('applies limit and type filtering to an empty query', async () => {
+    const provider = fakeProvider({
+      listTags: () => Promise.resolve({ data: [tag('v1'), tag('v2'), tag('v3')] }),
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: '', types: ['tag'], limit: 2 });
+    expect(matches).toEqual([match('tag', 'v1'), match('tag', 'v2')]);
+  });
+
+  it('appends a commit match for a resolvable hex query', async () => {
+    const provider = fakeProvider({
+      searchRefs: () => Promise.resolve([match('branch', 'abc-branch')]),
+      getCommit: (params) => Promise.resolve({ ...fakeCommit(params.ref), raw: { full: true } }),
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: 'abc1234' });
+    expect(matches).toEqual([
+      match('branch', 'abc-branch'),
+      { type: 'commit', name: 'abc1234', sha: 'abc1234', raw: { full: true } },
+    ]);
+  });
+
+  it('ignores commit resolution misses but propagates other errors', async () => {
+    const notFound = new RepoError('nope', { code: 'not_found', provider: 'github' });
+    const provider = fakeProvider({
+      searchRefs: () => Promise.resolve([]),
+      getCommit: () => Promise.reject(notFound),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.search({ repo: 'a/b', query: 'abc1234' })).toEqual([]);
+
+    provider.getCommit = () =>
+      Promise.reject(new RepoError('boom', { code: 'forbidden', provider: 'github' }));
+    await expectRepoError(client.refs.search({ repo: 'a/b', query: 'abc1234' }), 'forbidden');
+  });
+
+  it('does not resolve commits for non-hex queries or when commit is not requested', async () => {
+    const provider = fakeProvider({
+      searchRefs: () => Promise.resolve([]),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.search({ repo: 'a/b', query: 'feature' })).toEqual([]);
+    expect(await client.refs.search({ repo: 'a/b', query: 'abc1234', types: ['branch'] })).toEqual(
+      [],
+    );
+  });
+
+  it('searches only commits when requested', async () => {
+    const provider = fakeProvider({
+      getCommit: (params) => Promise.resolve(fakeCommit(params.ref)),
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: 'abc1234', types: ['commit'] });
+    expect(matches).toMatchObject([{ type: 'commit', name: 'abc1234' }]);
+  });
+
+  it('truncates merged results to the limit', async () => {
+    const provider = fakeProvider({
+      searchRefs: () => Promise.resolve([match('branch', 'abc1'), match('tag', 'abc2')]),
+      getCommit: (params) => Promise.resolve(fakeCommit(params.ref)),
+    });
+    const client = createClient({ provider });
+    const matches = await client.refs.search({ repo: 'a/b', query: 'abc1234', limit: 2 });
+    expect(matches).toEqual([match('branch', 'abc1'), match('tag', 'abc2')]);
   });
 });
 

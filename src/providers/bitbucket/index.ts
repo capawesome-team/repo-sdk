@@ -9,6 +9,7 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -19,6 +20,7 @@ import type {
   GetRepositoryParams,
   GetWebhookParams,
   GitActor,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -26,6 +28,8 @@ import type {
   ListWebhooksParams,
   Namespace,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -49,6 +53,7 @@ const CAPABILITIES: RepoCapabilities = {
   repoSearch: true,
   ownedRepoFilter: true,
   commitUserRef: true,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -112,6 +117,11 @@ interface BitbucketTag {
   target: { hash: string; date?: string };
 }
 
+interface BitbucketBranch {
+  name: string;
+  target: { hash: string };
+}
+
 interface BitbucketHook {
   uuid: string;
   url?: string;
@@ -131,7 +141,7 @@ function nextCursor(body: BitbucketList<unknown>): string | undefined {
 }
 
 function bbqlNameQuery(text: string): string {
-  return `name ~ "${text.replaceAll('"', '\\"')}"`;
+  return `name ~ "${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
 function toNamespace(workspace: BitbucketWorkspace): Namespace {
@@ -205,6 +215,10 @@ function toTag(tag: BitbucketTag): Tag {
     date: new Date(tag.date ?? tag.target.date ?? 0),
     raw: tag,
   };
+}
+
+function toBranch(branch: BitbucketBranch): Branch {
+  return { name: branch.name, sha: branch.target.hash, raw: branch };
 }
 
 function toBitbucketEvents(events: WebhookEventType[]): string[] {
@@ -389,6 +403,48 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         },
       );
       return { data: (data.values ?? []).map(toTag), cursor: nextCursor(data) };
+    },
+
+    async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      if (params.cursor) {
+        const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
+        assertSameOriginUrl('bitbucket', BASE_URL, url);
+        const { data } = await http.json<BitbucketList<BitbucketBranch>>(url, {
+          signal: params.signal,
+        });
+        return { data: (data.values ?? []).map(toBranch), cursor: nextCursor(data) };
+      }
+      const { data } = await http.json<BitbucketList<BitbucketBranch>>(
+        `${repoPath(params.repo)}/refs/branches`,
+        {
+          query: { pagelen: clampPerPage(params.limit) },
+          signal: params.signal,
+        },
+      );
+      return { data: (data.values ?? []).map(toBranch), cursor: nextCursor(data) };
+    },
+
+    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      const endpoints = { branch: 'branches', tag: 'tags' } as const;
+      // Bitbucket's `~` operator is a case-insensitive CONTAINS filter with no
+      // starts-with equivalent, so narrow the server-filtered first page down to
+      // the prefix contract locally.
+      const q = bbqlNameQuery(params.query);
+      const prefix = params.query.toLowerCase();
+      const matches = await Promise.all(
+        (['branch', 'tag'] as const)
+          .filter((type) => params.types.includes(type))
+          .map(async (type) => {
+            const { data } = await http.json<BitbucketList<BitbucketBranch>>(
+              `${repoPath(params.repo)}/refs/${endpoints[type]}`,
+              { query: { q, pagelen: params.limit }, signal: params.signal },
+            );
+            return (data.values ?? [])
+              .filter((ref) => ref.name.toLowerCase().startsWith(prefix))
+              .map((ref): RefMatch => ({ type, name: ref.name, sha: ref.target.hash, raw: ref }));
+          }),
+      );
+      return matches.flat().slice(0, params.limit);
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {

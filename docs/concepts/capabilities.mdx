@@ -20,6 +20,7 @@ Every provider exposes a `capabilities` object, also surfaced on `client.capabil
     repoSearch: { type: 'boolean', description: 'Whether repos.list accepts a free-text query.' },
     ownedRepoFilter: { type: 'boolean', description: 'Whether repos.list accepts owned: true.' },
     commitUserRef: { type: 'boolean', description: 'Whether commit actors can carry a resolved account (GitActor.user).' },
+    refSearch: { type: 'boolean', description: 'Whether refs.search can prefix-match branch and tag names server-side.' },
     webhookEvents: { type: 'WebhookEventType[]', description: 'The webhook events the provider can register.' },
     webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How incoming webhooks are verified.' },
     archiveFormats: { type: 'ArchiveFormat[]', description: 'The archive formats downloadArchive can return.' },
@@ -50,6 +51,7 @@ The same gating applies to:
 - `repos.list({ query })` — requires `repoSearch`
 - `repos.list({ owned: true })` — requires `ownedRepoFilter`
 - `repos.downloadArchive({ format })` — the `format` must be in `archiveFormats`
+- `refs.search` — requires `refSearch`
 - `webhooks.create` / `webhooks.update` — every event must be in `webhookEvents`
 
 ## Gate at runtime

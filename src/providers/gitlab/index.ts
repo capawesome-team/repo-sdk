@@ -10,6 +10,7 @@ import {
 } from '../shared.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -20,6 +21,7 @@ import type {
   GetRepositoryParams,
   GetWebhookParams,
   GitActor,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -27,6 +29,8 @@ import type {
   ListWebhooksParams,
   Namespace,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -54,6 +58,7 @@ const CAPABILITIES: RepoCapabilities = {
   ownedRepoFilter: true,
   // The GitLab commits API exposes only name/email for authors, never a user account.
   commitUserRef: false,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'shared-token',
   archiveFormats: ['zip', 'tar.gz'],
@@ -119,6 +124,11 @@ interface GitLabTag {
   target?: string;
   created_at?: string | null;
   commit?: { id: string; committed_date?: string };
+}
+
+interface GitLabBranch {
+  name: string;
+  commit: { id: string };
 }
 
 interface GitLabHook {
@@ -233,6 +243,10 @@ function toTag(tag: GitLabTag): Tag {
     date: dateSource ? new Date(dateSource) : undefined,
     raw: tag,
   };
+}
+
+function toBranch(branch: GitLabBranch): Branch {
+  return { name: branch.name, sha: branch.commit.id, raw: branch };
 }
 
 function eventsFromHook(hook: GitLabHook): WebhookEventType[] {
@@ -457,6 +471,58 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         signal: params.signal,
       });
       return { data: data.map(toTag), cursor: nextCursor(reqUrl(path, query), response) };
+    },
+
+    async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      if (params.cursor) {
+        const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
+        const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
+        const { data, response } = await http.json<GitLabBranch[]>(url, { signal: params.signal });
+        return { data: data.map(toBranch), cursor: nextCursor(url, response) };
+      }
+      const path = `/projects/${projectId(params.repo)}/repository/branches`;
+      const query = { per_page: clampPerPage(params.limit) };
+      const { data, response } = await http.json<GitLabBranch[]>(path, {
+        query,
+        signal: params.signal,
+      });
+      return { data: data.map(toBranch), cursor: nextCursor(reqUrl(path, query), response) };
+    },
+
+    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      const base = `/projects/${projectId(params.repo)}/repository`;
+      // GitLab's ?search= substring-matches; anchor with `^` for a prefix match.
+      // First page only — prefix search results fit within `limit`.
+      const query = { search: `^${params.query}`, per_page: params.limit };
+      const matches = await Promise.all(
+        (['branch', 'tag'] as const)
+          .filter((type) => params.types.includes(type))
+          .map(async (type): Promise<RefMatch[]> => {
+            if (type === 'branch') {
+              const { data } = await http.json<GitLabBranch[]>(`${base}/branches`, {
+                query,
+                signal: params.signal,
+              });
+              return data.map((branch) => ({
+                type,
+                name: branch.name,
+                sha: branch.commit.id,
+                raw: branch,
+              }));
+            }
+            const { data } = await http.json<GitLabTag[]>(`${base}/tags`, {
+              query,
+              signal: params.signal,
+            });
+            return data.map((tag) => ({
+              type,
+              name: tag.name,
+              sha: tag.commit?.id ?? tag.target ?? '',
+              raw: tag,
+            }));
+          }),
+      );
+      return matches.flat().slice(0, params.limit);
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {

@@ -34,6 +34,14 @@ const seed: InMemorySeed = {
   tags: {
     'acme/service': [{ name: 'v1.0.0', sha: 'c1' }],
   },
+  branches: {
+    'acme/service': [
+      { name: 'main', sha: 'c3' },
+      { name: 'feature/login', sha: 'c2' },
+      { name: 'feature/logout', sha: 'c2' },
+      { name: 'v1-hotfix', sha: 'c1' },
+    ],
+  },
   webhooks: {
     'acme/service': [{ url: 'https://example.com/seeded', events: ['push'] }],
   },
@@ -178,6 +186,81 @@ describe('createInMemoryProvider through createClient', () => {
       const { client } = setup();
       const page = await client.tags.list({ repo: 'acme/service' });
       expect(page.data).toMatchObject([{ name: 'v1.0.0', sha: 'c1' }]);
+    });
+  });
+
+  describe('branches.list', () => {
+    it('lists seeded branches with raw seed passthrough', async () => {
+      const { client } = setup();
+      const page = await client.branches.list({ repo: 'acme/service' });
+      expect(page.data).toHaveLength(2);
+      expect(page.data[0]).toMatchObject({ name: 'main', sha: 'c3' });
+      expect(page.cursor).toBeDefined();
+    });
+
+    it('crosses the size-2 page boundary via listAll', async () => {
+      const { client } = setup();
+      const branches = await collect(client.branches.listAll({ repo: 'acme/service' }));
+      expect(branches.map((branch) => branch.name)).toEqual([
+        'main',
+        'feature/login',
+        'feature/logout',
+        'v1-hotfix',
+      ]);
+    });
+
+    it('rejects an unknown repo with not_found', async () => {
+      const { client } = setup();
+      await expectRepoError(client.branches.list({ repo: 'acme/missing' }), 'not_found');
+    });
+  });
+
+  describe('refs.search', () => {
+    it('prefix-filters branch names case-sensitively', async () => {
+      const { client } = setup();
+      const matches = await client.refs.search({ repo: 'acme/service', query: 'feature/' });
+      expect(matches).toEqual([
+        { type: 'branch', name: 'feature/login', sha: 'c2', raw: expect.anything() },
+        { type: 'branch', name: 'feature/logout', sha: 'c2', raw: expect.anything() },
+      ]);
+    });
+
+    it('orders branch matches before tag matches', async () => {
+      const { client } = setup();
+      const matches = await client.refs.search({ repo: 'acme/service', query: 'v1' });
+      expect(matches.map((match) => [match.type, match.name])).toEqual([
+        ['branch', 'v1-hotfix'],
+        ['tag', 'v1.0.0'],
+      ]);
+    });
+
+    it('truncates to the given limit', async () => {
+      const { client } = setup();
+      const matches = await client.refs.search({
+        repo: 'acme/service',
+        query: 'feature/',
+        limit: 1,
+      });
+      expect(matches).toHaveLength(1);
+      expect(matches[0]?.name).toBe('feature/login');
+    });
+
+    it('restricts results to the requested ref types', async () => {
+      const { client } = setup();
+      const tagsOnly = await client.refs.search({
+        repo: 'acme/service',
+        query: 'v1',
+        types: ['tag'],
+      });
+      expect(tagsOnly.map((match) => [match.type, match.name])).toEqual([['tag', 'v1.0.0']]);
+    });
+
+    it('rejects an unknown repo with not_found', async () => {
+      const { client } = setup();
+      await expectRepoError(
+        client.refs.search({ repo: 'acme/missing', query: 'feature/' }),
+        'not_found',
+      );
     });
   });
 

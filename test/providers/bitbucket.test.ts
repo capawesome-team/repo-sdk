@@ -303,6 +303,104 @@ describe('listTags', () => {
   });
 });
 
+describe('listBranches', () => {
+  it('normalizes branches, uses default order, and round-trips the next-URL cursor', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get('page') === '2') {
+        return { json: { values: [{ name: 'develop', target: { hash: 'sha2' } }] } };
+      }
+      return {
+        json: {
+          values: [{ name: 'main', target: { hash: 'sha1' } }],
+          next: 'https://api.bitbucket.org/2.0/repositories/o/r/refs/branches?page=2',
+        },
+      };
+    });
+
+    const page = await provider.listBranches({ repo: 'o/r' });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.pathname).toBe('/2.0/repositories/o/r/refs/branches');
+    expect(url.searchParams.get('sort')).toBeNull();
+    expect(page.data[0]).toMatchObject({ name: 'main', sha: 'sha1' });
+    expect(page.data[0]?.raw).toEqual({ name: 'main', target: { hash: 'sha1' } });
+    expect(page.cursor).toBeDefined();
+
+    const second = await provider.listBranches({ repo: 'o/r', cursor: page.cursor });
+    expect(second.data[0]).toMatchObject({ name: 'develop', sha: 'sha2' });
+    expect(second.cursor).toBeUndefined();
+  });
+
+  it('rejects a forged cross-origin cursor without fetching the attacker host', async () => {
+    const { provider, stub } = setup(() => ({ json: { values: [] } }));
+    const cursor = encodeCursor('bitbucket', { url: 'https://attacker.example/x' });
+    await expectRepoError(provider.listBranches({ repo: 'o/r', cursor }), 'validation');
+    expect(stub.requests).toHaveLength(0);
+  });
+});
+
+describe('searchRefs', () => {
+  const branchesPayload = {
+    values: [
+      { name: 'feature-x', target: { hash: 'sha1' } },
+      { name: 'Feature-y', target: { hash: 'sha2' } },
+      { name: 'my-feat', target: { hash: 'sha3' } },
+    ],
+  };
+  const tagsPayload = { values: [{ name: 'feat-tag', target: { hash: 'tagsha' } }] };
+
+  const byEndpoint: StubHandler = (request) => {
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/refs/branches')) return { json: branchesPayload };
+    if (url.pathname.endsWith('/refs/tags')) return { json: tagsPayload };
+    return { status: 404, json: {} };
+  };
+
+  it('sends a contains q filter, narrows it to a case-insensitive prefix, and orders branches before tags', async () => {
+    const { provider, stub } = setup(byEndpoint);
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'feat',
+      types: ['branch', 'tag'],
+      limit: 20,
+    });
+    for (const request of stub.requests) {
+      expect(new URL(request.url).searchParams.get('q')).toBe('name ~ "feat"');
+    }
+    // 'my-feat' contains but does not start with 'feat', so the prefix post-filter drops it.
+    expect(matches).toEqual([
+      { type: 'branch', name: 'feature-x', sha: 'sha1', raw: branchesPayload.values[0] },
+      { type: 'branch', name: 'Feature-y', sha: 'sha2', raw: branchesPayload.values[1] },
+      { type: 'tag', name: 'feat-tag', sha: 'tagsha', raw: tagsPayload.values[0] },
+    ]);
+  });
+
+  it('escapes backslashes and double quotes in the q filter', async () => {
+    const { provider, stub } = setup(() => ({ json: { values: [] } }));
+    await provider.searchRefs({ repo: 'o/r', query: 'a"b', types: ['branch'], limit: 20 });
+    expect(new URL(stub.requests[0]!.url).searchParams.get('q')).toBe('name ~ "a\\"b"');
+
+    await provider.searchRefs({ repo: 'o/r', query: 'a\\b', types: ['branch'], limit: 20 });
+    expect(new URL(stub.requests[1]!.url).searchParams.get('q')).toBe('name ~ "a\\\\b"');
+  });
+
+  it('fetches only the requested types and truncates to the limit', async () => {
+    const { provider, stub } = setup(byEndpoint);
+    const matches = await provider.searchRefs({
+      repo: 'o/r',
+      query: 'feat',
+      types: ['branch'],
+      limit: 1,
+    });
+    expect(stub.requests).toHaveLength(1);
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.pathname).toBe('/2.0/repositories/o/r/refs/branches');
+    expect(url.searchParams.get('pagelen')).toBe('1');
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.name).toBe('feature-x');
+  });
+});
+
 describe('downloadArchive', () => {
   it('downloads from the bitbucket.org host with Basic auth', async () => {
     const { provider, stub } = setup((request) => {

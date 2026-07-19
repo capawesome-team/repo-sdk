@@ -294,6 +294,91 @@ describe('listTags', () => {
   });
 });
 
+describe('listBranches', () => {
+  it('normalizes branches and builds the x-next-page cursor', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.searchParams.get('page') === '2') {
+        return { json: [{ name: 'develop', commit: { id: 'sha2' } }] };
+      }
+      return {
+        json: [{ name: 'main', commit: { id: 'sha1' } }],
+        headers: { 'x-next-page': '2' },
+      };
+    });
+    const page = await provider.listBranches({ repo: '42', limit: 50 });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.pathname).toBe('/api/v4/projects/42/repository/branches');
+    expect(url.searchParams.get('per_page')).toBe('50');
+    expect(page.data[0]).toMatchObject({ name: 'main', sha: 'sha1' });
+    expect(page.cursor).toBeDefined();
+
+    const next = await provider.listBranches({ repo: '42', cursor: page.cursor });
+    expect(next.data[0]).toMatchObject({ name: 'develop', sha: 'sha2' });
+    expect(new URL(stub.requests.at(-1)!.url).searchParams.get('page')).toBe('2');
+    expect(next.cursor).toBeUndefined();
+  });
+
+  it('rejects a forged cursor that points to another host', async () => {
+    const { provider, stub } = setup(() => ({ json: [] }));
+    const forged = encodeCursor('gitlab', { url: 'https://attacker.example/x' });
+    await expectRepoError(provider.listBranches({ repo: '42', cursor: forged }), 'validation');
+    expect(stub.requests).toHaveLength(0);
+  });
+});
+
+describe('searchRefs', () => {
+  const branchesPayload = [
+    { name: 'feature/login', commit: { id: 'sha1' } },
+    { name: 'feature/logout', commit: { id: 'sha2' } },
+  ];
+  const tagsPayload = [{ name: 'feat-tag', commit: { id: 'tagsha' } }];
+
+  it('anchors the query with ^, passes per_page and orders branches before tags', async () => {
+    const { provider, stub } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/v4/projects/42/repository/branches') {
+        return { json: branchesPayload };
+      }
+      if (url.pathname === '/api/v4/projects/42/repository/tags') {
+        return { json: tagsPayload };
+      }
+      return { status: 404, json: {} };
+    });
+    const matches = await provider.searchRefs({
+      repo: '42',
+      query: 'feat',
+      types: ['branch', 'tag'],
+      limit: 20,
+    });
+    for (const request of stub.requests) {
+      const url = new URL(request.url);
+      expect(url.searchParams.get('search')).toBe('^feat');
+      expect(url.searchParams.get('per_page')).toBe('20');
+    }
+    expect(matches).toEqual([
+      { type: 'branch', name: 'feature/login', sha: 'sha1', raw: branchesPayload[0] },
+      { type: 'branch', name: 'feature/logout', sha: 'sha2', raw: branchesPayload[1] },
+      { type: 'tag', name: 'feat-tag', sha: 'tagsha', raw: tagsPayload[0] },
+    ]);
+  });
+
+  it('only queries the requested types and truncates to the limit', async () => {
+    const { provider, stub } = setup(() => ({ json: branchesPayload }));
+    const matches = await provider.searchRefs({
+      repo: '42',
+      query: 'feat',
+      types: ['branch'],
+      limit: 1,
+    });
+    expect(stub.requests).toHaveLength(1);
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v4/projects/42/repository/branches');
+    expect(matches).toEqual([
+      { type: 'branch', name: 'feature/login', sha: 'sha1', raw: branchesPayload[0] },
+    ]);
+  });
+});
+
 describe('downloadArchive', () => {
   it('requests the zip format with the sha query param', async () => {
     const { provider, stub } = setup(() => ({

@@ -5,12 +5,14 @@ import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../paginatio
 import {
   clampPerPage,
   commitWebUrlBuilder,
+  encodeRefPath,
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
 } from '../shared.ts';
 import type {
   Archive,
+  Branch,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -21,6 +23,7 @@ import type {
   GetRepositoryParams,
   GetWebhookParams,
   GitActor,
+  ListBranchesParams,
   ListCommitsParams,
   ListNamespacesParams,
   ListRepositoriesParams,
@@ -28,6 +31,8 @@ import type {
   ListWebhooksParams,
   Namespace,
   Page,
+  ProviderSearchRefsParams,
+  RefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -64,6 +69,7 @@ const CAPABILITIES: RepoCapabilities = {
   repoSearch: true,
   ownedRepoFilter: true,
   commitUserRef: true,
+  refSearch: true,
   webhookEvents: ['push', 'tag_push', 'release'],
   webhookVerification: 'hmac-sha256',
   archiveFormats: ['zip', 'tar.gz'],
@@ -151,6 +157,16 @@ interface GitHubCommit {
 interface GitHubTag {
   name: string;
   commit: { sha: string };
+}
+
+interface GitHubBranch {
+  name: string;
+  commit: { sha: string };
+}
+
+interface GitHubRef {
+  ref: string;
+  object: { sha: string; type: string };
 }
 
 interface GitHubHookConfig {
@@ -251,6 +267,10 @@ function toCommit(commit: GitHubCommit): Commit {
 
 function toTag(tag: GitHubTag): Tag {
   return { name: tag.name, sha: tag.commit.sha, raw: tag };
+}
+
+function toBranch(branch: GitHubBranch): Branch {
+  return { name: branch.name, sha: branch.commit.sha, raw: branch };
 }
 
 function toGitHubEvents(events: WebhookEventType[]): string[] {
@@ -514,6 +534,46 @@ export function github(options: GitHubProviderOptions): RepoProvider {
         signal: params.signal,
       });
       return { data: data.map(toTag), cursor: nextCursor(response) };
+    },
+
+    async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
+      if (params.cursor) {
+        const { url } = decodeCursor<{ url: string }>('github', params.cursor);
+        assertSameOriginUrl('github', baseUrl, url);
+        const { data, response } = await http.json<GitHubBranch[]>(url, { signal: params.signal });
+        return { data: data.map(toBranch), cursor: nextCursor(response) };
+      }
+      const { data, response } = await http.json<GitHubBranch[]>(
+        `${repoPath(params.repo)}/branches`,
+        {
+          query: { per_page: clampPerPage(params.limit) },
+          signal: params.signal,
+        },
+      );
+      return { data: data.map(toBranch), cursor: nextCursor(response) };
+    },
+
+    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+      const namespaces = { branch: 'heads', tag: 'tags' } as const;
+      // The matching-refs endpoint prefix-matches and is unpaginated; truncate to `limit`.
+      const matches = await Promise.all(
+        (['branch', 'tag'] as const)
+          .filter((type) => params.types.includes(type))
+          .map(async (type) => {
+            const { data } = await http.json<GitHubRef[]>(
+              `${repoPath(params.repo)}/git/matching-refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
+              { signal: params.signal },
+            );
+            const prefix = `refs/${namespaces[type]}/`;
+            return data.map((ref): RefMatch => ({
+              type,
+              name: ref.ref.slice(prefix.length),
+              sha: ref.object.sha,
+              raw: ref,
+            }));
+          }),
+      );
+      return matches.flat().slice(0, params.limit);
     },
 
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {
