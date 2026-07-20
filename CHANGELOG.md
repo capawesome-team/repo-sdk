@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.1](https://github.com/capawesome-team/repo-sdk/compare/v0.1.0...v0.1.1) (2026-07-20)
+
+
+### Features
+
+* add git-http provider for generic smart-HTTP remotes ([0aca86d](https://github.com/capawesome-team/repo-sdk/commit/0aca86d904c8dbc00b12c20b1652a965a60877b1))
+* add refs.resolve, branches.get, and tags.get ([958b4b2](https://github.com/capawesome-team/repo-sdk/commit/958b4b28227057fca6d9244e62a9d9714062ec4d))
+
 ## 0.1.0 (2026-07-19)
 
 
