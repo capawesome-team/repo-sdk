@@ -17,9 +17,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   GitActor,
   ListBranchesParams,
@@ -481,6 +483,22 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         },
       );
       return { data: (data.values ?? []).map(toBranch), cursor: nextCursor(data) };
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      const { data } = await http.json<BitbucketBranch>(
+        `${repoPath(params.repo)}/refs/branches/${encodeURIComponent(params.name)}`,
+        { signal: params.signal },
+      );
+      return toBranch(data);
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      const { data } = await http.json<BitbucketTag>(
+        `${repoPath(params.repo)}/refs/tags/${encodeURIComponent(params.name)}`,
+        { signal: params.signal },
+      );
+      return toTag(data);
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

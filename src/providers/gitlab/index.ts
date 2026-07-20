@@ -18,9 +18,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   GitActor,
   ListBranchesParams,
@@ -520,6 +522,22 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         signal: params.signal,
       });
       return { data: data.map(toBranch), cursor: nextCursor(reqUrl(path, query), response) };
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      const { data } = await http.json<GitLabBranch>(
+        `/projects/${projectId(params.repo)}/repository/branches/${encodeURIComponent(params.name)}`,
+        { signal: params.signal },
+      );
+      return toBranch(data);
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      const { data } = await http.json<GitLabTag>(
+        `/projects/${projectId(params.repo)}/repository/tags/${encodeURIComponent(params.name)}`,
+        { signal: params.signal },
+      );
+      return toTag(data);
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

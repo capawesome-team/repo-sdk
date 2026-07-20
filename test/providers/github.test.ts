@@ -459,6 +459,64 @@ describe('searchRefs', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('fetches the branch endpoint and preserves slashes in the name', async () => {
+    const payload = { name: 'feature/log in', commit: { sha: 'sha1' } };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const branch = await provider.getBranch({ repo: 'o/r', name: 'feature/log in' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/repos/o/r/branches/feature/log%20in');
+    expect(branch).toEqual({ name: 'feature/log in', sha: 'sha1', raw: payload });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getBranch({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('resolves a lightweight tag from the ref alone', async () => {
+    const refPayload = { ref: 'refs/tags/v1.0.0', object: { sha: 'commit1', type: 'commit' } };
+    const { provider, stub } = setup(() => ({ json: refPayload }));
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v1.0.0' });
+    expect(stub.requests).toHaveLength(1);
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/repos/o/r/git/ref/tags/v1.0.0');
+    expect(tag).toEqual({ name: 'v1.0.0', sha: 'commit1', isAnnotated: false, raw: refPayload });
+  });
+
+  it('peels an annotated tag to the commit SHA', async () => {
+    const refPayload = { ref: 'refs/tags/v2.0.0', object: { sha: 'tagobj', type: 'tag' } };
+    const tagObjectPayload = {
+      sha: 'tagobj',
+      tag: 'v2.0.0',
+      message: 'release v2',
+      tagger: { date: '2026-01-02T03:04:05Z' },
+      object: { sha: 'commit2', type: 'commit' },
+    };
+    const { provider, stub } = setup((request) => {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === '/repos/o/r/git/ref/tags/v2.0.0') return { json: refPayload };
+      if (pathname === '/repos/o/r/git/tags/tagobj') return { json: tagObjectPayload };
+      return { status: 404, json: {} };
+    });
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v2.0.0' });
+    expect(stub.requests).toHaveLength(2);
+    expect(tag).toEqual({
+      name: 'v2.0.0',
+      sha: 'commit2',
+      message: 'release v2',
+      date: new Date('2026-01-02T03:04:05Z'),
+      isAnnotated: true,
+      raw: tagObjectPayload,
+    });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getTag({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
 describe('downloadArchive', () => {
   it('follows a 302 to codeload without forwarding the Authorization header', async () => {
     const { provider, stub } = setup((request) => {

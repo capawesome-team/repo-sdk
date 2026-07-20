@@ -9,9 +9,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   ListBranchesParams,
   ListCommitsParams,
@@ -25,6 +27,7 @@ import type {
   RefMatch,
   RefType,
   Repository,
+  ResolveRefParams,
   SearchRefsParams,
   Tag,
   UpdateWebhookParams,
@@ -69,13 +72,16 @@ export interface RepoClient {
   tags: {
     list(params: ListTagsParams): Promise<Page<Tag>>;
     listAll(params: Omit<ListTagsParams, 'cursor'>): AsyncGenerator<Tag, void>;
+    get(params: GetTagParams): Promise<Tag>;
   };
   branches: {
     list(params: ListBranchesParams): Promise<Page<Branch>>;
     listAll(params: Omit<ListBranchesParams, 'cursor'>): AsyncGenerator<Branch, void>;
+    get(params: GetBranchParams): Promise<Branch>;
   };
   refs: {
     search(params: SearchRefsParams): Promise<RefMatch[]>;
+    resolve(params: ResolveRefParams): Promise<RefMatch>;
   };
   webhooks: {
     create(params: CreateWebhookParams): Promise<Webhook>;
@@ -93,6 +99,18 @@ function delay(milliseconds: number): Promise<void> {
 const DEFAULT_REF_SEARCH_LIMIT = 20;
 const ALL_REF_TYPES: RefType[] = ['branch', 'tag', 'commit'];
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{4,40}$/i;
+
+function branchMatch(branch: Branch): RefMatch {
+  return { type: 'branch', name: branch.name, sha: branch.sha, raw: branch.raw };
+}
+
+function tagMatch(tag: Tag): RefMatch {
+  return { type: 'tag', name: tag.name, sha: tag.sha, raw: tag.raw };
+}
+
+function commitMatch(commit: Commit): RefMatch {
+  return { type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw };
+}
 
 export function createClient(options: CreateClientOptions): RepoClient {
   const { provider } = options;
@@ -229,6 +247,11 @@ export function createClient(options: CreateClientOptions): RepoClient {
       },
     },
     tags: {
+      get: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        requireNonEmpty(params.name, 'name');
+        return withRetry(() => provider.getTag(params));
+      },
       list: async (params) => {
         requireNonEmpty(params.repo, 'repo');
         return withRetry(() => provider.listTags(params));
@@ -240,6 +263,11 @@ export function createClient(options: CreateClientOptions): RepoClient {
         }),
     },
     branches: {
+      get: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        requireNonEmpty(params.name, 'name');
+        return withRetry(() => provider.getBranch(params));
+      },
       list: async (params) => {
         requireNonEmpty(params.repo, 'repo');
         return withRetry(() => provider.listBranches(params));
@@ -271,20 +299,7 @@ export function createClient(options: CreateClientOptions): RepoClient {
               ? withRetry(() => provider.listTags({ repo, limit, signal }))
               : { data: [] as Tag[] },
           ]);
-          return [
-            ...branches.data.map((b): RefMatch => ({
-              type: 'branch',
-              name: b.name,
-              sha: b.sha,
-              raw: b.raw,
-            })),
-            ...tags.data.map((t): RefMatch => ({
-              type: 'tag',
-              name: t.name,
-              sha: t.sha,
-              raw: t.raw,
-            })),
-          ].slice(0, limit);
+          return [...branches.data.map(branchMatch), ...tags.data.map(tagMatch)].slice(0, limit);
         }
         const refTypes = types.filter((t): t is Exclude<RefType, 'commit'> => t !== 'commit');
         const [refMatches, commitMatches] = await Promise.all([
@@ -293,9 +308,7 @@ export function createClient(options: CreateClientOptions): RepoClient {
             : ([] as RefMatch[]),
           types.includes('commit') && COMMIT_SHA_PATTERN.test(query)
             ? withRetry(() => provider.getCommit({ repo, ref: query, signal })).then(
-                (commit): RefMatch[] => [
-                  { type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw },
-                ],
+                (commit): RefMatch[] => [commitMatch(commit)],
                 (error) => {
                   // `unsupported`: providers without commit lookup (git-http)
                   // simply contribute no commit matches.
@@ -313,6 +326,59 @@ export function createClient(options: CreateClientOptions): RepoClient {
             : ([] as RefMatch[]),
         ]);
         return [...refMatches, ...commitMatches].slice(0, limit);
+      },
+      resolve: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        requireNonEmpty(params.ref, 'ref');
+        const { repo, ref, type, signal } = params;
+        if (ref === 'HEAD' && (type === undefined || type === 'branch')) {
+          const repository = await withRetry(() => provider.getRepository({ repo, signal }));
+          const defaultBranch = repository.defaultBranch;
+          if (defaultBranch === undefined) {
+            throw new RepoError('Cannot resolve HEAD: repository has no default branch', {
+              code: 'not_found',
+              provider: provider.name,
+            });
+          }
+          return branchMatch(
+            await withRetry(() => provider.getBranch({ repo, name: defaultBranch, signal })),
+          );
+        }
+        if (type === 'commit') {
+          return commitMatch(await withRetry(() => provider.getCommit({ repo, ref, signal })));
+        }
+        const [tagResult, branchResult] = await Promise.allSettled([
+          type === 'branch'
+            ? undefined
+            : withRetry(() => provider.getTag({ repo, name: ref, signal })),
+          type === 'tag'
+            ? undefined
+            : withRetry(() => provider.getBranch({ repo, name: ref, signal })),
+        ]);
+        const isMiss = (result: PromiseSettledResult<unknown>): boolean =>
+          result.status === 'rejected' &&
+          result.reason instanceof RepoError &&
+          result.reason.code === 'not_found';
+        // Tag precedence follows git rev-parse: a tag shadows a branch of the
+        // same name, so a tag failure other than a miss must propagate even
+        // when the branch lookup succeeded.
+        if (tagResult.status === 'fulfilled') {
+          if (tagResult.value !== undefined) return tagMatch(tagResult.value);
+        } else if (!isMiss(tagResult)) {
+          throw tagResult.reason;
+        }
+        if (branchResult.status === 'fulfilled') {
+          if (branchResult.value !== undefined) return branchMatch(branchResult.value);
+        } else if (!isMiss(branchResult)) {
+          throw branchResult.reason;
+        }
+        if (type === undefined && COMMIT_SHA_PATTERN.test(ref)) {
+          return commitMatch(await withRetry(() => provider.getCommit({ repo, ref, signal })));
+        }
+        throw new RepoError(`Ref not found: ${ref}`, {
+          code: 'not_found',
+          provider: provider.name,
+        });
       },
     },
     webhooks: {

@@ -339,6 +339,59 @@ describe('listBranches', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('fetches the single-branch endpoint with an encoded name', async () => {
+    const payload = { name: 'feature/login', target: { hash: 'sha1' } };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const branch = await provider.getBranch({ repo: 'o/r', name: 'feature/login' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe(
+      '/2.0/repositories/o/r/refs/branches/feature%2Flogin',
+    );
+    expect(branch).toEqual({ name: 'feature/login', sha: 'sha1', raw: payload });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getBranch({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('returns the commit hash for an annotated tag', async () => {
+    const payload = {
+      name: 'v1.0.0',
+      message: 'release 1.0.0',
+      date: '2026-05-01T12:00:00+00:00',
+      tagger: { raw: 'Robin <robin@example.com>' },
+      target: { hash: 'targetsha', date: '2026-04-30T00:00:00+00:00' },
+    };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v1.0.0' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/2.0/repositories/o/r/refs/tags/v1.0.0');
+    expect(tag).toMatchObject({
+      name: 'v1.0.0',
+      sha: 'targetsha',
+      message: 'release 1.0.0',
+      isAnnotated: true,
+    });
+  });
+
+  it('marks a tag without a tagger as lightweight', async () => {
+    const payload = {
+      name: 'v0.1',
+      target: { hash: 'lightsha', date: '2026-04-30T00:00:00+00:00' },
+    };
+    const { provider } = setup(() => ({ json: payload }));
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v0.1' });
+    expect(tag).toMatchObject({ name: 'v0.1', sha: 'lightsha', isAnnotated: false });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getTag({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
 describe('searchRefs', () => {
   const branchesPayload = {
     values: [

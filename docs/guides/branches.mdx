@@ -43,6 +43,16 @@ const repo = await client.repos.get({ repo: 'capawesome-team/repo-sdk' });
 console.log(repo.defaultBranch); // e.g. 'main' (undefined for an empty repository)
 ```
 
+## Getting a single branch
+
+`branches.get` fetches one branch by its exact name and throws a `RepoError` with `code: 'not_found'`
+on a miss:
+
+```ts
+const branch = await client.branches.get({ repo: 'capawesome-team/repo-sdk', name: 'main' });
+console.log(branch.sha); // the branch's current tip
+```
+
 <Card title="Next: Searching refs" icon="search" href="/docs/guides/searching-refs">
   Prefix-match branches, tags, and commit SHAs — built for autocompletion.
 </Card>

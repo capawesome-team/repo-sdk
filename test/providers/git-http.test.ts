@@ -191,6 +191,62 @@ describe('listTags', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('matches a branch by exact name from the advertisement', async () => {
+    const { provider } = setup();
+    const branch = await provider.getBranch({ repo: REPO, name: 'feature/login' });
+    expect(branch).toEqual({
+      name: 'feature/login',
+      sha: SHA_FEATURE,
+      raw: { name: 'refs/heads/feature/login', sha: SHA_FEATURE },
+    });
+  });
+
+  it('throws not_found for an unknown branch', async () => {
+    const { provider } = setup();
+    await expectRepoError(provider.getBranch({ repo: REPO, name: 'nope' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('returns the peeled commit SHA for an annotated tag', async () => {
+    const { provider } = setup();
+    const tag = await provider.getTag({ repo: REPO, name: 'v1.0.0' });
+    expect(tag).toEqual({
+      name: 'v1.0.0',
+      sha: SHA_TAG_COMMIT,
+      isAnnotated: true,
+      raw: { name: 'refs/tags/v1.0.0', sha: SHA_TAG_OBJECT, peeledSha: SHA_TAG_COMMIT },
+    });
+  });
+
+  it('returns the ref SHA for a lightweight tag', async () => {
+    const { provider } = setup();
+    const tag = await provider.getTag({ repo: REPO, name: 'v0.9.0' });
+    expect(tag).toMatchObject({ name: 'v0.9.0', sha: SHA_LIGHT_TAG, isAnnotated: false });
+  });
+
+  it('throws not_found for an unknown tag', async () => {
+    const { provider } = setup();
+    await expectRepoError(provider.getTag({ repo: REPO, name: 'v9' }), 'not_found');
+  });
+});
+
+describe('refs.resolve through createClient', () => {
+  it('resolves HEAD to the default branch tip', async () => {
+    const { provider } = setup();
+    const client = createClient({ provider });
+    const match = await client.refs.resolve({ repo: REPO, ref: 'HEAD' });
+    expect(match).toMatchObject({ type: 'branch', name: 'main', sha: SHA_MAIN });
+  });
+
+  it('surfaces unsupported for a raw commit SHA', async () => {
+    const { provider } = setup();
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: REPO, ref: 'f'.repeat(40) }), 'unsupported');
+  });
+});
+
 describe('pagination', () => {
   it('slices in memory and pages through with cursors', async () => {
     const { provider } = setup();

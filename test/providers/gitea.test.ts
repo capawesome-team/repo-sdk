@@ -337,6 +337,55 @@ describe('listBranches', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('fetches the single-branch endpoint preserving slashes', async () => {
+    const payload = { name: 'feature/login', commit: { id: 'sha1' } };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const branch = await provider.getBranch({ repo: 'o/r', name: 'feature/login' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe(
+      '/api/v1/repos/o/r/branches/feature/login',
+    );
+    expect(branch).toEqual({ name: 'feature/login', sha: 'sha1', raw: payload });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getBranch({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('fetches the single-tag endpoint and distinguishes annotated tags', async () => {
+    const payload = {
+      name: 'v1.0.0',
+      message: 'release',
+      id: 'tagobjectsha',
+      commit: { sha: 'commitsha' },
+    };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v1.0.0' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v1/repos/o/r/tags/v1.0.0');
+    expect(tag).toMatchObject({
+      name: 'v1.0.0',
+      sha: 'commitsha',
+      message: 'release',
+      isAnnotated: true,
+    });
+  });
+
+  it('marks a tag whose object sha equals the commit as lightweight', async () => {
+    const payload = { name: 'v0.9.0', message: '', id: 'lightsha', commit: { sha: 'lightsha' } };
+    const { provider } = setup(() => ({ json: payload }));
+    const tag = await provider.getTag({ repo: 'o/r', name: 'v0.9.0' });
+    expect(tag).toMatchObject({ name: 'v0.9.0', sha: 'lightsha', isAnnotated: false });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getTag({ repo: 'o/r', name: 'missing' }), 'not_found');
+  });
+});
+
 describe('searchRefs', () => {
   const headsPayload = [
     { ref: 'refs/heads/feature/login', object: { sha: 'sha1', type: 'commit' } },

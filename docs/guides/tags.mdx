@@ -58,6 +58,19 @@ The git-http provider peels annotated tags to the commit SHA and sets `isAnnotat
 tag `message` or `date` — the smart-HTTP ref advertisement carries neither.
 :::
 
+## Getting a single tag
+
+`tags.get` fetches one tag by its exact name and throws a `RepoError` with `code: 'not_found'` on a
+miss. Annotated tags are always peeled — `sha` is the tagged commit, not the tag object:
+
+```ts
+const tag = await client.tags.get({ repo: 'capawesome-team/repo-sdk', name: 'v1.0.0' });
+console.log(tag.sha, tag.isAnnotated);
+```
+
+Unlike the listing, `tags.get` on GitHub can supply `message` and `date` for annotated tags (they come
+from the tag object itself); `capabilities.tagDates` continues to describe the listing.
+
 <CardGroup cols={2}>
   <Card title="Next: Downloading code" icon="download" href="/docs/guides/downloading-code">
     Stream a repository archive or get an authenticated clone URL.

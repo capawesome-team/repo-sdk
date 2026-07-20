@@ -44,7 +44,7 @@ on `client.capabilities.refSearch` if you accept arbitrary providers.
   type={{
     type: { type: "'branch' | 'tag' | 'commit'", description: 'What kind of ref matched.' },
     name: { type: 'string', description: 'The ref name without its refs/heads/ or refs/tags/ prefix; the full SHA for commit matches.' },
-    sha: { type: 'string', description: 'The SHA the ref points to. For annotated tags on GitHub and Gitea this is the tag object, not the peeled commit.' },
+    sha: { type: 'string', description: 'The SHA the ref points to. In search results on GitHub and Gitea, annotated tags carry the tag object SHA, not the peeled commit — use refs.resolve or tags.get when you need the commit.' },
     raw: { type: 'unknown', description: 'The untouched provider payload.' },
   }}
 />
@@ -79,6 +79,11 @@ tags advertised by the remote (filtered in memory) and — having no commit look
 for commit-SHA queries.
 :::
 
-<Card title="Provider support" icon="table" href="/docs/reference/provider-support">
-  Per-provider ref-search caveats in the feature matrix.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Resolving refs" icon="crosshair" href="/docs/guides/resolving-refs">
+    Turn one exact ref into its commit SHA — always peeled.
+  </Card>
+  <Card title="Provider support" icon="table" href="/docs/reference/provider-support">
+    Per-provider ref-search caveats in the feature matrix.
+  </Card>
+</CardGroup>

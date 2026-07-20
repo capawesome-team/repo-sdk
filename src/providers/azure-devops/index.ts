@@ -11,9 +11,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   GitActor,
   ListBranchesParams,
@@ -321,6 +323,29 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     return cached;
   }
 
+  // `filter` is a prefix match, but the exact name always sorts first in the
+  // lexicographically ordered result, so a first-page scan suffices — never
+  // follow continuation tokens here.
+  async function getExactRef(
+    repo: string,
+    fullName: string,
+    peelTags: boolean,
+    signal?: AbortSignal,
+  ): Promise<AzureRef> {
+    const { data } = await jsonApi<AzureList<AzureRef>>(`${repoBasePath(repo)}/refs`, {
+      query: { filter: fullName, ...(peelTags ? { peelTags: true } : {}), $top: 100 },
+      signal,
+    });
+    const ref = data.value.find((candidate) => candidate.name === `refs/${fullName}`);
+    if (!ref) {
+      throw new RepoError(`Ref "refs/${fullName}" not found`, {
+        code: 'not_found',
+        provider: 'azure-devops',
+      });
+    }
+    return ref;
+  }
+
   return {
     name: 'azure-devops',
     capabilities: CAPABILITIES,
@@ -485,6 +510,14 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         data: data.value.map(toBranch),
         cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
       };
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      return toBranch(await getExactRef(params.repo, `heads/${params.name}`, false, params.signal));
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      return toTag(await getExactRef(params.repo, `tags/${params.name}`, true, params.signal));
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

@@ -90,10 +90,12 @@ identity, ref search, webhook events and verification, archive formats, and `use
       `repo` string is the **full remote URL** (e.g. `https://git.example.com/team/app.git`), and there
       is no `baseUrl`. SSH (`git@…`, `ssh://`) and `git://` remotes throw `validation`, as do URLs with
       embedded credentials (pass them via `auth` instead).
-    - **Read-only ref discovery.** Only `repos.get`, `branches.list`, `tags.list`, `refs.search`, and
-      `repos.getCloneUrl` are supported; `users.me`, `namespaces.*`, `repos.list`, all of `commits.*`,
-      `repos.downloadArchive`, and all of `webhooks.*` throw `unsupported`. There are no
-      `verifyWebhook` / `parseWebhookEvent` exports.
+    - **Read-only ref discovery.** Only `repos.get`, `branches.list` / `branches.get`,
+      `tags.list` / `tags.get`, `refs.search`, `refs.resolve`, and `repos.getCloneUrl` are supported;
+      `users.me`, `namespaces.*`, `repos.list`, all of `commits.*`, `repos.downloadArchive`, and all of
+      `webhooks.*` throw `unsupported`. There are no `verifyWebhook` / `parseWebhookEvent` exports.
+      `refs.resolve` resolves branch and tag names (and `HEAD`) from the advertisement but cannot
+      resolve raw commit SHAs — those throw `unsupported`.
     - Every supported call issues a **single** `GET <url>/info/refs?service=git-upload-pack` request (the
       smart-HTTP ref advertisement); `limit` and cursor pagination are applied in memory over that one
       response.

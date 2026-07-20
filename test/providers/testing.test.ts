@@ -264,6 +264,78 @@ describe('createInMemoryProvider through createClient', () => {
     });
   });
 
+  describe('branches.get / tags.get', () => {
+    it('returns seeded branches and tags by exact name', async () => {
+      const { client } = setup();
+      expect(
+        await client.branches.get({ repo: 'acme/service', name: 'feature/login' }),
+      ).toMatchObject({ name: 'feature/login', sha: 'c2' });
+      expect(await client.tags.get({ repo: 'acme/service', name: 'v1.0.0' })).toMatchObject({
+        name: 'v1.0.0',
+        sha: 'c1',
+      });
+    });
+
+    it('rejects unknown names and repos with not_found', async () => {
+      const { client } = setup();
+      await expectRepoError(
+        client.branches.get({ repo: 'acme/service', name: 'nope' }),
+        'not_found',
+      );
+      await expectRepoError(client.tags.get({ repo: 'acme/service', name: 'v9' }), 'not_found');
+      await expectRepoError(
+        client.branches.get({ repo: 'acme/missing', name: 'main' }),
+        'not_found',
+      );
+    });
+  });
+
+  describe('refs.resolve', () => {
+    it('resolves branches, tags, and commit SHAs', async () => {
+      const { client } = setup();
+      expect(await client.refs.resolve({ repo: 'acme/service', ref: 'main' })).toMatchObject({
+        type: 'branch',
+        sha: 'c3',
+      });
+      expect(await client.refs.resolve({ repo: 'acme/service', ref: 'v1.0.0' })).toMatchObject({
+        type: 'tag',
+        sha: 'c1',
+      });
+      expect(
+        await client.refs.resolve({ repo: 'acme/service', ref: 'c2', type: 'commit' }),
+      ).toMatchObject({ type: 'commit', sha: 'c2' });
+    });
+
+    it('prefers the tag over a branch with the same name', async () => {
+      const { client } = setup({
+        repositories: { 'acme/service': {} },
+        tags: { 'acme/service': [{ name: 'release', sha: 't1' }] },
+        branches: { 'acme/service': [{ name: 'release', sha: 'b1' }] },
+      });
+      expect(await client.refs.resolve({ repo: 'acme/service', ref: 'release' })).toMatchObject({
+        type: 'tag',
+        sha: 't1',
+      });
+    });
+
+    it('resolves HEAD to the default branch', async () => {
+      const { client } = setup();
+      expect(await client.refs.resolve({ repo: 'acme/service', ref: 'HEAD' })).toMatchObject({
+        type: 'branch',
+        name: 'main',
+        sha: 'c3',
+      });
+    });
+
+    it('rejects unknown refs with not_found', async () => {
+      const { client } = setup();
+      await expectRepoError(
+        client.refs.resolve({ repo: 'acme/service', ref: 'nope' }),
+        'not_found',
+      );
+    });
+  });
+
   describe('downloadArchive', () => {
     it('returns a readable stream with archive metadata', async () => {
       const { client } = setup();

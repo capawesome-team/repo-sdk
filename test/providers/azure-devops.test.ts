@@ -374,6 +374,53 @@ describe('listBranches', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('picks the exact match out of the prefix-filtered result', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        count: 2,
+        value: [
+          { name: 'refs/heads/main', objectId: 'mainsha' },
+          { name: 'refs/heads/main-2', objectId: 'othersha' },
+        ],
+      },
+    }));
+    const branch = await provider.getBranch({ repo: 'core/repo-sdk', name: 'main' });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.searchParams.get('filter')).toBe('heads/main');
+    expect(url.searchParams.get('peelTags')).toBeNull();
+    expect(branch).toMatchObject({ name: 'main', sha: 'mainsha' });
+  });
+
+  it('throws not_found when only prefix matches exist', async () => {
+    const { provider } = setup(() => ({
+      json: { count: 1, value: [{ name: 'refs/heads/main-2', objectId: 'othersha' }] },
+    }));
+    await expectRepoError(provider.getBranch({ repo: 'core/repo-sdk', name: 'main' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('requests peeled tags and returns the commit SHA for annotated tags', async () => {
+    const { provider, stub } = setup(() => ({
+      json: {
+        count: 1,
+        value: [{ name: 'refs/tags/v1.0.0', objectId: 'tagobj', peeledObjectId: 'commitsha' }],
+      },
+    }));
+    const tag = await provider.getTag({ repo: 'core/repo-sdk', name: 'v1.0.0' });
+    const url = new URL(stub.requests[0]!.url);
+    expect(url.searchParams.get('filter')).toBe('tags/v1.0.0');
+    expect(url.searchParams.get('peelTags')).toBe('true');
+    expect(tag).toMatchObject({ name: 'v1.0.0', sha: 'commitsha', isAnnotated: true });
+  });
+
+  it('throws not_found on an empty result', async () => {
+    const { provider } = setup(() => ({ json: { count: 0, value: [] } }));
+    await expectRepoError(provider.getTag({ repo: 'core/repo-sdk', name: 'v9' }), 'not_found');
+  });
+});
+
 describe('searchRefs', () => {
   function refsSetup() {
     return setup((request) => {

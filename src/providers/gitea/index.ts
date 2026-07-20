@@ -19,9 +19,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   GitActor,
   ListBranchesParams,
@@ -525,6 +527,22 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         },
       );
       return { data: data.map(toBranch), cursor: nextCursor(response) };
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      const { data } = await http.json<GiteaBranch>(
+        `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
+        { signal: params.signal },
+      );
+      return toBranch(data);
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      const { data } = await http.json<GiteaTag>(
+        `${repoPath(params.repo)}/tags/${encodeRefPath(params.name)}`,
+        { signal: params.signal },
+      );
+      return toTag(data);
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

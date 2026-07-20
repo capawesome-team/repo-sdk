@@ -11,9 +11,11 @@ import type {
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   ListBranchesParams,
   ListCommitsParams,
@@ -408,6 +410,28 @@ export function createInMemoryProvider(
     listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
       requireRepository(params.repo);
       return Promise.resolve(paginate(state.branches.get(params.repo) ?? [], params.cursor));
+    },
+
+    getBranch(params: GetBranchParams): Promise<Branch> {
+      requireRepository(params.repo);
+      const branch = (state.branches.get(params.repo) ?? []).find(
+        (candidate) => candidate.name === params.name,
+      );
+      if (!branch) {
+        throw notFound(`Unknown branch "${params.name}" in repository: ${params.repo}`);
+      }
+      return Promise.resolve(branch);
+    },
+
+    getTag(params: GetTagParams): Promise<Tag> {
+      requireRepository(params.repo);
+      const tag = (state.tags.get(params.repo) ?? []).find(
+        (candidate) => candidate.name === params.name,
+      );
+      if (!tag) {
+        throw notFound(`Unknown tag "${params.name}" in repository: ${params.repo}`);
+      }
+      return Promise.resolve(tag);
     },
 
     searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

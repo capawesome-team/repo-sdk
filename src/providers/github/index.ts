@@ -20,9 +20,11 @@ import type {
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
+  GetBranchParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
+  GetTagParams,
   GetWebhookParams,
   GitActor,
   ListBranchesParams,
@@ -213,6 +215,14 @@ interface GitHubBranch {
 
 interface GitHubRef {
   ref: string;
+  object: { sha: string; type: string };
+}
+
+interface GitHubTagObject {
+  sha: string;
+  tag: string;
+  message?: string | null;
+  tagger?: { date?: string };
   object: { sha: string; type: string };
 }
 
@@ -649,6 +659,48 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         },
       );
       return { data: data.map(toBranch), cursor: nextCursor(response) };
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      const { data } = await http.json<GitHubBranch>(
+        `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
+        { signal: params.signal },
+      );
+      return toBranch(data);
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      const { data: ref } = await http.json<GitHubRef>(
+        `${repoPath(params.repo)}/git/ref/tags/${encodeRefPath(params.name)}`,
+        { signal: params.signal },
+      );
+      const name = ref.ref.replace(/^refs\/tags\//, '');
+      if (ref.object.type !== 'tag') {
+        return { name, sha: ref.object.sha, isAnnotated: false, raw: ref };
+      }
+      // Annotated tags may point at further tag objects; peel a bounded chain.
+      let sha = ref.object.sha;
+      for (let hops = 0; hops < 5; hops++) {
+        const { data } = await http.json<GitHubTagObject>(
+          `${repoPath(params.repo)}/git/tags/${sha}`,
+          { signal: params.signal },
+        );
+        sha = data.object.sha;
+        if (data.object.type !== 'tag') {
+          return {
+            name,
+            sha,
+            message: data.message ?? undefined,
+            date: data.tagger?.date ? new Date(data.tagger.date) : undefined,
+            isAnnotated: true,
+            raw: data,
+          };
+        }
+      }
+      throw new RepoError(`Tag ${name} points at a tag chain deeper than 5 objects`, {
+        code: 'provider_error',
+        provider: 'github',
+      });
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

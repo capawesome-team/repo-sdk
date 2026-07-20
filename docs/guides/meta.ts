@@ -9,6 +9,7 @@ export default defineMeta({
     'tags',
     'branches',
     'searching-refs',
+    'resolving-refs',
     'downloading-code',
     'webhooks-managing',
     'webhooks-receiving',

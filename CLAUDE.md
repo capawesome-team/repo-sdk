@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea REST APIs (discovery, commits, tags, archive/clone-URL, webhooks), plus a `git-http` provider for generic git smart-HTTP remotes (ref discovery + clone URLs only; the `repo` param is the remote URL). It does **no git pack transfer or object parsing** — the only wire-protocol surface is the smart-HTTP `info/refs` advertisement the `git-http` provider reads. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
+`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea REST APIs (discovery, commits, tags, branches, ref resolution, archive/clone-URL, webhooks), plus a `git-http` provider for generic git smart-HTTP remotes (ref discovery + clone URLs only; the `repo` param is the remote URL). It does **no git pack transfer or object parsing** — the only wire-protocol surface is the smart-HTTP `info/refs` advertisement the `git-http` provider reads. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
 
 ## Commands
 

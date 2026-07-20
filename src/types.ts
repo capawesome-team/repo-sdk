@@ -108,7 +108,7 @@ export type RefType = 'branch' | 'tag' | 'commit';
 export interface RefMatch {
   type: RefType;
   name: string;
-  /** SHA the ref points to; the tag object rather than the commit for annotated tags on GitHub and Gitea. */
+  /** SHA the ref points to. In `refs.search` results on GitHub and Gitea, annotated tags carry the tag object SHA rather than the commit; `refs.resolve` and `tags.get` always return the peeled commit SHA. */
   sha: string;
   raw: unknown;
 }
@@ -204,6 +204,23 @@ export interface ListBranchesParams extends BaseParams {
   limit?: number;
 }
 
+export interface GetBranchParams extends BaseParams {
+  repo: string;
+  name: string;
+}
+
+export interface GetTagParams extends BaseParams {
+  repo: string;
+  name: string;
+}
+
+export interface ResolveRefParams extends BaseParams {
+  repo: string;
+  ref: string;
+  /** Restrict resolution to one ref type; when omitted, branches and tags are tried (tag wins on collision) before falling back to commit SHAs. */
+  type?: RefType;
+}
+
 export interface SearchRefsParams extends BaseParams {
   repo: string;
   /** Prefix to match ref names against; an empty string lists the first refs unfiltered. */
@@ -286,6 +303,10 @@ export interface RepoProvider {
   getCommit(params: GetCommitParams): Promise<Commit>;
   listTags(params: ListTagsParams): Promise<Page<Tag>>;
   listBranches(params: ListBranchesParams): Promise<Page<Branch>>;
+  /** Exact-match a branch by name; throws `not_found` on a miss. */
+  getBranch(params: GetBranchParams): Promise<Branch>;
+  /** Exact-match a tag by name, peeled to the commit SHA for annotated tags; throws `not_found` on a miss. */
+  getTag(params: GetTagParams): Promise<Tag>;
   /** Prefix-match refs of the requested types, branches before tags, at most `limit` results. */
   searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]>;
   downloadArchive(params: DownloadArchiveParams): Promise<Archive>;

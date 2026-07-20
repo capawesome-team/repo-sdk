@@ -1,0 +1,95 @@
+---
+title: Resolving refs
+description: Turn a branch name, tag name, commit SHA, or HEAD into a single commit with refs.resolve.
+sidebar:
+  label: Resolving refs
+---
+
+`refs.resolve` turns one ref — a branch name, tag name, commit SHA, or `HEAD` — into a single
+`RefMatch` telling you what it is and which commit it points at. Where `refs.search` prefix-matches
+many refs for autocompletion, `resolve` answers the exact question "what does `v2.1.0` point to?" —
+the typical first step of a CI/CD or pinning flow.
+
+## Resolving
+
+```ts
+const match = await client.refs.resolve({
+  repo: 'capawesome-team/repo-sdk',
+  ref: 'v2.1.0',
+});
+// { type: 'tag', name: 'v2.1.0', sha: '4f2a…', raw: {…} }
+```
+
+The returned `sha` is always the **peeled commit SHA** — annotated tags are followed to the commit
+they tag, on every provider. This differs from `refs.search`, whose GitHub and Gitea results carry
+the tag object SHA for annotated tags.
+
+## Parameters
+
+<TypeTable
+  type={{
+    repo: { type: 'string', description: 'The repository to resolve in.' },
+    ref: { type: 'string', description: "The ref to resolve: a branch name, tag name, 4–40 hex commit SHA, or 'HEAD'." },
+    type: { type: "RefType", required: false, description: "Restrict resolution to 'branch', 'tag', or 'commit'. Omit to try all (see resolution order)." },
+  }}
+/>
+
+## Resolution order
+
+Without a `type` hint, the SDK looks up the name as a branch and a tag in parallel, then:
+
+1. A matching **tag** wins — even when a branch shares the name (git `rev-parse` semantics).
+2. Otherwise a matching **branch** is returned.
+3. Otherwise, if `ref` is 4–40 hex characters, it is resolved as a **commit** SHA.
+4. Otherwise the call throws a `RepoError` with `code: 'not_found'`.
+
+Pass `type` when you already know what you're resolving — it skips the other lookups (one request
+instead of two) and removes the ambiguity:
+
+```ts
+await client.refs.resolve({ repo: 'o/r', ref: 'release', type: 'branch' });
+```
+
+## HEAD
+
+`ref: 'HEAD'` resolves the repository's default branch and returns it as a branch match with the
+**actual branch name** — a one-call answer to "what is the default branch and its current tip":
+
+```ts
+const head = await client.refs.resolve({ repo: 'o/r', ref: 'HEAD' });
+// { type: 'branch', name: 'main', sha: 'a1b2…', raw: {…} }
+```
+
+An empty repository without a default branch throws `not_found`.
+
+## Single branches and tags
+
+`resolve` is built on `branches.get` and `tags.get`, which are also public — use them when you want
+the full normalized model instead of a `RefMatch` (`tags.get` returns `message`, `date`, and
+`isAnnotated`, always peeled):
+
+```ts
+const branch = await client.branches.get({ repo: 'o/r', name: 'main' });
+const tag = await client.tags.get({ repo: 'o/r', name: 'v2.1.0' });
+```
+
+Both throw `not_found` on a miss.
+
+## Provider semantics
+
+:::note
+- **git-http** resolves branch and tag names (and `HEAD`) from the remote's ref advertisement, but has
+  no commit lookup — resolving a raw commit SHA throws `unsupported`. A hint-less resolve costs two
+  `info/refs` requests (branch + tag lookup); pass `type` to make it one.
+- **Azure DevOps** only resolves full 40-character commit SHAs; abbreviated SHAs throw `not_found`.
+- **GitHub** needs one extra request to peel an annotated tag to its commit.
+:::
+
+<CardGroup cols={2}>
+  <Card title="Searching refs" icon="search" href="/docs/guides/searching-refs">
+    Prefix-match many refs at once — built for autocompletion.
+  </Card>
+  <Card title="Provider support" icon="table" href="/docs/reference/provider-support">
+    Per-provider caveats in the feature matrix.
+  </Card>
+</CardGroup>

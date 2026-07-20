@@ -6,8 +6,10 @@ import { clampPerPage } from '../shared.ts';
 import type {
   Branch,
   CloneUrl,
+  GetBranchParams,
   GetCloneUrlParams,
   GetRepositoryParams,
+  GetTagParams,
   ListBranchesParams,
   ListTagsParams,
   Page,
@@ -370,6 +372,32 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
       const repoUrl = normalizeRepoUrl(params.repo);
       const advertisement = await fetchAdvertisement(repoUrl, params.signal);
       return paginate(repoUrl, branchesOf(advertisement), params);
+    },
+
+    async getBranch(params: GetBranchParams): Promise<Branch> {
+      const repoUrl = normalizeRepoUrl(params.repo);
+      const advertisement = await fetchAdvertisement(repoUrl, params.signal);
+      const branch = branchesOf(advertisement).find((candidate) => candidate.name === params.name);
+      if (branch === undefined) {
+        throw new RepoError(`Branch "${params.name}" not found`, {
+          code: 'not_found',
+          provider: 'git-http',
+        });
+      }
+      return branch;
+    },
+
+    async getTag(params: GetTagParams): Promise<Tag> {
+      const repoUrl = normalizeRepoUrl(params.repo);
+      const advertisement = await fetchAdvertisement(repoUrl, params.signal);
+      const tag = tagsOf(advertisement).find((candidate) => candidate.name === params.name);
+      if (tag === undefined) {
+        throw new RepoError(`Tag "${params.name}" not found`, {
+          code: 'not_found',
+          provider: 'git-http',
+        });
+      }
+      return tag;
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {

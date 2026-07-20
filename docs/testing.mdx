@@ -67,8 +67,8 @@ real provider supports.
     namespaces: { type: 'InMemoryNamespaceSeed[]', required: false, description: 'Namespaces, as an array of { id, slug, name, kind, parent? }.' },
     repositories: { type: 'Record<string, InMemoryRepositorySeed>', required: false, description: 'Repositories keyed by path. Fields default sensibly (e.g. defaultBranch → main).' },
     commits: { type: 'Record<string, InMemoryCommitSeed[]>', required: false, description: 'Commits keyed by repo path, newest first.' },
-    branches: { type: 'Record<string, InMemoryBranchSeed[]>', required: false, description: 'Branches keyed by repo path, as { name, sha }. Drives branches.list and refs.search.' },
-    tags: { type: 'Record<string, InMemoryTagSeed[]>', required: false, description: 'Tags keyed by repo path.' },
+    branches: { type: 'Record<string, InMemoryBranchSeed[]>', required: false, description: 'Branches keyed by repo path, as { name, sha }. Drives branches.list, branches.get, refs.search, and refs.resolve.' },
+    tags: { type: 'Record<string, InMemoryTagSeed[]>', required: false, description: 'Tags keyed by repo path. Drives tags.list, tags.get, refs.search, and refs.resolve.' },
     webhooks: { type: 'Record<string, InMemoryWebhookSeed[]>', required: false, description: 'Webhooks keyed by repo path.' },
   }}
 />

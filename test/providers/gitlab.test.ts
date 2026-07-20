@@ -327,6 +327,51 @@ describe('listBranches', () => {
   });
 });
 
+describe('getBranch', () => {
+  it('fetches the single-branch endpoint with an encoded name', async () => {
+    const payload = { name: 'feature/login', commit: { id: 'sha1' } };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const branch = await provider.getBranch({ repo: '42', name: 'feature/login' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe(
+      '/api/v4/projects/42/repository/branches/feature%2Flogin',
+    );
+    expect(branch).toEqual({ name: 'feature/login', sha: 'sha1', raw: payload });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getBranch({ repo: '42', name: 'missing' }), 'not_found');
+  });
+});
+
+describe('getTag', () => {
+  it('fetches the single-tag endpoint and returns the peeled commit SHA', async () => {
+    const payload = {
+      name: 'v1.0.0',
+      message: 'release',
+      target: 'tagobjectsha',
+      created_at: '2026-01-10T09:00:00Z',
+      commit: { id: 'commitsha', committed_date: '2026-01-10T08:00:00Z' },
+    };
+    const { provider, stub } = setup(() => ({ json: payload }));
+    const tag = await provider.getTag({ repo: '42', name: 'v1.0.0' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe(
+      '/api/v4/projects/42/repository/tags/v1.0.0',
+    );
+    expect(tag).toMatchObject({
+      name: 'v1.0.0',
+      sha: 'commitsha',
+      message: 'release',
+      isAnnotated: true,
+    });
+  });
+
+  it('maps a 404 to not_found', async () => {
+    const { provider } = setup(() => ({ status: 404, json: {} }));
+    await expectRepoError(provider.getTag({ repo: '42', name: 'missing' }), 'not_found');
+  });
+});
+
 describe('searchRefs', () => {
   const branchesPayload = [
     { name: 'feature/login', commit: { id: 'sha1' } },

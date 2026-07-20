@@ -39,6 +39,8 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
     getCommit: notImplemented,
     listTags: notImplemented,
     listBranches: notImplemented,
+    getBranch: notImplemented,
+    getTag: notImplemented,
     searchRefs: notImplemented,
     downloadArchive: notImplemented,
     getCloneUrl: notImplemented,
@@ -255,6 +257,225 @@ describe('refs.search', () => {
     const client = createClient({ provider });
     const matches = await client.refs.search({ repo: 'a/b', query: 'abc1234', limit: 2 });
     expect(matches).toEqual([match('branch', 'abc1'), match('tag', 'abc2')]);
+  });
+});
+
+describe('branches.get / tags.get', () => {
+  it('validates repo and name', async () => {
+    const client = createClient({ provider: fakeProvider() });
+    await expectRepoError(client.branches.get({ repo: '', name: 'main' }), 'validation');
+    await expectRepoError(client.branches.get({ repo: 'a/b', name: ' ' }), 'validation');
+    await expectRepoError(client.tags.get({ repo: 'a/b', name: '' }), 'validation');
+  });
+
+  it('passes through to the provider', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve({ name: params.name, sha: 'b1', raw: {} }),
+      getTag: (params) =>
+        Promise.resolve({ name: params.name, sha: 't1', isAnnotated: true, raw: {} }),
+    });
+    const client = createClient({ provider });
+    expect(await client.branches.get({ repo: 'a/b', name: 'main' })).toEqual({
+      name: 'main',
+      sha: 'b1',
+      raw: {},
+    });
+    expect(await client.tags.get({ repo: 'a/b', name: 'v1' })).toEqual({
+      name: 'v1',
+      sha: 't1',
+      isAnnotated: true,
+      raw: {},
+    });
+  });
+});
+
+describe('refs.resolve', () => {
+  function miss(): Promise<never> {
+    return Promise.reject(new RepoError('missing', { code: 'not_found', provider: 'github' }));
+  }
+  function branchOf(name: string, sha: string): Branch {
+    return { name, sha, raw: { kind: 'branch' } };
+  }
+  function tagOf(name: string, sha: string): Tag {
+    return { name, sha, isAnnotated: true, raw: { kind: 'tag' } };
+  }
+
+  it('validates repo and ref', async () => {
+    const client = createClient({ provider: fakeProvider() });
+    await expectRepoError(client.refs.resolve({ repo: '', ref: 'main' }), 'validation');
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: ' ' }), 'validation');
+  });
+
+  it('resolves a branch when no tag matches', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+      getTag: miss,
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'main' })).toEqual({
+      type: 'branch',
+      name: 'main',
+      sha: 'b-sha',
+      raw: { kind: 'branch' },
+    });
+  });
+
+  it('resolves a tag when no branch matches', async () => {
+    const provider = fakeProvider({
+      getBranch: miss,
+      getTag: (params) => Promise.resolve(tagOf(params.name, 'peeled-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'v1.0.0' })).toEqual({
+      type: 'tag',
+      name: 'v1.0.0',
+      sha: 'peeled-sha',
+      raw: { kind: 'tag' },
+    });
+  });
+
+  it('prefers the tag when a branch and tag share the name', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+      getTag: (params) => Promise.resolve(tagOf(params.name, 't-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'release' })).toMatchObject({
+      type: 'tag',
+      sha: 't-sha',
+    });
+  });
+
+  it('honors a branch type hint without touching tags', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+    });
+    const client = createClient({ provider });
+    expect(
+      await client.refs.resolve({ repo: 'a/b', ref: 'release', type: 'branch' }),
+    ).toMatchObject({ type: 'branch', sha: 'b-sha' });
+  });
+
+  it('honors a tag type hint without touching branches', async () => {
+    const provider = fakeProvider({
+      getTag: (params) => Promise.resolve(tagOf(params.name, 't-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'release', type: 'tag' })).toMatchObject({
+      type: 'tag',
+      sha: 't-sha',
+    });
+  });
+
+  it('resolves directly via getCommit for a commit type hint', async () => {
+    const provider = fakeProvider({
+      getCommit: (params) => Promise.resolve(fakeCommit(params.ref)),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'main', type: 'commit' })).toMatchObject({
+      type: 'commit',
+      name: 'main',
+      sha: 'main',
+    });
+  });
+
+  it('falls back to a commit lookup for hex refs', async () => {
+    const provider = fakeProvider({
+      getBranch: miss,
+      getTag: miss,
+      getCommit: (params) => Promise.resolve({ ...fakeCommit(params.ref), raw: { full: true } }),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'abc1234' })).toEqual({
+      type: 'commit',
+      name: 'abc1234',
+      sha: 'abc1234',
+      raw: { full: true },
+    });
+
+    provider.getCommit = miss;
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'abc1234' }), 'not_found');
+  });
+
+  it('does not attempt a commit lookup for non-hex refs or with a name hint', async () => {
+    const provider = fakeProvider({ getBranch: miss, getTag: miss });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'feature' }), 'not_found');
+    await expectRepoError(
+      client.refs.resolve({ repo: 'a/b', ref: 'abc1234', type: 'branch' }),
+      'not_found',
+    );
+  });
+
+  it('resolves HEAD via the default branch', async () => {
+    const provider = fakeProvider({
+      getRepository: () =>
+        Promise.resolve({
+          id: '1',
+          name: 'b',
+          path: 'a/b',
+          namespace: 'a',
+          defaultBranch: 'main',
+          private: false,
+          urls: { web: 'https://x.test/a/b' },
+          raw: {},
+        }),
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'head-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'HEAD' })).toMatchObject({
+      type: 'branch',
+      name: 'main',
+      sha: 'head-sha',
+    });
+  });
+
+  it('rejects HEAD when the repository has no default branch', async () => {
+    const provider = fakeProvider({
+      getRepository: () =>
+        Promise.resolve({
+          id: '1',
+          name: 'b',
+          path: 'a/b',
+          namespace: 'a',
+          private: false,
+          urls: { web: 'https://x.test/a/b' },
+          raw: {},
+        }),
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'HEAD' }), 'not_found');
+  });
+
+  it('returns the tag even when the branch lookup fails hard', async () => {
+    const provider = fakeProvider({
+      getBranch: () =>
+        Promise.reject(new RepoError('nope', { code: 'forbidden', provider: 'github' })),
+      getTag: (params) => Promise.resolve(tagOf(params.name, 't-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'v1' })).toMatchObject({ type: 'tag' });
+  });
+
+  it('propagates a hard tag failure even when the branch resolves', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+      getTag: () =>
+        Promise.reject(new RepoError('nope', { code: 'forbidden', provider: 'github' })),
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'v1' }), 'forbidden');
+  });
+
+  it('propagates unsupported from the commit fallback', async () => {
+    const provider = fakeProvider({
+      getBranch: miss,
+      getTag: miss,
+      getCommit: () =>
+        Promise.reject(new RepoError('nope', { code: 'unsupported', provider: 'git-http' })),
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'abc1234' }), 'unsupported');
   });
 });
 
