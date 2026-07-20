@@ -112,6 +112,42 @@ const { token, expiresAt } = await provider.getInstallationToken();
 The token is the same cached one the SDK uses for its own API calls. Under token auth the method
 throws `RepoError` with `code: 'unsupported'`.
 
+### Listing a user's installations
+
+`listUserInstallations` is a standalone export — no provider instance needed, because it authenticates
+with a **user access token** (e.g. the OAuth token minted by your GitHub App's web login flow), a
+different credential from the installation token the provider uses. It lists the app installations the
+user can access (`GET /user/installations`) as a cursor-paginated page:
+
+```ts
+import { listUserInstallations } from 'repo-sdk/github';
+
+let cursor: string | undefined;
+do {
+  const page = await listUserInstallations({ token: userToken, cursor });
+  if (page.data.some((installation) => installation.id === installationId)) {
+    // the user behind this token has access to the installation
+  }
+  cursor = page.cursor;
+} while (cursor);
+```
+
+<TypeTable
+  type={{
+    token: { type: 'string', description: 'User access token from the GitHub App web login flow.' },
+    baseUrl: { type: 'string', required: false, description: 'GHES API root (/api/v3); defaults to https://api.github.com.' },
+    fetch: { type: 'typeof fetch', required: false, description: 'Custom fetch implementation.' },
+    limit: { type: 'number', required: false, description: 'Page size (max 100).' },
+    cursor: { type: 'string', required: false, description: 'Cursor from the previous page.' },
+    signal: { type: 'AbortSignal', required: false, description: 'Abort signal for the request.' },
+  }}
+/>
+
+Each installation carries a normalized `id` and `account` (login, `user` or `organization` kind,
+avatar) plus the raw payload. Failures throw `RepoError` like every other SDK call — a typical use is
+verifying, in an installation callback, that the logged-in user actually has access to the
+`installation_id` the callback claims.
+
 ## Scopes
 
 Pick the token scope for what you'll do.

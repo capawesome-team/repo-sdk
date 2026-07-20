@@ -1,14 +1,14 @@
 import { AppTokenSource, type InstallationToken, type TokenSource } from './app-auth.ts';
-import { codeFromStatus, RepoError, type RepoErrorCode } from '../../errors.ts';
-import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
-import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
+import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
+import { codeFromStatus, RepoError } from '../../errors.ts';
+import { HttpClient } from '../../http.ts';
+import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
   encodeRefPath,
   filenameFromContentDisposition,
   isRecord,
-  parseLinkNext,
 } from '../shared.ts';
 import type {
   Archive,
@@ -46,10 +46,6 @@ import type {
   Webhook,
   WebhookEventType,
 } from '../../types.ts';
-
-const DEFAULT_BASE_URL = 'https://api.github.com';
-const API_VERSION = '2022-11-28';
-const USER_AGENT = 'repo-sdk';
 
 export interface GitHubTokenAuth {
   token: string;
@@ -240,11 +236,6 @@ interface GitHubHook {
   config?: GitHubHookConfig;
 }
 
-function nextCursor(response: Response): string | undefined {
-  const next = parseLinkNext(response.headers.get('link'));
-  return next === undefined ? undefined : encodeCursor('github', { url: next });
-}
-
 function gitHostFromBaseUrl(baseUrl: string): string {
   const url = new URL(baseUrl);
   return url.hostname === 'api.github.com' ? 'github.com' : url.host;
@@ -360,15 +351,6 @@ function toWebhook(hook: GitHubHook): Webhook {
     active: hook.active,
     raw: hook,
   };
-}
-
-function mapError(status: number, body: unknown, response: Response): ProviderErrorInfo {
-  const message = isRecord(body) && typeof body.message === 'string' ? body.message : undefined;
-  let code: RepoErrorCode | undefined;
-  if (status === 429 || (status === 403 && response.headers.get('x-ratelimit-remaining') === '0')) {
-    code = 'rate_limited';
-  }
-  return { code, message };
 }
 
 /**
