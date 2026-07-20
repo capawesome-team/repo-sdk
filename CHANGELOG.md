@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/capawesome-team/repo-sdk/compare/v0.1.1...v0.1.2) (2026-07-20)
+
+
+### Features
+
+* accept fully-qualified refs in refs.resolve, add RefMatch.ref, resolve full SHAs commit-first ([205f0b8](https://github.com/capawesome-team/repo-sdk/commit/205f0b8924a5c7e7d2e02fa3b48afb82e13f6c3b))
+
 ## [0.1.1](https://github.com/capawesome-team/repo-sdk/compare/v0.1.0...v0.1.1) (2026-07-20)
 
 
