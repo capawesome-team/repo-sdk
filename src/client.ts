@@ -24,6 +24,7 @@ import type {
   Namespace,
   Page,
   ProviderName,
+  ProviderRefMatch,
   RefMatch,
   RefType,
   Repository,
@@ -99,17 +100,30 @@ function delay(milliseconds: number): Promise<void> {
 const DEFAULT_REF_SEARCH_LIMIT = 20;
 const ALL_REF_TYPES: RefType[] = ['branch', 'tag', 'commit'];
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{4,40}$/i;
+const FULL_COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/i;
+const BRANCH_REF_PREFIX = 'refs/heads/';
+const TAG_REF_PREFIX = 'refs/tags/';
+
+function qualifyRef(match: ProviderRefMatch): RefMatch {
+  const ref =
+    match.type === 'branch'
+      ? `${BRANCH_REF_PREFIX}${match.name}`
+      : match.type === 'tag'
+        ? `${TAG_REF_PREFIX}${match.name}`
+        : match.sha;
+  return { ...match, ref };
+}
 
 function branchMatch(branch: Branch): RefMatch {
-  return { type: 'branch', name: branch.name, sha: branch.sha, raw: branch.raw };
+  return qualifyRef({ type: 'branch', name: branch.name, sha: branch.sha, raw: branch.raw });
 }
 
 function tagMatch(tag: Tag): RefMatch {
-  return { type: 'tag', name: tag.name, sha: tag.sha, raw: tag.raw };
+  return qualifyRef({ type: 'tag', name: tag.name, sha: tag.sha, raw: tag.raw });
 }
 
 function commitMatch(commit: Commit): RefMatch {
-  return { type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw };
+  return qualifyRef({ type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw });
 }
 
 export function createClient(options: CreateClientOptions): RepoClient {
@@ -304,7 +318,9 @@ export function createClient(options: CreateClientOptions): RepoClient {
         const refTypes = types.filter((t): t is Exclude<RefType, 'commit'> => t !== 'commit');
         const [refMatches, commitMatches] = await Promise.all([
           refTypes.length > 0
-            ? withRetry(() => provider.searchRefs({ repo, query, types: refTypes, limit, signal }))
+            ? withRetry(() =>
+                provider.searchRefs({ repo, query, types: refTypes, limit, signal }),
+              ).then((matches) => matches.map(qualifyRef))
             : ([] as RefMatch[]),
           types.includes('commit') && COMMIT_SHA_PATTERN.test(query)
             ? withRetry(() => provider.getCommit({ repo, ref: query, signal })).then(
@@ -330,8 +346,28 @@ export function createClient(options: CreateClientOptions): RepoClient {
       resolve: async (params) => {
         requireNonEmpty(params.repo, 'repo');
         requireNonEmpty(params.ref, 'ref');
-        const { repo, ref, type, signal } = params;
-        if (ref === 'HEAD' && (type === undefined || type === 'branch')) {
+        const { repo, signal } = params;
+        let { ref, type } = params;
+        const impliedType = ref.startsWith(BRANCH_REF_PREFIX)
+          ? 'branch'
+          : ref.startsWith(TAG_REF_PREFIX)
+            ? 'tag'
+            : undefined;
+        if (impliedType !== undefined) {
+          if (type !== undefined && type !== impliedType) {
+            fail('validation', `Fully-qualified ref '${ref}' contradicts type '${type}'`);
+          }
+          type = impliedType;
+          ref = ref.slice(
+            impliedType === 'branch' ? BRANCH_REF_PREFIX.length : TAG_REF_PREFIX.length,
+          );
+          requireNonEmpty(ref, 'ref');
+        }
+        if (
+          impliedType === undefined &&
+          ref === 'HEAD' &&
+          (type === undefined || type === 'branch')
+        ) {
           const repository = await withRetry(() => provider.getRepository({ repo, signal }));
           const defaultBranch = repository.defaultBranch;
           if (defaultBranch === undefined) {
@@ -346,6 +382,26 @@ export function createClient(options: CreateClientOptions): RepoClient {
         }
         if (type === 'commit') {
           return commitMatch(await withRetry(() => provider.getCommit({ repo, ref, signal })));
+        }
+        // A full 40-hex ref is an object id before it is a ref name (git
+        // rev-parse semantics), and it is the webhook-consumer hot path —
+        // one request instead of three. Branch/tag probes only run on a miss.
+        let commitProbeError: RepoError | undefined;
+        if (type === undefined && FULL_COMMIT_SHA_PATTERN.test(ref)) {
+          try {
+            return commitMatch(await withRetry(() => provider.getCommit({ repo, ref, signal })));
+          } catch (error) {
+            if (
+              error instanceof RepoError &&
+              (error.code === 'not_found' ||
+                error.code === 'validation' ||
+                error.code === 'unsupported')
+            ) {
+              commitProbeError = error;
+            } else {
+              throw error;
+            }
+          }
         }
         const [tagResult, branchResult] = await Promise.allSettled([
           type === 'branch'
@@ -373,6 +429,9 @@ export function createClient(options: CreateClientOptions): RepoClient {
           throw branchResult.reason;
         }
         if (type === undefined && COMMIT_SHA_PATTERN.test(ref)) {
+          // The full-SHA fast path already asked the provider; surface its
+          // original error instead of a second identical request.
+          if (commitProbeError !== undefined) throw commitProbeError;
           return commitMatch(await withRetry(() => provider.getCommit({ repo, ref, signal })));
         }
         throw new RepoError(`Ref not found: ${ref}`, {

@@ -33,7 +33,7 @@ import type {
   Namespace,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   TokenProvider,
@@ -501,7 +501,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       return toTag(data);
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       const endpoints = { branch: 'branches', tag: 'tags' } as const;
       // Bitbucket's `~` operator is a case-insensitive CONTAINS filter with no
       // starts-with equivalent, so narrow the server-filtered first page down to
@@ -518,7 +518,12 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
             );
             return (data.values ?? [])
               .filter((ref) => ref.name.toLowerCase().startsWith(prefix))
-              .map((ref): RefMatch => ({ type, name: ref.name, sha: ref.target.hash, raw: ref }));
+              .map((ref): ProviderRefMatch => ({
+                type,
+                name: ref.name,
+                sha: ref.target.hash,
+                raw: ref,
+              }));
           }),
       );
       return matches.flat().slice(0, params.limit);

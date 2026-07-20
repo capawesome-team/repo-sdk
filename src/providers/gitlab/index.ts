@@ -34,7 +34,7 @@ import type {
   Namespace,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   TokenProvider,
@@ -540,7 +540,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       return toTag(data);
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       const base = `/projects/${projectId(params.repo)}/repository`;
       // GitLab's ?search= substring-matches; anchor with `^` for a prefix match.
       // First page only — prefix search results fit within `limit`.
@@ -548,7 +548,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       const matches = await Promise.all(
         (['branch', 'tag'] as const)
           .filter((type) => params.types.includes(type))
-          .map(async (type): Promise<RefMatch[]> => {
+          .map(async (type): Promise<ProviderRefMatch[]> => {
             if (type === 'branch') {
               const { data } = await http.json<GitLabBranch[]>(`${base}/branches`, {
                 query,

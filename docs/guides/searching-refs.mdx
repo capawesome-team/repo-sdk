@@ -44,6 +44,7 @@ on `client.capabilities.refSearch` if you accept arbitrary providers.
   type={{
     type: { type: "'branch' | 'tag' | 'commit'", description: 'What kind of ref matched.' },
     name: { type: 'string', description: 'The ref name without its refs/heads/ or refs/tags/ prefix; the full SHA for commit matches.' },
+    ref: { type: 'string', description: 'The fully-qualified form: refs/heads/<name> for branches, refs/tags/<name> for tags, the SHA itself for commit matches. Always accepted back by refs.resolve.' },
     sha: { type: 'string', description: 'The SHA the ref points to. In search results on GitHub and Gitea, annotated tags carry the tag object SHA, not the peeled commit — use refs.resolve or tags.get when you need the commit.' },
     raw: { type: 'unknown', description: 'The untouched provider payload.' },
   }}
@@ -58,7 +59,7 @@ propagate as usual.
 
 ```ts
 await client.refs.search({ repo: 'o/r', query: 'a1b2c3d' });
-// [ …matching branches/tags…, { type: 'commit', name: 'a1b2c3d4…', sha: 'a1b2c3d4…', raw: {…} } ]
+// [ …matching branches/tags…, { type: 'commit', name: 'a1b2c3d4…', ref: 'a1b2c3d4…', sha: 'a1b2c3d4…', raw: {…} } ]
 ```
 
 ## Empty input

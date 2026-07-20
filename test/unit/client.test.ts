@@ -147,7 +147,8 @@ describe('refs.search', () => {
     return { name, sha: `sha-${name}`, raw: {} };
   }
   function match(type: RefMatch['type'], name: string): RefMatch {
-    return { type, name, sha: `sha-${name}`, raw: {} };
+    const ref = type === 'branch' ? `refs/heads/${name}` : `refs/tags/${name}`;
+    return { type, name, ref, sha: `sha-${name}`, raw: {} };
   }
 
   it('rejects when the provider lacks the refSearch capability', async () => {
@@ -211,7 +212,7 @@ describe('refs.search', () => {
     const matches = await client.refs.search({ repo: 'a/b', query: 'abc1234' });
     expect(matches).toEqual([
       match('branch', 'abc-branch'),
-      { type: 'commit', name: 'abc1234', sha: 'abc1234', raw: { full: true } },
+      { type: 'commit', name: 'abc1234', ref: 'abc1234', sha: 'abc1234', raw: { full: true } },
     ]);
   });
 
@@ -315,6 +316,7 @@ describe('refs.resolve', () => {
     expect(await client.refs.resolve({ repo: 'a/b', ref: 'main' })).toEqual({
       type: 'branch',
       name: 'main',
+      ref: 'refs/heads/main',
       sha: 'b-sha',
       raw: { kind: 'branch' },
     });
@@ -329,6 +331,7 @@ describe('refs.resolve', () => {
     expect(await client.refs.resolve({ repo: 'a/b', ref: 'v1.0.0' })).toEqual({
       type: 'tag',
       name: 'v1.0.0',
+      ref: 'refs/tags/v1.0.0',
       sha: 'peeled-sha',
       raw: { kind: 'tag' },
     });
@@ -367,6 +370,72 @@ describe('refs.resolve', () => {
     });
   });
 
+  it('resolves a fully-qualified branch ref without touching tags', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'refs/heads/main' })).toEqual({
+      type: 'branch',
+      name: 'main',
+      ref: 'refs/heads/main',
+      sha: 'b-sha',
+      raw: { kind: 'branch' },
+    });
+  });
+
+  it('resolves a fully-qualified tag ref without touching branches', async () => {
+    const provider = fakeProvider({
+      getTag: (params) => Promise.resolve(tagOf(params.name, 't-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'refs/tags/v1.0.0' })).toEqual({
+      type: 'tag',
+      name: 'v1.0.0',
+      ref: 'refs/tags/v1.0.0',
+      sha: 't-sha',
+      raw: { kind: 'tag' },
+    });
+  });
+
+  it('accepts a type hint matching the fully-qualified ref', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+    });
+    const client = createClient({ provider });
+    expect(
+      await client.refs.resolve({ repo: 'a/b', ref: 'refs/heads/main', type: 'branch' }),
+    ).toMatchObject({ type: 'branch', name: 'main' });
+  });
+
+  it('rejects a type hint contradicting the fully-qualified ref', async () => {
+    const client = createClient({ provider: fakeProvider() });
+    await expectRepoError(
+      client.refs.resolve({ repo: 'a/b', ref: 'refs/heads/main', type: 'tag' }),
+      'validation',
+    );
+    await expectRepoError(
+      client.refs.resolve({ repo: 'a/b', ref: 'refs/tags/v1', type: 'commit' }),
+      'validation',
+    );
+  });
+
+  it('rejects a ref prefix without a name', async () => {
+    const client = createClient({ provider: fakeProvider() });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'refs/heads/' }), 'validation');
+  });
+
+  it('treats refs/heads/HEAD as a branch named HEAD', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: 'refs/heads/HEAD' })).toMatchObject({
+      type: 'branch',
+      name: 'HEAD',
+    });
+  });
+
   it('resolves directly via getCommit for a commit type hint', async () => {
     const provider = fakeProvider({
       getCommit: (params) => Promise.resolve(fakeCommit(params.ref)),
@@ -389,12 +458,86 @@ describe('refs.resolve', () => {
     expect(await client.refs.resolve({ repo: 'a/b', ref: 'abc1234' })).toEqual({
       type: 'commit',
       name: 'abc1234',
+      ref: 'abc1234',
       sha: 'abc1234',
       raw: { full: true },
     });
 
     provider.getCommit = miss;
     await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: 'abc1234' }), 'not_found');
+  });
+
+  const FULL_SHA = 'a1b2c3d4'.repeat(5);
+
+  it('resolves a full 40-hex SHA with a single commit lookup', async () => {
+    const provider = fakeProvider({
+      getCommit: (params) => Promise.resolve(fakeCommit(params.ref)),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: FULL_SHA })).toMatchObject({
+      type: 'commit',
+      name: FULL_SHA,
+      ref: FULL_SHA,
+      sha: FULL_SHA,
+    });
+  });
+
+  it('falls back to branch and tag lookups when a full SHA misses as a commit', async () => {
+    const provider = fakeProvider({
+      getCommit: miss,
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+      getTag: miss,
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: FULL_SHA })).toMatchObject({
+      type: 'branch',
+      name: FULL_SHA,
+    });
+  });
+
+  it('does not repeat the commit lookup when everything misses on a full SHA', async () => {
+    let commitCalls = 0;
+    const provider = fakeProvider({
+      getCommit: () => {
+        commitCalls += 1;
+        return miss();
+      },
+      getBranch: miss,
+      getTag: miss,
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: FULL_SHA }), 'not_found');
+    expect(commitCalls).toBe(1);
+  });
+
+  it('surfaces unsupported from the full-SHA fast path when no ref matches either', async () => {
+    const provider = fakeProvider({
+      getCommit: () =>
+        Promise.reject(new RepoError('nope', { code: 'unsupported', provider: 'git-http' })),
+      getBranch: miss,
+      getTag: miss,
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: FULL_SHA }), 'unsupported');
+  });
+
+  it('propagates a hard failure from the full-SHA fast path immediately', async () => {
+    const provider = fakeProvider({
+      getCommit: () =>
+        Promise.reject(new RepoError('nope', { code: 'forbidden', provider: 'github' })),
+    });
+    const client = createClient({ provider });
+    await expectRepoError(client.refs.resolve({ repo: 'a/b', ref: FULL_SHA }), 'forbidden');
+  });
+
+  it('skips the full-SHA fast path when a type hint is present', async () => {
+    const provider = fakeProvider({
+      getBranch: (params) => Promise.resolve(branchOf(params.name, 'b-sha')),
+    });
+    const client = createClient({ provider });
+    expect(await client.refs.resolve({ repo: 'a/b', ref: FULL_SHA, type: 'branch' })).toMatchObject(
+      { type: 'branch', name: FULL_SHA },
+    );
   });
 
   it('does not attempt a commit lookup for non-hex refs or with a name hint', async () => {

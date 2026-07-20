@@ -34,6 +34,7 @@ export type {
   Page,
   ParsedWebhookEvent,
   ProviderName,
+  ProviderRefMatch,
   ProviderSearchRefsParams,
   RefMatch,
   RefType,

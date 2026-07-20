@@ -27,7 +27,7 @@ import type {
   Namespace,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -520,7 +520,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       return toTag(await getExactRef(params.repo, `tags/${params.name}`, true, params.signal));
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       // Azure's refs endpoint prefix-matches via `filter`; a single request per type
       // is enough since `$top` caps the results — never follow continuation tokens here.
       const refsPath = `${repoBasePath(params.repo)}/refs`;
@@ -538,7 +538,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
               signal: params.signal,
             });
             const prefix = isTag ? 'refs/tags/' : 'refs/heads/';
-            return data.value.map((ref): RefMatch => ({
+            return data.value.map((ref): ProviderRefMatch => ({
               type,
               name: stripPrefix(ref.name, prefix),
               sha: isTag ? (ref.peeledObjectId ?? ref.objectId) : ref.objectId,

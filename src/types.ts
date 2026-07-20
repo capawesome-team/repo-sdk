@@ -108,10 +108,15 @@ export type RefType = 'branch' | 'tag' | 'commit';
 export interface RefMatch {
   type: RefType;
   name: string;
+  /** Fully-qualified form — `refs/heads/<name>` for branches, `refs/tags/<name>` for tags, the SHA itself for commits. Any `ref` value round-trips through `refs.resolve`. */
+  ref: string;
   /** SHA the ref points to. In `refs.search` results on GitHub and Gitea, annotated tags carry the tag object SHA rather than the commit; `refs.resolve` and `tags.get` always return the peeled commit SHA. */
   sha: string;
   raw: unknown;
 }
+
+/** `RefMatch` as produced by provider adapters, before the client derives the fully-qualified `ref`. */
+export type ProviderRefMatch = Omit<RefMatch, 'ref'>;
 
 export interface Webhook {
   id: string;
@@ -216,8 +221,9 @@ export interface GetTagParams extends BaseParams {
 
 export interface ResolveRefParams extends BaseParams {
   repo: string;
+  /** A branch or tag name, a fully-qualified ref (`refs/heads/…`, `refs/tags/…`), a 4–40 hex commit SHA, or `HEAD`. */
   ref: string;
-  /** Restrict resolution to one ref type; when omitted, branches and tags are tried (tag wins on collision) before falling back to commit SHAs. */
+  /** Restrict resolution to one ref type; when omitted, a full 40-hex `ref` is tried as a commit first, then branches and tags (tag wins on collision), then abbreviated commit SHAs. A fully-qualified `ref` implies its type; passing a contradicting `type` throws a validation error. */
   type?: RefType;
 }
 
@@ -308,7 +314,7 @@ export interface RepoProvider {
   /** Exact-match a tag by name, peeled to the commit SHA for annotated tags; throws `not_found` on a miss. */
   getTag(params: GetTagParams): Promise<Tag>;
   /** Prefix-match refs of the requested types, branches before tags, at most `limit` results. */
-  searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]>;
+  searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]>;
   downloadArchive(params: DownloadArchiveParams): Promise<Archive>;
   getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl>;
   createWebhook(params: CreateWebhookParams): Promise<Webhook>;

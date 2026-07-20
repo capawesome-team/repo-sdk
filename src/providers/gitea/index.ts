@@ -35,7 +35,7 @@ import type {
   Namespace,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   TokenProvider,
@@ -545,7 +545,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
       return toTag(data);
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       const namespaces = { branch: 'heads', tag: 'tags' } as const;
       // Gitea's ref endpoint prefix-matches (case-sensitive) and is unpaginated;
       // truncate to `limit` client-side.
@@ -567,7 +567,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
               if (error instanceof RepoError && error.code === 'not_found') return [];
               throw error;
             }
-            return refs.map((ref): RefMatch => ({
+            return refs.map((ref): ProviderRefMatch => ({
               type,
               name: ref.ref.slice(prefix.length),
               sha: ref.object.sha,

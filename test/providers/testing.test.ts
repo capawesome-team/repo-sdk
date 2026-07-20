@@ -220,8 +220,20 @@ describe('createInMemoryProvider through createClient', () => {
       const { client } = setup();
       const matches = await client.refs.search({ repo: 'acme/service', query: 'feature/' });
       expect(matches).toEqual([
-        { type: 'branch', name: 'feature/login', sha: 'c2', raw: expect.anything() },
-        { type: 'branch', name: 'feature/logout', sha: 'c2', raw: expect.anything() },
+        {
+          type: 'branch',
+          name: 'feature/login',
+          ref: 'refs/heads/feature/login',
+          sha: 'c2',
+          raw: expect.anything(),
+        },
+        {
+          type: 'branch',
+          name: 'feature/logout',
+          ref: 'refs/heads/feature/logout',
+          sha: 'c2',
+          raw: expect.anything(),
+        },
       ]);
     });
 

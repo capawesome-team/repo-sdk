@@ -36,7 +36,7 @@ import type {
   Namespace,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   TokenProvider,
@@ -703,7 +703,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       });
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       const namespaces = { branch: 'heads', tag: 'tags' } as const;
       // The matching-refs endpoint prefix-matches and is unpaginated; truncate to `limit`.
       const matches = await Promise.all(
@@ -715,7 +715,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
               { signal: params.signal },
             );
             const prefix = `refs/${namespaces[type]}/`;
-            return data.map((ref): RefMatch => ({
+            return data.map((ref): ProviderRefMatch => ({
               type,
               name: ref.ref.slice(prefix.length),
               sha: ref.object.sha,

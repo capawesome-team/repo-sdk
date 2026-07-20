@@ -17,7 +17,7 @@ const match = await client.refs.resolve({
   repo: 'capawesome-team/repo-sdk',
   ref: 'v2.1.0',
 });
-// { type: 'tag', name: 'v2.1.0', sha: '4f2a…', raw: {…} }
+// { type: 'tag', name: 'v2.1.0', ref: 'refs/tags/v2.1.0', sha: '4f2a…', raw: {…} }
 ```
 
 The returned `sha` is always the **peeled commit SHA** — annotated tags are followed to the commit
@@ -29,19 +29,40 @@ the tag object SHA for annotated tags.
 <TypeTable
   type={{
     repo: { type: 'string', description: 'The repository to resolve in.' },
-    ref: { type: 'string', description: "The ref to resolve: a branch name, tag name, 4–40 hex commit SHA, or 'HEAD'." },
-    type: { type: "RefType", required: false, description: "Restrict resolution to 'branch', 'tag', or 'commit'. Omit to try all (see resolution order)." },
+    ref: { type: 'string', description: "The ref to resolve: a branch or tag name, a fully-qualified ref (refs/heads/…, refs/tags/…), a 4–40 hex commit SHA, or 'HEAD'." },
+    type: { type: "RefType", required: false, description: "Restrict resolution to 'branch', 'tag', or 'commit'. Omit to try all (see resolution order). A type contradicting a fully-qualified ref throws a validation error." },
   }}
 />
 
+## Fully-qualified refs
+
+`ref` also accepts the fully-qualified forms git and webhooks use: `refs/heads/<name>` resolves as a
+branch, `refs/tags/<name>` as a tag — one lookup, no ambiguity. This makes `resolve` symmetric with
+`ParsedWebhookEvent.ref` and `RefMatch.ref`, so any ref the SDK itself emits can be passed straight
+back:
+
+```ts
+const event = parseWebhookEvent({ headers, body });
+if (event.ref) {
+  const match = await client.refs.resolve({ repo: 'o/r', ref: event.ref });
+}
+```
+
+Passing a `type` that contradicts the prefix (e.g. `ref: 'refs/heads/main'` with `type: 'tag'`)
+throws a `RepoError` with `code: 'validation'`.
+
 ## Resolution order
 
-Without a `type` hint, the SDK looks up the name as a branch and a tag in parallel, then:
+Without a `type` hint (and no `refs/…` prefix), the SDK resolves in this order:
 
-1. A matching **tag** wins — even when a branch shares the name (git `rev-parse` semantics).
-2. Otherwise a matching **branch** is returned.
-3. Otherwise, if `ref` is 4–40 hex characters, it is resolved as a **commit** SHA.
-4. Otherwise the call throws a `RepoError` with `code: 'not_found'`.
+1. If `ref` is a **full 40-hex SHA**, it is looked up as a commit first — git treats a full object
+   id ahead of a same-named ref — so the webhook hot path of resolving a `headCommitSha` costs a
+   single request. The steps below only run when that lookup misses.
+2. The name is looked up as a branch and a tag in parallel; a matching **tag** wins — even when a
+   branch shares the name (git `rev-parse` semantics).
+3. Otherwise a matching **branch** is returned.
+4. Otherwise, if `ref` is 4–39 hex characters, it is resolved as an abbreviated **commit** SHA.
+5. Otherwise the call throws a `RepoError` with `code: 'not_found'`.
 
 Pass `type` when you already know what you're resolving — it skips the other lookups (one request
 instead of two) and removes the ambiguity:
@@ -57,7 +78,7 @@ await client.refs.resolve({ repo: 'o/r', ref: 'release', type: 'branch' });
 
 ```ts
 const head = await client.refs.resolve({ repo: 'o/r', ref: 'HEAD' });
-// { type: 'branch', name: 'main', sha: 'a1b2…', raw: {…} }
+// { type: 'branch', name: 'main', ref: 'refs/heads/main', sha: 'a1b2…', raw: {…} }
 ```
 
 An empty repository without a default branch throws `not_found`.

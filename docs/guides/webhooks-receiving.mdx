@@ -131,7 +131,7 @@ compared against that header in constant time.
   type={{
     type: { type: "'push' | 'tag_push' | 'release' | 'ping' | 'unknown'", description: 'The normalized event type. Unrecognized events map to unknown.' },
     repo: { type: 'string', required: false, description: 'The repository path, when present in the payload.' },
-    ref: { type: 'string', required: false, description: 'The git ref (e.g. refs/heads/main or refs/tags/v1.0.0).' },
+    ref: { type: 'string', required: false, description: 'The git ref (e.g. refs/heads/main or refs/tags/v1.0.0). Accepted as-is by refs.resolve.' },
     commits: { type: '{ sha: string; message?: string }[]', required: false, description: 'The commits in the delivery, when present.' },
     headCommitSha: { type: 'string', required: false, description: 'The SHA the ref points to after the push. Undefined when the push deleted the ref.' },
     deliveryId: { type: 'string', required: false, description: "The provider's delivery id, for de-duplication/logging." },

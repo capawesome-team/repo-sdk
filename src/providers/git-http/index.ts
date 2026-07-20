@@ -14,7 +14,7 @@ import type {
   ListTagsParams,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   TokenProvider,
@@ -400,10 +400,10 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
       return tag;
     },
 
-    async searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       const repoUrl = normalizeRepoUrl(params.repo);
       const advertisement = await fetchAdvertisement(repoUrl, params.signal);
-      const matches: RefMatch[] = [];
+      const matches: ProviderRefMatch[] = [];
       for (const type of ['branch', 'tag'] as const) {
         if (!params.types.includes(type)) continue;
         const prefix = type === 'branch' ? BRANCH_PREFIX : TAG_PREFIX;

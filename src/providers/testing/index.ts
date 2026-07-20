@@ -27,7 +27,7 @@ import type {
   NamespaceKind,
   Page,
   ProviderSearchRefsParams,
-  RefMatch,
+  ProviderRefMatch,
   Repository,
   Tag,
   UpdateWebhookParams,
@@ -434,9 +434,9 @@ export function createInMemoryProvider(
       return Promise.resolve(tag);
     },
 
-    searchRefs(params: ProviderSearchRefsParams): Promise<RefMatch[]> {
+    searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
       requireRepository(params.repo);
-      const matches: RefMatch[] = [];
+      const matches: ProviderRefMatch[] = [];
       if (params.types.includes('branch')) {
         for (const branch of state.branches.get(params.repo) ?? []) {
           if (branch.name.startsWith(params.query)) {
