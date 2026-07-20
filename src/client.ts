@@ -297,9 +297,13 @@ export function createClient(options: CreateClientOptions): RepoClient {
                   { type: 'commit', name: commit.sha, sha: commit.sha, raw: commit.raw },
                 ],
                 (error) => {
+                  // `unsupported`: providers without commit lookup (git-http)
+                  // simply contribute no commit matches.
                   if (
                     error instanceof RepoError &&
-                    (error.code === 'not_found' || error.code === 'validation')
+                    (error.code === 'not_found' ||
+                      error.code === 'validation' ||
+                      error.code === 'unsupported')
                   ) {
                     return [];
                   }

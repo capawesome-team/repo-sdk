@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea REST APIs (discovery, commits, tags, archive/clone-URL, webhooks). It is **not** a git wire-protocol implementation. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
+`repo-sdk` — a unified, normalized, **zero-runtime-dependency**, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea REST APIs (discovery, commits, tags, archive/clone-URL, webhooks), plus a `git-http` provider for generic git smart-HTTP remotes (ref discovery + clone URLs only; the `repo` param is the remote URL). It does **no git pack transfer or object parsing** — the only wire-protocol surface is the smart-HTTP `info/refs` advertisement the `git-http` provider reads. ESM-only, Node ≥ 20, built on raw `fetch` and Web Crypto so it runs on Cloudflare Workers and other Web-standard runtimes.
 
 ## Commands
 
@@ -25,7 +25,7 @@ Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip t
 
 ## Architecture: thin adapter, fat client
 
-- **Entry points** map 1:1 to package subpath exports: `src/index.ts` (core), `src/{github,gitlab,bitbucket,azure-devops,gitea,testing}.ts` are re-export barrels over `src/providers/<name>/`.
+- **Entry points** map 1:1 to package subpath exports: `src/index.ts` (core), `src/{github,gitlab,bitbucket,azure-devops,gitea,git-http,testing}.ts` are re-export barrels over `src/providers/<name>/`.
 - **Fat client** (`src/client.ts`, `createClient`): input validation, capability gating, `listAll` async generators, bounded rate-limit retry (honors `Retry-After`), `AbortSignal` threading. **Thin adapters**: each provider implements the `RepoProvider` interface (`src/types.ts`) over the shared `HttpClient` (`src/http.ts`) with per-provider `authHeaders`/`mapError`/`secrets` hooks.
 - **Capability gating over silent degradation**: providers declare `RepoCapabilities`; anything a provider can't do throws `RepoError` with `code: 'unsupported'` — never silently drop an option. Follow this when adding features.
 - **Error model**: every failure is a `RepoError` (`src/errors.ts`) with a fixed code taxonomy; token values are redacted from messages via each provider's `secrets` hook. Exception by design: `getCloneUrl` returns credential-bearing URLs.

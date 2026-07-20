@@ -6,9 +6,9 @@ sidebar:
 ---
 
 Providers are not identical. GitLab can date tags, GitHub can't; Azure DevOps doesn't support free-text
-repository search; only GitHub, GitLab, and Gitea emit `release` webhooks. Rather than hide these
-differences and silently drop options, `repo-sdk` **advertises** each provider's capabilities and
-**gates** on them.
+repository search; only GitHub, GitLab, and Gitea emit `release` webhooks; git-http has no webhooks at
+all. Rather than hide these differences and silently drop options, `repo-sdk` **advertises** each
+provider's capabilities and **gates** on them.
 
 ## RepoCapabilities
 
@@ -23,7 +23,7 @@ Every provider exposes a `capabilities` object, also surfaced on `client.capabil
     commitUserRef: { type: 'boolean', description: 'Whether commit actors can carry a resolved account (GitActor.user).' },
     refSearch: { type: 'boolean', description: 'Whether refs.search can prefix-match branch and tag names server-side.' },
     webhookEvents: { type: 'WebhookEventType[]', description: 'The webhook events the provider can register.' },
-    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How incoming webhooks are verified.' },
+    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth' | 'none'", description: 'How incoming webhooks are verified. none means the provider has no webhooks at all (git-http).' },
     archiveFormats: { type: 'ArchiveFormat[]', description: 'The archive formats downloadArchive can return.' },
   }}
 />
@@ -73,17 +73,17 @@ if (client.capabilities.webhookEvents.includes('release')) {
 
 ## Per-provider differences
 
-| Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     | Gitea                     |
-| ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- | ------------------------- |
-| User profile (`users.me`) | ✓ (✗ under App auth)   | ✓                         | ✓                | ✓                | ✓                         |
-| Tag dates              | ✗                         | ✓                         | ✓                | ✗                | ✗                         |
-| Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
-| Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                | ✓                         |
-| Commit author identity (`author.user`) | ✓         | ✗                         | ✓                | ✗                | ✓                         |
-| Ref search             | ✓                         | ✓                         | ✓                | ✓                | ✓                         |
-| Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   | push, tag_push, release   |
-| Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       | HMAC-SHA256               |
-| Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              | zip, tar.gz               |
+| Capability             | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps     | Gitea                     | Git HTTP    |
+| ---------------------- | ------------------------- | ------------------------- | ---------------- | ---------------- | ------------------------- | ----------- |
+| User profile (`users.me`) | ✓ (✗ under App auth)   | ✓                         | ✓                | ✓                | ✓                         | ✗           |
+| Tag dates              | ✗                         | ✓                         | ✓                | ✗                | ✗                         | ✗           |
+| Repo search (`query`)  | ✓                         | ✓                         | ✓                | ✗                | ✓                         | ✗           |
+| Owned filter (`owned`) | ✓                         | ✓                         | ✓                | ✗                | ✓                         | ✗           |
+| Commit author identity (`author.user`) | ✓         | ✗                         | ✓                | ✗                | ✓                         | ✗           |
+| Ref search             | ✓                         | ✓                         | ✓                | ✓                | ✓                         | ✓           |
+| Webhook events         | push, tag_push, release   | push, tag_push, release   | push, tag_push   | push, tag_push   | push, tag_push, release   | — (none)    |
+| Webhook verification   | HMAC-SHA256               | shared token              | HMAC-SHA256      | basic auth       | HMAC-SHA256               | none        |
+| Archive formats        | zip, tar.gz               | zip, tar.gz               | zip, tar.gz      | zip              | zip, tar.gz               | — (none)    |
 
 <Card title="See the full matrix" icon="table" href="/docs/reference/capability-matrix">
   The complete per-provider capability reference.

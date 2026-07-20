@@ -21,6 +21,7 @@ passed through verbatim, so it always matches what you see in the provider's own
 | Bitbucket    | `workspace/repo_slug`                      | —                     |
 | Azure DevOps | `project/repository`                       | `organization` (req.) |
 | Gitea        | `owner/name`                               | —                     |
+| Git HTTP     | full http(s) remote URL                    | —                     |
 
 ```ts
 await client.repos.get({ repo: 'capawesome-team/repo-sdk' }); // GitHub
@@ -50,6 +51,9 @@ for the same idea, the `kind` field tells you which one you're looking at:
     raw: { type: 'unknown', description: 'The untouched provider payload.' },
   }}
 />
+
+The git-http provider is the exception: it has no namespaces and no discovery, so `namespaces.list` and
+`repos.list` throw `unsupported` — address a repository directly by its full remote URL.
 
 List them with `namespaces.list` / `namespaces.listAll`:
 

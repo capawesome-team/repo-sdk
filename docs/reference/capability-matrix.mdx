@@ -14,17 +14,17 @@ gates on these values and throws `unsupported` rather than silently dropping an 
 
 ## Matrix
 
-| Capability            | Type                            | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps  | Gitea                     |
-| --------------------- | ------------------------------- | ------------------------- | ------------------------- | ---------------- | ------------- | ------------------------- |
-| `userProfile`         | `boolean`                       | `true` (`false` under App auth) | `true`              | `true`           | `true`        | `true`                    |
-| `tagDates`            | `boolean`                       | `false`                   | `true`                    | `true`           | `false`       | `false`                   |
-| `repoSearch`          | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    |
-| `ownedRepoFilter`     | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    |
-| `commitUserRef`  | `boolean`                       | `true`                    | `false`                   | `true`           | `false`       | `true`                    |
-| `refSearch`           | `boolean`                       | `true`                    | `true`                    | `true`           | `true`        | `true`                    |
-| `webhookEvents`       | `WebhookEventType[]`            | `push, tag_push, release` | `push, tag_push, release` | `push, tag_push` | `push, tag_push` | `push, tag_push, release` |
-| `webhookVerification` | `WebhookVerificationMethod`     | `hmac-sha256`             | `shared-token`            | `hmac-sha256`    | `basic-auth`  | `hmac-sha256`             |
-| `archiveFormats`      | `ArchiveFormat[]`               | `zip, tar.gz`             | `zip, tar.gz`             | `zip, tar.gz`    | `zip`         | `zip, tar.gz`             |
+| Capability            | Type                            | GitHub                    | GitLab                    | Bitbucket        | Azure DevOps  | Gitea                     | Git HTTP      |
+| --------------------- | ------------------------------- | ------------------------- | ------------------------- | ---------------- | ------------- | ------------------------- | ------------- |
+| `userProfile`         | `boolean`                       | `true` (`false` under App auth) | `true`              | `true`           | `true`        | `true`                    | `false`       |
+| `tagDates`            | `boolean`                       | `false`                   | `true`                    | `true`           | `false`       | `false`                   | `false`       |
+| `repoSearch`          | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    | `false`       |
+| `ownedRepoFilter`     | `boolean`                       | `true`                    | `true`                    | `true`           | `false`       | `true`                    | `false`       |
+| `commitUserRef`  | `boolean`                       | `true`                    | `false`                   | `true`           | `false`       | `true`                    | `false`       |
+| `refSearch`           | `boolean`                       | `true`                    | `true`                    | `true`           | `true`        | `true`                    | `true`        |
+| `webhookEvents`       | `WebhookEventType[]`            | `push, tag_push, release` | `push, tag_push, release` | `push, tag_push` | `push, tag_push` | `push, tag_push, release` | `—` (none)  |
+| `webhookVerification` | `WebhookVerificationMethod`     | `hmac-sha256`             | `shared-token`            | `hmac-sha256`    | `basic-auth`  | `hmac-sha256`             | `none`        |
+| `archiveFormats`      | `ArchiveFormat[]`               | `zip, tar.gz`             | `zip, tar.gz`             | `zip, tar.gz`    | `zip`         | `zip, tar.gz`             | `—` (none)  |
 
 ## What each field gates
 
@@ -37,7 +37,7 @@ gates on these values and throws `unsupported` rather than silently dropping an 
     commitUserRef: { type: 'boolean', description: 'Whether commit actors can carry a resolved account (GitActor.user). When false, user is always undefined (GitLab, Azure DevOps).' },
     refSearch: { type: 'boolean', description: 'Whether refs.search can prefix-match branch and tag names server-side. Calling it without support throws unsupported (all current providers support it).' },
     webhookEvents: { type: 'WebhookEventType[]', description: 'The events webhooks.create / update accept. Any other event throws unsupported.' },
-    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth'", description: 'How verifyWebhook checks an incoming delivery for this provider.' },
+    webhookVerification: { type: "'hmac-sha256' | 'shared-token' | 'basic-auth' | 'none'", description: 'How verifyWebhook checks an incoming delivery for this provider. none means the provider has no webhooks at all (git-http).' },
     archiveFormats: { type: 'ArchiveFormat[]', description: 'The formats downloadArchive can return. Any other format throws unsupported.' },
   }}
 />

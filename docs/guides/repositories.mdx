@@ -24,6 +24,11 @@ normalizes them to a `Namespace` with a `kind` telling you which one you're look
 To resolve the account behind the credentials themselves, use `users.me()` — see
 [Who is this token?](/docs/authentication#who-is-this-token) in the authentication guide.
 
+:::note
+The git-http provider supports neither discovery nor namespaces — `namespaces.list` and `repos.list`
+throw `unsupported`. Address a repository directly by its full remote URL.
+:::
+
 ```ts
 const { data: namespaces } = await client.namespaces.list();
 
@@ -89,6 +94,7 @@ repo.raw; // untouched provider payload
 | Bitbucket    | `workspace/repo_slug`                      | `acme-workspace/api`       |
 | Azure DevOps | `project/repository`                       | `Payments/checkout`        |
 | Gitea        | `owner/name`                               | `capawesome-team/repo-sdk` |
+| Git HTTP     | full http(s) remote URL                    | `https://git.example.com/team/app.git` |
 
 :::note
 For Azure DevOps the `organization` is fixed on the provider factory, so it is not part of the `repo`

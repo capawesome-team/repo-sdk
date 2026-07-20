@@ -1,0 +1,87 @@
+---
+title: Git HTTP authentication
+description: Authenticate the git-http provider against any plain git remote served over HTTP(S).
+sidebar:
+  label: Git HTTP
+---
+
+The `gitHttp` provider from `repo-sdk/git-http` connects to any plain git remote served over HTTP(S) via
+the git smart-HTTP protocol — self-hosted bare repos, appliances, and hosts the SDK has no dedicated
+provider for. The `repo` string is the **full remote URL**, and authentication is HTTP Basic, resolved
+anonymous-first just like the git CLI.
+
+## Basic auth
+
+Pass an `auth` block with a `password` (and an optional `username`, defaulting to `git`). Most hosts
+accept any username with a token as the password; Bitbucket app passwords need the real username.
+
+```ts
+import { createClient } from 'repo-sdk';
+import { gitHttp } from 'repo-sdk/git-http';
+
+const client = createClient({
+  provider: gitHttp({ auth: { password: process.env.GIT_HTTP_TOKEN! } }),
+});
+
+const { data: branches } = await client.branches.list({
+  repo: 'https://git.example.com/team/app.git',
+});
+```
+
+<TypeTable
+  type={{
+    username: { type: 'string', required: false, description: 'HTTP Basic username. Defaults to git.' },
+    password: { type: 'string', description: 'HTTP Basic password — usually a token or app password.' },
+  }}
+/>
+
+## Anonymous-first
+
+`auth` is optional. Requests carry **no credentials** until the remote answers `401`, then the SDK
+retries with HTTP Basic auth and keeps sending it for that remote — so a public repository works with no
+`auth` at all:
+
+```ts
+const client = createClient({ provider: gitHttp() });
+
+await client.repos.get({ repo: 'https://git.example.com/team/public.git' });
+```
+
+## Scopes
+
+There is no scope model — git-http speaks the raw smart-HTTP protocol, not a host API. **Any credential
+that grants read access to the repository works**, for example:
+
+- a **GitHub** fine-grained PAT with **contents: read**,
+- a **GitLab** PAT with **`read_repository`**,
+- a **Bitbucket** app password with **repository: read** (pass the real username), or
+- a host-specific **deploy token**.
+
+## The `repo` is a full URL
+
+Every client method takes the **full http(s) remote URL** as `repo` — the same URL you would pass to
+`git clone`:
+
+```ts
+await client.repos.get({ repo: 'https://git.example.com/team/app.git' });
+await client.tags.list({ repo: 'https://git.example.com/team/app.git' });
+```
+
+:::warning
+Do **not** embed credentials in the URL — a `repo` like `https://user:pass@git.example.com/...` throws a
+`validation` error. Pass credentials via `auth` instead. SSH (`git@…`, `ssh://`) and `git://` remotes
+are rejected the same way; git-http speaks HTTP(S) only.
+:::
+
+<Card title="Discover branches and tags" icon="git-branch" href="/docs/guides/repositories">
+  Read refs from a remote once you're authenticated.
+</Card>
+
+## Expiring tokens
+
+`auth: { tokenProvider }` mints the Basic password per request, with one forced-refresh retry on `401` —
+see [Expiring tokens](/docs/authentication#expiring-tokens-tokenprovider) for the contract.
+
+```ts
+gitHttp({ auth: { tokenProvider: async () => currentToken() } });
+```

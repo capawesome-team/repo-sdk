@@ -35,7 +35,7 @@ The client also exposes two read-only fields derived from the provider:
 
 <TypeTable
   type={{
-    providerName: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'", description: 'Which provider backs this client.' },
+    providerName: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea' | 'git-http'", description: 'Which provider backs this client.' },
     capabilities: { type: 'RepoCapabilities', description: 'The provider capability object — see Capabilities.' },
   }}
 />
@@ -51,6 +51,7 @@ import { gitlab } from 'repo-sdk/gitlab';
 import { bitbucket } from 'repo-sdk/bitbucket';
 import { azureDevOps } from 'repo-sdk/azure-devops';
 import { gitea } from 'repo-sdk/gitea';
+import { gitHttp } from 'repo-sdk/git-http';
 ```
 
 Every factory takes an `auth` block; most also accept an optional `baseUrl` for self-hosted or

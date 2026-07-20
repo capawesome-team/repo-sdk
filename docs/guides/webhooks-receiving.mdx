@@ -102,6 +102,11 @@ returns `false` (never throws) on a missing or mismatched signature, and compari
 | Azure DevOps | basic auth   | `Authorization: Basic` header (hook registered with the secret) |
 | Gitea        | HMAC-SHA256  | `x-gitea-signature` over the raw body (bare hex, no `sha256=` prefix) |
 
+:::note
+git-http remotes emit no webhooks — `repo-sdk/git-http` exports no `verifyWebhook` / `parseWebhookEvent`.
+Poll refs to detect changes instead.
+:::
+
 <TypeTable
   type={{
     request: { type: 'Request', required: false, description: 'A Web-standard Request. Provide this or headers + body.' },

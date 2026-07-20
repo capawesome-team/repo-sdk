@@ -55,6 +55,7 @@ for await (const commit of client.commits.listAll({ repo: 'capawesome-team/repo-
 :::note
 Bitbucket has no server-side `since` / `until` / `author` filters, and Gitea has no server-side `author`
 filter — the SDK applies those client-side to each returned page. Everything else filters server-side.
+The git-http provider supports no commit APIs at all — every `commits.*` call throws `unsupported`.
 :::
 
 ## Resolving a ref to one commit

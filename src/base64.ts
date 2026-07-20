@@ -1,9 +1,17 @@
-export function bytesToBase64Url(bytes: Uint8Array): string {
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  return btoa(binary);
+}
+
+export function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+export function stringToBase64(text: string): string {
+  return bytesToBase64(new TextEncoder().encode(text));
 }
 
 export function stringToBase64Url(text: string): string {

@@ -17,6 +17,7 @@
     "azure-devops",
     "gitea",
     "forgejo",
+    "git-http",
     "sdk",
     "version-control",
     "webhooks"
@@ -53,6 +54,10 @@
     "./gitea": {
       "types": "./dist/gitea.d.ts",
       "default": "./dist/gitea.js"
+    },
+    "./git-http": {
+      "types": "./dist/git-http.d.ts",
+      "default": "./dist/git-http.js"
     },
     "./testing": {
       "types": "./dist/testing.d.ts",

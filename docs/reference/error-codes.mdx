@@ -18,7 +18,7 @@ failure without parsing provider-specific statuses or messages. For the conceptu
 <TypeTable
   type={{
     code: { type: 'RepoErrorCode', description: 'Normalized failure code — the field to branch on.' },
-    provider: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea'", description: 'Which provider produced the error.' },
+    provider: { type: "'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea' | 'git-http'", description: 'Which provider produced the error.' },
     status: { type: 'number', required: false, description: 'The HTTP status, when the failure came from a response.' },
     retryable: { type: 'boolean', description: 'Whether retrying the operation may succeed.' },
     retryAfter: { type: 'number', required: false, description: 'Seconds to wait, when a Retry-After header was present.' },

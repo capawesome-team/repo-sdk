@@ -1,12 +1,12 @@
 ---
 title: Provider support
-description: A feature-by-provider support matrix across GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea.
+description: A feature-by-provider support matrix across GitHub, GitLab, Bitbucket, Azure DevOps, Gitea, and git-http.
 sidebar:
   label: Provider support
 ---
 
 A feature × provider matrix covering authentication methods, `baseUrl`/self-hosted support, discovery,
-downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea.
+downloads, and webhooks across GitHub, GitLab, Bitbucket Cloud, Azure DevOps, Gitea, and git-http.
 
 :::note
 Everything gated by a capability flag — repo search, the owned filter, tag dates, commit author
@@ -16,19 +16,19 @@ identity, ref search, webhook events and verification, archive formats, and `use
 
 ## Feature matrix
 
-| Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          | Gitea                 |
-| ------------------------------ | -------------------- | -------------------- | -------------------- | --------------------- | --------------------- |
-| Subpath import                 | `repo-sdk/github`    | `repo-sdk/gitlab`    | `repo-sdk/bitbucket` | `repo-sdk/azure-devops` | `repo-sdk/gitea`    |
-| Token auth                     | ✓ (PAT / OAuth)      | ✓ (PAT / project / group / OAuth) | ✓ (access token, Bearer) | ✓ (PAT / OAuth) | ✓ (PAT, `token` scheme) |
-| App / alternative auth         | ✓ (GitHub App)       | —                    | ✓ (email + API token, Basic) | ✓ (Entra `tokenProvider`) | — |
-| Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            | ✓ (self-hosted / Forgejo) |
-| `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  | `owner/name`       |
-| Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              | user + orgs           |
-| Commit filters (`since` / `until` / `author`) | server-side | server-side     | client-side per page | server-side           | client-side `author`  |
-| Namespace `avatarUrl`          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     |
-| Archive download               | ✓                    | ✓                    | ✓ (API token auth only) | ✓                  | ✓                     |
-| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) | ✓ (embedded)   |
-| Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   | ✓                     |
+| Feature                        | GitHub               | GitLab               | Bitbucket Cloud      | Azure DevOps          | Gitea                 | Git HTTP                        |
+| ------------------------------ | -------------------- | -------------------- | -------------------- | --------------------- | --------------------- | ------------------------------- |
+| Subpath import                 | `repo-sdk/github`    | `repo-sdk/gitlab`    | `repo-sdk/bitbucket` | `repo-sdk/azure-devops` | `repo-sdk/gitea`    | `repo-sdk/git-http`             |
+| Token auth                     | ✓ (PAT / OAuth)      | ✓ (PAT / project / group / OAuth) | ✓ (access token, Bearer) | ✓ (PAT / OAuth) | ✓ (PAT, `token` scheme) | ✓ (HTTP Basic, anonymous-first) |
+| App / alternative auth         | ✓ (GitHub App)       | —                    | ✓ (email + API token, Basic) | ✓ (Entra `tokenProvider`) | — | —                             |
+| Self-hosted (`baseUrl`)        | ✓ (GHES)             | ✓ (self-managed)     | ✗ (Cloud only)       | ✓ (Server)            | ✓ (self-hosted / Forgejo) | — (`repo` is the full URL)   |
+| `repo` string                  | `owner/name`         | `group/…/project` or id | `workspace/repo_slug` | `project/repository`  | `owner/name`       | full http(s) remote URL         |
+| Namespace discovery            | user + orgs          | user + groups        | workspaces           | projects              | user + orgs           | — (none)                        |
+| Commit filters (`since` / `until` / `author`) | server-side | server-side     | client-side per page | server-side           | client-side `author`  | — (no commit APIs)            |
+| Namespace `avatarUrl`          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     | — (no namespaces)               |
+| Archive download               | ✓                    | ✓                    | ✓ (API token auth only) | ✓                  | ✓                     | ✗                               |
+| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) | ✓ (embedded)   | ✓ (embedded)                    |
+| Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   | ✓                     | — (no repo listing)             |
 
 ## Per-provider caveats
 
@@ -84,6 +84,25 @@ identity, ref search, webhook events and verification, archive formats, and `use
     - The repositories endpoint returns everything in **one response** — there's no server-side cursor, so
       `limit` is honored client-side.
     - `listOrganizations` is a standalone helper (organizations live outside the org-pinned provider).
+  </AccordionItem>
+  <AccordionItem title="Git HTTP" icon="git-branch">
+    - Connects to **any plain git remote served over HTTP(S)** via the git smart-HTTP protocol — the
+      `repo` string is the **full remote URL** (e.g. `https://git.example.com/team/app.git`), and there
+      is no `baseUrl`. SSH (`git@…`, `ssh://`) and `git://` remotes throw `validation`, as do URLs with
+      embedded credentials (pass them via `auth` instead).
+    - **Read-only ref discovery.** Only `repos.get`, `branches.list`, `tags.list`, `refs.search`, and
+      `repos.getCloneUrl` are supported; `users.me`, `namespaces.*`, `repos.list`, all of `commits.*`,
+      `repos.downloadArchive`, and all of `webhooks.*` throw `unsupported`. There are no
+      `verifyWebhook` / `parseWebhookEvent` exports.
+    - Every supported call issues a **single** `GET <url>/info/refs?service=git-upload-pack` request (the
+      smart-HTTP ref advertisement); `limit` and cursor pagination are applied in memory over that one
+      response.
+    - **Anonymous-first auth**, exactly like the git CLI: requests carry no credentials until the remote
+      answers `401`, then the SDK retries with HTTP Basic auth and keeps sending it for that remote.
+      `username` defaults to `git`; most hosts accept any username with a token as the password.
+    - `repos.get` derives `defaultBranch` from the HEAD symref and reports `private: true` when the
+      remote rejected anonymous access. Annotated tags are peeled to the commit SHA with `isAnnotated`
+      set, but carry no message or date.
   </AccordionItem>
 </Accordion>
 

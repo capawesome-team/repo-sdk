@@ -22,3 +22,4 @@ skills-lock.json
 
 # Local tooling
 .claude
+*.tgz

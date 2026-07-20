@@ -20,6 +20,11 @@ each to the provider's native trigger:
 | `tag_push` | A tag is created or deleted    |   ✓    |   ✓    |     ✓     |      ✓       |   ✓   |
 | `release`  | A release is published         |   ✓    |   ✓    |     ✗     |      ✗       |   ✓   |
 
+:::note
+The git-http provider has no webhook API — every `client.webhooks.*` call throws `unsupported`. Poll
+refs instead.
+:::
+
 ## Creating a webhook
 
 ```ts

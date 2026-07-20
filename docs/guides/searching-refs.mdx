@@ -74,7 +74,9 @@ The prefix contract holds everywhere, with two variations. **Case sensitivity va
 matches case-insensitively, Gitea case-sensitively, and the remaining providers leave it undocumented —
 don't rely on either behavior. **GitHub and Gitea search unpaginated**: all matches transfer in one
 response before the SDK truncates to `limit`, so very broad prefixes on huge repos are the one case
-where a keystroke can be expensive.
+where a keystroke can be expensive. **git-http** prefix-matches case-sensitively over the branches and
+tags advertised by the remote (filtered in memory) and — having no commit lookup — returns no matches
+for commit-SHA queries.
 :::
 
 <Card title="Provider support" icon="table" href="/docs/reference/provider-support">

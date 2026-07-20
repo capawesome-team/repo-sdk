@@ -107,6 +107,19 @@ const client = createClient({
   provider: gitea({ auth: { token: process.env.GITEA_TOKEN! } }),
 });
 ```
+
+```ts git-http
+import { gitHttp } from 'repo-sdk/git-http';
+
+const client = createClient({
+  provider: gitHttp({ auth: { password: process.env.GIT_HTTP_TOKEN! } }),
+});
+
+// repo is the full remote URL; use a supported call like branches.list.
+const { data: branches } = await client.branches.list({
+  repo: 'https://git.example.com/team/app.git',
+});
+```
 </CodeGroup>
 
 ## 4. Receive a webhook

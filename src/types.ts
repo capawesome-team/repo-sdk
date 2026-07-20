@@ -1,4 +1,5 @@
-export type ProviderName = 'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea';
+export type ProviderName =
+  'github' | 'gitlab' | 'bitbucket' | 'azure-devops' | 'gitea' | 'git-http';
 
 export type WebhookEventType = 'push' | 'tag_push' | 'release';
 
@@ -6,7 +7,7 @@ export type ArchiveFormat = 'zip' | 'tar.gz';
 
 export type NamespaceKind = 'user' | 'organization' | 'group' | 'workspace' | 'project';
 
-export type WebhookVerificationMethod = 'hmac-sha256' | 'shared-token' | 'basic-auth';
+export type WebhookVerificationMethod = 'hmac-sha256' | 'shared-token' | 'basic-auth' | 'none';
 
 /**
  * Mints a bearer token for each request. `forceRefresh` is true only on the

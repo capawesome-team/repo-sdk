@@ -4,7 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dm/repo-sdk)](https://www.npmjs.com/package/repo-sdk)
 [![license](https://img.shields.io/npm/l/repo-sdk)](https://github.com/capawesome-team/repo-sdk/blob/main/LICENSE)
 
-A unified, normalized, zero-dependency, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea. Write your discovery, commit, tag, download, and webhook logic once against one normalized API — built on raw `fetch` and Web Crypto, so it runs on Node, Cloudflare Workers, and other Web-standard runtimes.
+A unified, normalized, zero-dependency, edge-compatible TypeScript SDK over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea — plus generic git smart-HTTP remotes. Write your discovery, commit, tag, download, and webhook logic once against one normalized API — built on raw `fetch` and Web Crypto, so it runs on Node, Cloudflare Workers, and other Web-standard runtimes.
 
 ## Installation
 
@@ -47,13 +47,14 @@ Full documentation lives at **[repo-sdk.dev](https://repo-sdk.dev)** ([docs](htt
 
 ## Providers
 
-| Provider     | Import                  | Notes                              |
-| ------------ | ----------------------- | ---------------------------------- |
-| GitHub       | `repo-sdk/github`       | Token and GitHub App auth          |
-| GitLab       | `repo-sdk/gitlab`       | PAT, group/project, or OAuth token |
-| Bitbucket    | `repo-sdk/bitbucket`    | Bitbucket Cloud                    |
-| Azure DevOps | `repo-sdk/azure-devops` | PAT or Entra ID                    |
-| Gitea        | `repo-sdk/gitea`        | Gitea ≥ 1.20 and Forgejo           |
+| Provider     | Import                  | Notes                                                            |
+| ------------ | ----------------------- | ---------------------------------------------------------------- |
+| GitHub       | `repo-sdk/github`       | Token and GitHub App auth                                        |
+| GitLab       | `repo-sdk/gitlab`       | PAT, group/project, or OAuth token                               |
+| Bitbucket    | `repo-sdk/bitbucket`    | Bitbucket Cloud                                                  |
+| Azure DevOps | `repo-sdk/azure-devops` | PAT or Entra ID                                                  |
+| Gitea        | `repo-sdk/gitea`        | Gitea ≥ 1.20 and Forgejo                                         |
+| Generic git  | `repo-sdk/git-http`     | Any git smart-HTTP remote (read-only ref discovery + clone URLs) |
 
 Self-hosted deployments — GitHub Enterprise Server, GitLab self-managed, Azure DevOps Server, and Gitea/Forgejo instances — are supported via `baseUrl`.
 

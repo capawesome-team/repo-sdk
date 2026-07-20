@@ -87,7 +87,7 @@ me.avatarUrl;
 ```
 
 It is gated by the `userProfile` capability: credentials without a user identity — e.g. GitHub App
-installation tokens — throw `unsupported`. Branch on `client.capabilities.userProfile` before calling
+installation tokens, or the git-http provider — throw `unsupported`. Branch on `client.capabilities.userProfile` before calling
 it when the token type isn't known up front.
 
 ### Resolving a hidden email
@@ -112,7 +112,7 @@ const me = await client.users.me({ includeEmail: true });
 
 ## Self-hosted and enterprise instances
 
-Four of the five providers accept a `baseUrl` so you can target a self-managed deployment. Point it at
+Four of the six providers accept a `baseUrl` so you can target a self-managed deployment. Point it at
 your instance's API root and everything else works unchanged:
 
 | Provider     | Self-hosted product      | `baseUrl` example                   |
@@ -122,6 +122,7 @@ your instance's API root and everything else works unchanged:
 | Azure DevOps | Azure DevOps Server      | `https://azure.example.com/tfs`     |
 | Gitea        | Self-hosted / Forgejo    | `https://gitea.example.com/api/v1`  |
 | Bitbucket    | — (Cloud only)           | not supported                       |
+| Git HTTP     | Any git HTTP(S) remote   | no `baseUrl` — `repo` is the full remote URL |
 
 :::warning
 Bitbucket is **Cloud only**. The `bitbucket` factory takes no `baseUrl`; there is no Bitbucket
@@ -145,5 +146,8 @@ Data Center / Server support.
   </Card>
   <Card title="Gitea" icon="git-branch" href="/docs/authentication/gitea">
     Personal access token, self-hosted instances, and Forgejo.
+  </Card>
+  <Card title="Git HTTP" icon="globe" href="/docs/authentication/git-http">
+    Anonymous-first HTTP Basic auth against any plain git remote by full URL.
   </Card>
 </CardGroup>

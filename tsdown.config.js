@@ -8,6 +8,7 @@ export default defineConfig({
     'src/bitbucket.ts',
     'src/azure-devops.ts',
     'src/gitea.ts',
+    'src/git-http.ts',
     'src/testing.ts',
   ],
   format: 'esm',
