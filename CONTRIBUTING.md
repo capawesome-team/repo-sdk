@@ -16,7 +16,7 @@ npm run test:watch # run tests in watch mode
 npm run lint       # lint the codebase
 npm run typecheck  # type-check without emitting
 npm run build      # build with tsdown
-npm run format     # format with prettier
+npm run fmt     # format with prettier
 ```
 
 ## Test layout

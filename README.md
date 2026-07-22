@@ -74,7 +74,7 @@ npm install
 | `npm run test:live`  | Gated live provider tests (env vars documented in CONTRIBUTING) |
 | `npm run typecheck`  | Type-check without emitting                                     |
 | `npm run lint`       | Lint the codebase                                               |
-| `npm run format`     | Format with prettier                                            |
+| `npm run fmt`        | Format with prettier                                            |
 
 Docs site:
 
