@@ -3,6 +3,8 @@ import type { ProviderName } from './types.ts';
 
 export type QueryValue = string | number | boolean | string[] | undefined;
 
+const USER_AGENT = 'repo-sdk';
+
 export interface HttpRequestOptions {
   method?: string;
   query?: Record<string, QueryValue>;
@@ -68,6 +70,7 @@ export class HttpClient {
         ...(await this.options.authHeaders({ forceRefresh })),
         ...options.headers,
       };
+      headers['User-Agent'] ??= USER_AGENT;
       if (body !== undefined) {
         headers['Content-Type'] ??= 'application/json';
       }

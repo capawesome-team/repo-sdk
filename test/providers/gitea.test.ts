@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { commitWebUrl, gitea, parseWebhookEvent, verifyWebhook } from '../../src/gitea.ts';
 import { RepoError } from '../../src/errors.ts';
+import { HttpClient } from '../../src/http.ts';
 import { encodeCursor } from '../../src/pagination.ts';
 import { hmacSha256Hex } from '../../src/webhooks/verify.ts';
 import { createFetchStub, type StubHandler } from '../helpers/fetch-stub.ts';
@@ -41,6 +42,22 @@ describe('request headers', () => {
     const { provider, stub } = setup(() => ({ json: repoPayload }));
     await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
     expect(stub.requests[0]!.headers.authorization).toBe(`token ${TOKEN}`);
+  });
+
+  it('defaults the User-Agent to repo-sdk without overriding a caller-supplied value', async () => {
+    const { provider, stub } = setup(() => ({ json: repoPayload }));
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(stub.requests[0]!.headers['user-agent']).toBe('repo-sdk');
+
+    const overriddenStub = createFetchStub(() => ({ json: repoPayload }));
+    const http = new HttpClient({
+      provider: 'gitea',
+      baseUrl: 'https://gitea.example.com/api/v1',
+      fetchImpl: overriddenStub.fetch,
+      authHeaders: () => ({ 'User-Agent': 'custom-agent' }),
+    });
+    await http.json('user');
+    expect(overriddenStub.requests[0]!.headers['user-agent']).toBe('custom-agent');
   });
 });
 
