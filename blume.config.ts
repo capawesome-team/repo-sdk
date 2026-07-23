@@ -49,6 +49,10 @@ export default defineConfig({
       { label: 'Changelog', path: '/changelog', icon: 'history' },
     ],
   },
+  // Derive per-page "Last updated" dates from git history; also emits
+  // <lastmod> in sitemap.xml for crawl optimization. Needs full git history
+  // at build time (fetch-depth: 0 in CI) to be accurate.
+  lastModified: true,
   seo: {
     rss: {
       enabled: true,
