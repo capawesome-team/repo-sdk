@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/capawesome-team/repo-sdk/compare/v0.1.3...v0.1.4) (2026-07-23)
+
+
+### Bug Fixes
+
+* **bitbucket:** adapt to CHANGE-2770 removal of cross-workspace APIs ([d5b3b6e](https://github.com/capawesome-team/repo-sdk/commit/d5b3b6ec236efa723317d8a62de719e4bb6cdadf))
+
 ## [0.1.3](https://github.com/capawesome-team/repo-sdk/compare/v0.1.2...v0.1.3) (2026-07-23)
 
 
