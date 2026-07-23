@@ -381,6 +381,32 @@ describe('GitHub App auth', () => {
     expect(clone.expiresAt).toBeInstanceOf(Date);
     expect(clone.expiresAt!.toISOString()).toBe(expiresAt);
   });
+
+  it('invokes fetch detached from the AppTokenSource instance', async () => {
+    function strictFetch(this: unknown, ...args: Parameters<typeof fetch>): Promise<Response> {
+      if (this !== undefined && this !== globalThis) {
+        throw new TypeError('Illegal invocation: function called with incorrect `this` reference');
+      }
+      const [input] = args;
+      const url = new URL(
+        typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url,
+      );
+      if (url.pathname.endsWith('/access_tokens')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ token: INSTALLATION_TOKEN, expires_at: futureIso(60 * 60 * 1000) }),
+          ),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify(repoPayload)));
+    }
+    const provider = github({
+      auth: { appId: APP_ID, privateKey: pkcs8Pem, installationId: 99 },
+      fetch: strictFetch as typeof fetch,
+    });
+    const installationToken = await provider.getInstallationToken();
+    expect(installationToken.token).toBe(INSTALLATION_TOKEN);
+  });
 });
 
 describe('getAuthenticatedUser under App auth', () => {

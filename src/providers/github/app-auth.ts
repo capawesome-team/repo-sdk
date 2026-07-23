@@ -264,9 +264,10 @@ export class AppTokenSource implements TokenSource {
 
   private async appRequest<T>(path: string, method: string, jwt: string): Promise<T> {
     const url = joinUrl(this.baseUrl, path);
+    const { fetchImpl } = this;
     let response: Response;
     try {
-      response = await this.fetchImpl(url, {
+      response = await fetchImpl(url, {
         method,
         headers: {
           Authorization: `Bearer ${jwt}`,
