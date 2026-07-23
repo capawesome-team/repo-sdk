@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.3](https://github.com/capawesome-team/repo-sdk/compare/v0.1.2...v0.1.3) (2026-07-23)
+
+
+### Features
+
+* add listUserInstallations to the github subpath ([b2cf80d](https://github.com/capawesome-team/repo-sdk/commit/b2cf80dc7197579c50c9a103181f55887c2fe6c8))
+
+
+### Bug Fixes
+
+* **github:** call fetch detached to avoid Illegal invocation on workerd ([b495fdc](https://github.com/capawesome-team/repo-sdk/commit/b495fdce8633fff6d6852e7bdbd85785894e2ebe))
+* **http:** send default repo-sdk User-Agent on all requests ([ed126d0](https://github.com/capawesome-team/repo-sdk/commit/ed126d01144ba5ac5391bebaa33eddef3f629f5f))
+
 ## [0.1.2](https://github.com/capawesome-team/repo-sdk/compare/v0.1.1...v0.1.2) (2026-07-20)
 
 
