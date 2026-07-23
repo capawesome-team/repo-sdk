@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/capawesome-team/repo-sdk/compare/v0.1.4...v0.1.5) (2026-07-23)
+
+
+### Features
+
+* **docs:** git-derived lastModified for sitemap and page stamps ([#7](https://github.com/capawesome-team/repo-sdk/issues/7)) ([d4fc718](https://github.com/capawesome-team/repo-sdk/commit/d4fc71812016bf3606c78067d8383bd07b84e718))
+
 ## [0.1.4](https://github.com/capawesome-team/repo-sdk/compare/v0.1.3...v0.1.4) (2026-07-23)
 
 
