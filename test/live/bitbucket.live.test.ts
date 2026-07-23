@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { describe, expect, it } from 'vitest';
 import { bitbucket } from '../../src/bitbucket.ts';
+import { RepoError } from '../../src/errors.ts';
 import { createClient } from '../../src/index.ts';
 
 const email = process.env.REPO_SDK_LIVE_BITBUCKET_EMAIL;
@@ -12,9 +13,12 @@ describe.skipIf(!email || !apiToken || !repo)('Bitbucket live (read-only)', () =
     provider: bitbucket({ auth: { email: email!, apiToken: apiToken! } }),
   });
 
-  it('lists namespaces', async () => {
-    const page = await client.namespaces.list();
-    expect(page.data.length).toBeGreaterThanOrEqual(1);
+  it('rejects namespace listing as unsupported (Atlassian removed it via CHANGE-2770)', async () => {
+    await expect(client.namespaces.list()).rejects.toMatchObject({
+      code: 'unsupported',
+      provider: 'bitbucket',
+    });
+    await expect(client.namespaces.list()).rejects.toBeInstanceOf(RepoError);
   });
 
   it('gets the configured repository', async () => {

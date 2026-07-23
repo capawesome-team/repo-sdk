@@ -26,7 +26,6 @@ import type {
   GitActor,
   ListBranchesParams,
   ListCommitsParams,
-  ListNamespacesParams,
   ListRepositoriesParams,
   ListTagsParams,
   ListWebhooksParams,
@@ -86,13 +85,6 @@ interface BitbucketEmail {
   email?: string;
   is_primary?: boolean;
   is_confirmed?: boolean;
-}
-
-interface BitbucketWorkspace {
-  uuid: string;
-  slug: string;
-  name: string;
-  links?: { avatar?: { href?: string } };
 }
 
 interface BitbucketCloneLink {
@@ -166,17 +158,6 @@ function nextCursor(body: BitbucketList<unknown>): string | undefined {
 
 function bbqlNameQuery(text: string): string {
   return `name ~ "${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
-}
-
-function toNamespace(workspace: BitbucketWorkspace): Namespace {
-  return {
-    id: workspace.uuid,
-    slug: workspace.slug,
-    name: workspace.name,
-    kind: 'workspace',
-    avatarUrl: workspace.links?.avatar?.href,
-    raw: workspace,
-  };
 }
 
 function toRepository(repo: BitbucketRepo): Repository {
@@ -284,6 +265,13 @@ function mapError(status: number, body: unknown): ProviderErrorInfo {
   ) {
     message = body.error.message;
   }
+  // Atlassian permanently removed several cross-workspace/user-scoped endpoints
+  // (CHANGE-2770), which now respond with 410. Surface these as `unsupported`
+  // rather than `not_found` so callers can tell a removed API apart from a
+  // missing resource.
+  if (status === 410 || (message !== undefined && message.includes('CHANGE-2770'))) {
+    return { code: 'unsupported', message: 'Bitbucket Cloud removed this API (CHANGE-2770).' };
+  }
   const code: RepoErrorCode | undefined = undefined;
   return { code, message };
 }
@@ -364,20 +352,13 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       };
     },
 
-    async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
-      if (params.cursor) {
-        const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
-        assertSameOriginUrl('bitbucket', BASE_URL, url);
-        const { data } = await http.json<BitbucketList<BitbucketWorkspace>>(url, {
-          signal: params.signal,
-        });
-        return { data: (data.values ?? []).map(toNamespace), cursor: nextCursor(data) };
-      }
-      const { data } = await http.json<BitbucketList<BitbucketWorkspace>>('/workspaces', {
-        query: { pagelen: clampPerPage(params.limit) },
-        signal: params.signal,
-      });
-      return { data: (data.values ?? []).map(toNamespace), cursor: nextCursor(data) };
+    // Atlassian removed workspace enumeration (CHANGE-2770) with no replacement,
+    // so this can no longer be implemented — callers must know their workspace slug.
+    async listNamespaces(): Promise<Page<Namespace>> {
+      throw new RepoError(
+        'Bitbucket Cloud removed workspace enumeration (CHANGE-2770); query repositories with an explicit workspace/namespace instead.',
+        { code: 'unsupported', provider: 'bitbucket' },
+      );
     },
 
     async listRepositories(params: ListRepositoriesParams): Promise<Page<Repository>> {
@@ -389,17 +370,25 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         });
         return { data: (data.values ?? []).map(toRepository), cursor: nextCursor(data) };
       }
-      const path = params.namespace
-        ? `/repositories/${encodeURIComponent(params.namespace)}`
-        : '/repositories';
-      const { data } = await http.json<BitbucketList<BitbucketRepo>>(path, {
-        query: {
-          role: params.owned ? 'owner' : 'member',
-          q: params.query !== undefined ? bbqlNameQuery(params.query) : undefined,
-          pagelen: clampPerPage(params.limit),
+      // Atlassian removed cross-workspace repository listing (CHANGE-2770), so a
+      // namespace is now required — the bare `/repositories` endpoint returns 410.
+      if (params.namespace === undefined) {
+        throw new RepoError(
+          'Bitbucket Cloud removed cross-workspace repository listing (CHANGE-2770); pass a namespace (workspace slug) to list repositories.',
+          { code: 'unsupported', provider: 'bitbucket' },
+        );
+      }
+      const { data } = await http.json<BitbucketList<BitbucketRepo>>(
+        `/repositories/${encodeURIComponent(params.namespace)}`,
+        {
+          query: {
+            role: params.owned ? 'owner' : 'member',
+            q: params.query !== undefined ? bbqlNameQuery(params.query) : undefined,
+            pagelen: clampPerPage(params.limit),
+          },
+          signal: params.signal,
         },
-        signal: params.signal,
-      });
+      );
       return { data: (data.values ?? []).map(toRepository), cursor: nextCursor(data) };
     },
 

@@ -60,46 +60,9 @@ describe('request headers', () => {
 });
 
 describe('listNamespaces', () => {
-  it('maps workspaces and round-trips the next-URL cursor', async () => {
-    const { provider } = setup((request) => {
-      const url = new URL(request.url);
-      if (url.searchParams.get('page') === '2') {
-        return { json: { values: [{ uuid: '{ws2}', slug: 'team2', name: 'Team Two' }] } };
-      }
-      return {
-        json: {
-          values: [
-            {
-              uuid: '{ws1}',
-              slug: 'team1',
-              name: 'Team One',
-              links: { avatar: { href: 'https://avatars.example/ws1' } },
-            },
-          ],
-          next: 'https://api.bitbucket.org/2.0/workspaces?page=2',
-        },
-      };
-    });
-
-    const first = await provider.listNamespaces({});
-    expect(first.data[0]).toMatchObject({
-      avatarUrl: 'https://avatars.example/ws1',
-      id: '{ws1}',
-      slug: 'team1',
-      name: 'Team One',
-      kind: 'workspace',
-    });
-    expect(first.cursor).toBeDefined();
-
-    const second = await provider.listNamespaces({ cursor: first.cursor });
-    expect(second.data[0]?.slug).toBe('team2');
-    expect(second.cursor).toBeUndefined();
-  });
-
-  it('rejects a forged cross-origin cursor without fetching the attacker host', async () => {
+  it('rejects with unsupported because Atlassian removed workspace enumeration (CHANGE-2770)', async () => {
     const { provider, stub } = setup(() => ({ json: { values: [] } }));
-    const cursor = encodeCursor('bitbucket', { url: 'https://attacker.example/x' });
-    await expectRepoError(provider.listNamespaces({ cursor }), 'validation');
+    await expectRepoError(provider.listNamespaces({}), 'unsupported');
     expect(stub.requests).toHaveLength(0);
   });
 });
@@ -113,11 +76,11 @@ describe('listRepositories', () => {
     expect(url.searchParams.get('role')).toBe('owner');
   });
 
-  it('uses role=member and the root path when no namespace or owned flag', async () => {
+  it('uses role=member and the namespace path when no owned flag is set', async () => {
     const { provider, stub } = setup(() => ({ json: { values: [repoPayload] } }));
-    const page = await provider.listRepositories({});
+    const page = await provider.listRepositories({ namespace: 'capawesome-team' });
     const url = new URL(stub.requests[0]!.url);
-    expect(url.pathname).toBe('/2.0/repositories');
+    expect(url.pathname).toBe('/2.0/repositories/capawesome-team');
     expect(url.searchParams.get('role')).toBe('member');
     expect(page.data[0]).toMatchObject({
       id: '{repo-uuid}',
@@ -134,9 +97,16 @@ describe('listRepositories', () => {
     });
   });
 
+  it('rejects with unsupported when no namespace is given (CHANGE-2770 removed cross-workspace listing)', async () => {
+    const { provider, stub } = setup(() => ({ json: { values: [repoPayload] } }));
+    await expectRepoError(provider.listRepositories({}), 'unsupported');
+    await expectRepoError(provider.listRepositories({ owned: true }), 'unsupported');
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('builds a BBQL query and escapes embedded double quotes', async () => {
     const { provider, stub } = setup(() => ({ json: { values: [repoPayload] } }));
-    await provider.listRepositories({ query: 'my "sdk"' });
+    await provider.listRepositories({ namespace: 'capawesome-team', query: 'my "sdk"' });
     expect(new URL(stub.requests[0]!.url).searchParams.get('q')).toBe('name ~ "my \\"sdk\\""');
   });
 });
@@ -605,6 +575,24 @@ describe('error mapping', () => {
       expect(error).toBeInstanceOf(RepoError);
       expect((error as RepoError).code).toBe('not_found');
       expect((error as RepoError).message).toBe('Repository not found');
+    }
+  });
+
+  it('maps a 410 CHANGE-2770 removal to unsupported with a clearer message', async () => {
+    const { provider } = setup(() => ({
+      status: 410,
+      json: {
+        type: 'error',
+        error: { message: 'CHANGE-2770 - Functionality has been deprecated' },
+      },
+    }));
+    try {
+      await provider.getRepository({ repo: 'o/r' });
+      expect.unreachable('expected RepoError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RepoError);
+      expect((error as RepoError).code).toBe('unsupported');
+      expect((error as RepoError).message).toBe('Bitbucket Cloud removed this API (CHANGE-2770).');
     }
   });
 });
