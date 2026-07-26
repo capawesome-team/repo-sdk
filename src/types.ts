@@ -48,8 +48,8 @@ export interface Repository {
 }
 
 export interface CloneUrl {
+  /** Always carries the resolved credential embedded in the URL. */
   url: string;
-  headers?: Record<string, string>;
   expiresAt?: Date;
 }
 

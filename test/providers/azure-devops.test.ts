@@ -559,7 +559,6 @@ describe('getCloneUrl', () => {
     const { provider } = setup(() => ({ json: {} }));
     const clone = await provider.getCloneUrl({ repo: 'core/repo-sdk' });
     expect(clone.url).toBe(`https://pat:${PAT}@dev.azure.com/contoso/core/_git/repo-sdk`);
-    expect(clone.headers).toBeUndefined();
     expect(clone.expiresAt).toBeUndefined();
   });
 
@@ -574,10 +573,9 @@ describe('getCloneUrl', () => {
     expect(clone.url).toBe(
       'https://oauth2:oauth-access-token@dev.azure.com/contoso/core/_git/repo-sdk',
     );
-    expect(clone.headers).toBeUndefined();
   });
 
-  it('returns Entra tokens via headers instead of embedding them', async () => {
+  it('embeds Entra tokens from the tokenProvider with the oauth2 username', async () => {
     const stub = createFetchStub(() => ({ json: {} }));
     const provider = azureDevOps({
       organization: ORG,
@@ -585,8 +583,7 @@ describe('getCloneUrl', () => {
       fetch: stub.fetch,
     });
     const clone = await provider.getCloneUrl({ repo: 'core/repo-sdk' });
-    expect(clone.url).toBe('https://dev.azure.com/contoso/core/_git/repo-sdk');
-    expect(clone.headers).toEqual({ Authorization: 'Bearer entra-token' });
+    expect(clone.url).toBe('https://oauth2:entra-token@dev.azure.com/contoso/core/_git/repo-sdk');
   });
 });
 

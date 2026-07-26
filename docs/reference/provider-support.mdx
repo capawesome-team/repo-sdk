@@ -27,7 +27,7 @@ identity, ref search, webhook events and verification, archive formats, and `use
 | Commit filters (`since` / `until` / `author`) | server-side | server-side     | client-side per page | server-side           | client-side `author`  | — (no commit APIs)            |
 | Namespace `avatarUrl`          | ✓                    | ✓                    | ✓                    | ✗                     | ✓                     | — (no namespaces)               |
 | Archive download               | ✓                    | ✓                    | ✓ (API token auth only) | ✓                  | ✓                     | ✗                               |
-| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded / Entra headers) | ✓ (embedded)   | ✓ (embedded)                    |
+| Clone URL                      | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)         | ✓ (embedded)          | ✓ (embedded)          | ✓ (embedded)                    |
 | Server-side repo pagination    | ✓                    | ✓                    | ✓                    | ✗ (single response)   | ✓                     | — (no repo listing)             |
 
 ## Per-provider caveats
@@ -80,7 +80,6 @@ identity, ref search, webhook events and verification, archive formats, and `use
     - Archive downloads are **zip only**.
     - Webhooks: `push` and `tag_push` are delivered by one `git.push` subscription, so `webhooks.create`
       requires **both** together. No `release` event.
-    - Entra auth returns clone credentials in `headers` instead of embedding them in the URL.
     - The repositories endpoint returns everything in **one response** — there's no server-side cursor, so
       `limit` is honored client-side.
     - `listOrganizations` is a standalone helper (organizations live outside the org-pinned provider).

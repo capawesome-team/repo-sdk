@@ -77,8 +77,9 @@ azureDevOps({
 />
 
 :::note
-With Entra auth, `repos.getCloneUrl` returns the credential in `headers` (a `Bearer` `Authorization`
-header) rather than embedded in the URL — see [Downloading code](/docs/guides/downloading-code).
+With Entra auth, `repos.getCloneUrl` embeds the minted token in the URL with the `oauth2` username.
+Entra tokens are short-lived, so fetch the clone URL just before cloning — see
+[Downloading code](/docs/guides/downloading-code).
 :::
 
 ## Scopes

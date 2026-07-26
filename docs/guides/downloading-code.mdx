@@ -59,15 +59,14 @@ token auth — see [Bitbucket authentication](/docs/authentication/bitbucket).
 
 <TypeTable
   type={{
-    url: { type: 'string', description: 'The clone URL. For most providers it embeds the credential.' },
-    headers: { type: 'Record<string, string>', required: false, description: 'Auth headers to pass instead of embedding — used by Azure DevOps Entra auth.' },
+    url: { type: 'string', description: 'The clone URL with the resolved credential embedded.' },
     expiresAt: { type: 'Date', required: false, description: 'When the embedded credential expires (e.g. GitHub App tokens, ~1h).' },
   }}
 />
 
 ```ts
 const clone = await client.repos.getCloneUrl({ repo: 'capawesome-team/repo-sdk' });
-// clone: { url, headers?, expiresAt? }
+// clone: { url, expiresAt? }
 ```
 
 :::warning
@@ -82,16 +81,10 @@ Unlike error messages, this value is a credential by design and is not redacted.
 
 ### Azure DevOps with Entra auth
 
-With an OAuth `accessToken`, the token is embedded in the URL with the `oauth2` username
-(`https://oauth2:<token>@dev.azure.com/...`). With an Entra ID `tokenProvider`, the credential is
-returned in `headers` instead of being embedded in the URL. Pass it to git via `http.extraheader`:
-
-```ts
-const clone = await client.repos.getCloneUrl({ repo: 'Payments/checkout' });
-// clone.url has no credential; clone.headers = { Authorization: 'Bearer …' }
-
-// git -c http.extraheader="Authorization: Bearer …" clone <clone.url>
-```
+Both an OAuth `accessToken` and an Entra ID `tokenProvider` embed the token in the URL with the
+`oauth2` username (`https://oauth2:<token>@dev.azure.com/...`). Entra tokens are short-lived
+(typically ~1 hour) and the URL carries no `expiresAt`, so fetch the clone URL just before cloning
+rather than storing it.
 
 <Card title="Next: Managing webhooks" icon="webhook" href="/docs/guides/webhooks-managing">
   Register and manage repository webhooks.

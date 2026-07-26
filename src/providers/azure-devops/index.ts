@@ -596,7 +596,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         };
       }
       const token = await auth.tokenProvider({ forceRefresh: false });
-      return { url: `https://${host}/${repoPath}`, headers: { Authorization: `Bearer ${token}` } };
+      return { url: `https://oauth2:${encodeURIComponent(token)}@${host}/${repoPath}` };
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {
