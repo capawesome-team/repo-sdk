@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/capawesome-team/repo-sdk/compare/v0.1.4...v0.2.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **azure-devops:** CloneUrl no longer has a headers field; getCloneUrl always embeds the credential in the URL for every provider.
+
+### Features
+
+* **docs:** git-derived lastModified for sitemap and page stamps ([#7](https://github.com/capawesome-team/repo-sdk/issues/7)) ([d4fc718](https://github.com/capawesome-team/repo-sdk/commit/d4fc71812016bf3606c78067d8383bd07b84e718))
+
+
+### Bug Fixes
+
+* **azure-devops:** embed tokenProvider tokens in the clone URL ([6a47808](https://github.com/capawesome-team/repo-sdk/commit/6a47808a4a69185941441e7e294b433684ccc364))
+
 ## [0.1.4](https://github.com/capawesome-team/repo-sdk/compare/v0.1.3...v0.1.4) (2026-07-23)
 
 
