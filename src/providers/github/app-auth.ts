@@ -24,6 +24,11 @@ export interface TokenWithExpiry {
   expiresAt?: Date;
 }
 
+export interface CreateAppJwtOptions {
+  appId: string | number;
+  privateKey: string;
+}
+
 export interface AppTokenSourceOptions {
   appId: string | number;
   privateKey: string;
@@ -111,10 +116,26 @@ function base64UrlJson(value: unknown): string {
   return bytesToBase64Url(encoder.encode(JSON.stringify(value)));
 }
 
-async function createJwt(key: CryptoKey, appId: string): Promise<string> {
+/**
+ * Mints a short-lived RS256 JWT signed with the app private key — the
+ * credential for app-level endpoints (`/app/…`), which installation and user
+ * tokens cannot access. Internal to the package: not exported from the
+ * `repo-sdk/github` barrel.
+ */
+export async function createAppJwt(options: CreateAppJwtOptions): Promise<string> {
+  let key: CryptoKey;
+  try {
+    key = await importPrivateKey(options.privateKey);
+  } catch (error) {
+    throw new RepoError('GitHub App private key is not a valid PEM-encoded RSA private key', {
+      provider: 'github',
+      code: 'validation',
+      cause: error,
+    });
+  }
   const now = Math.floor(Date.now() / 1000);
   const header = base64UrlJson({ alg: 'RS256', typ: 'JWT' });
-  const payload = base64UrlJson({ iat: now - 60, exp: now + 540, iss: appId });
+  const payload = base64UrlJson({ iat: now - 60, exp: now + 540, iss: String(options.appId) });
   const signingInput = `${header}.${payload}`;
   const signature = await crypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
@@ -128,8 +149,9 @@ async function createJwt(key: CryptoKey, appId: string): Promise<string> {
  * Mints and caches GitHub App installation access tokens. A short-lived RS256
  * JWT (signed with the app private key) authenticates the app-level calls that
  * resolve the installation and mint installation tokens; the installation token
- * is cached and refreshed once it nears expiry. A fresh JWT is minted per token
- * refresh (cheap, and refreshes are rare given the ~1h token TTL).
+ * is cached and refreshed once it nears expiry. A fresh key import and JWT go
+ * into every token refresh (cheap, and refreshes are rare given the ~1h token
+ * TTL).
  */
 export class AppTokenSource implements TokenSource {
   readonly kind = 'app';
@@ -141,7 +163,6 @@ export class AppTokenSource implements TokenSource {
   private readonly userAgent: string;
   private installationId?: string;
   private readonly owner?: string;
-  private keyPromise?: Promise<CryptoKey>;
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
@@ -195,7 +216,7 @@ export class AppTokenSource implements TokenSource {
   }
 
   private async mintInstallationToken(): Promise<InstallationToken> {
-    const jwt = await this.createAppJwt();
+    const jwt = await createAppJwt({ appId: this.appId, privateKey: this.privateKey });
     const installationId = await this.resolveInstallationId(jwt);
     const data = await this.appRequest<AccessTokenResponse>(
       `/app/installations/${installationId}/access_tokens`,
@@ -253,13 +274,6 @@ export class AppTokenSource implements TokenSource {
       );
     }
     return String(installations[0]!.id);
-  }
-
-  private createAppJwt(): Promise<string> {
-    if (!this.keyPromise) {
-      this.keyPromise = importPrivateKey(this.privateKey);
-    }
-    return this.keyPromise.then((key) => createJwt(key, this.appId));
   }
 
   private async appRequest<T>(path: string, method: string, jwt: string): Promise<T> {
