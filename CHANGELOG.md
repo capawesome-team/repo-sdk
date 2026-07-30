@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/capawesome-team/repo-sdk/compare/v0.2.0...v0.2.1) (2026-07-30)
+
+
+### Features
+
+* **github:** add `listInstallationRequests` standalone export ([#9](https://github.com/capawesome-team/repo-sdk/issues/9)) ([8a1b3f7](https://github.com/capawesome-team/repo-sdk/commit/8a1b3f7f3a20d117dea6bb97b45da2f890e6f93c))
+
 ## [0.2.0](https://github.com/capawesome-team/repo-sdk/compare/v0.1.4...v0.2.0) (2026-07-26)
 
 
