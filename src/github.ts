@@ -7,10 +7,15 @@ export type {
   GitHubRepoProvider,
   GitHubTokenAuth,
 } from './providers/github/index.ts';
-export { listUserInstallations } from './providers/github/installations.ts';
+export {
+  listInstallationRequests,
+  listUserInstallations,
+} from './providers/github/installations.ts';
 export type {
   GitHubInstallationAccount,
+  GitHubInstallationRequest,
   GitHubUserInstallation,
+  ListInstallationRequestsParams,
   ListUserInstallationsParams,
 } from './providers/github/installations.ts';
 export { parseWebhookEvent, verifyWebhook } from './providers/github/webhooks.ts';

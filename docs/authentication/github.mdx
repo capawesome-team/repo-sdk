@@ -148,6 +148,37 @@ avatar) plus the raw payload. Failures throw `RepoError` like every other SDK ca
 verifying, in an installation callback, that the logged-in user actually has access to the
 `installation_id` the callback claims.
 
+### Listing pending installation requests
+
+`listInstallationRequests` is a standalone export too, but authenticates with an **app JWT** minted
+from your app id and private key — the credential for app-level endpoints. It lists the installations
+an organization owner has yet to approve (`GET /app/installation-requests`) as a cursor-paginated
+page:
+
+```ts
+import { listInstallationRequests } from 'repo-sdk/github';
+
+const page = await listInstallationRequests({ appId, privateKey });
+for (const request of page.data) {
+  console.log(request.account?.login, request.requester?.login, request.createdAt);
+}
+```
+
+<TypeTable
+  type={{
+    appId: { type: 'string | number', description: 'The GitHub App id.' },
+    privateKey: { type: 'string', description: 'PEM-encoded private key of the app.' },
+    baseUrl: { type: 'string', required: false, description: 'GHES API root (/api/v3); defaults to https://api.github.com.' },
+    fetch: { type: 'typeof fetch', required: false, description: 'Custom fetch implementation.' },
+    limit: { type: 'number', required: false, description: 'Page size (max 100).' },
+    cursor: { type: 'string', required: false, description: 'Cursor from the previous page.' },
+    signal: { type: 'AbortSignal', required: false, description: 'Abort signal for the request.' },
+  }}
+/>
+
+Each request carries a normalized `id`, the `account` it targets, the `requester` who asked for it,
+the `createdAt` timestamp, and the raw payload.
+
 ## Scopes
 
 Pick the token scope for what you'll do.
