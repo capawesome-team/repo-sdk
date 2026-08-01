@@ -115,6 +115,8 @@ If you need a clone URL instead of an archive, for example to run `git clone` wi
 
 Writing five archive integrations by hand means five URL templates, five auth schemes, five format quirks, and five sets of header parsing to recover a filename. A unified API collapses that into one method with one shape. You branch on a single `archiveFormats` capability instead of memorizing which host serves `tar.gz`, and you get the same streaming `Archive` back regardless of provider. Because the SDK is zero-dependency and built on Web standards, that single code path runs unchanged from a Node build server to an edge function.
 
+Archives are only one place the five APIs pull apart. Authentication headers, pagination, and webhook verification diverge just as much — see [how the GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea REST APIs differ](/blog/github-gitlab-bitbucket-azure-devops-api-differences) for the wider comparison.
+
 ## FAQ
 
 ### Can I download an archive at a specific commit?

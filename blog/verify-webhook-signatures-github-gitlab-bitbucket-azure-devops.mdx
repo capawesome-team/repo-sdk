@@ -32,6 +32,8 @@ The five providers agree on the goal and disagree on the mechanism. Here is the 
 
 GitHub computes an HMAC-SHA256 over the exact bytes of the request body using your secret as the key, then sends it as `sha256=<hex>` in `x-hub-signature-256`. Bitbucket uses the same HMAC scheme but with the older `x-hub-signature` header and no `-256` suffix. Gitea also signs with HMAC-SHA256, but sends the digest as **bare hex** in `x-gitea-signature` — no `sha256=` prefix — which trips up verification code ported from GitHub; Forgejo sends the same header, so one implementation covers both. GitLab takes a simpler path: it echoes your shared secret back verbatim in the `x-gitlab-token` header, so verification is a direct comparison rather than a hash. Azure DevOps does not sign the body at all; instead you register the hook with a username and password, and it sends them on every delivery in the standard `Authorization: Basic` header.
 
+Gitea's bare-hex encoding is the one that most often breaks code ported straight from GitHub; [How to Verify Gitea and Forgejo Webhook Signatures](/blog/verify-gitea-forgejo-webhook-signatures) covers that case on its own.
+
 You can read each provider's declared verification method at runtime from `client.capabilities.webhookVerification`, which is `hmac-sha256`, `shared-token`, or `basic-auth`. See the [capability matrix](/docs/reference/capability-matrix) for the full per-provider table.
 
 ## How do you verify a webhook with repo-sdk?

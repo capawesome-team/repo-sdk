@@ -96,7 +96,7 @@ console.log(head.sha, head.message);
 
 Webhooks diverge in both events and verification. GitHub, GitLab, and Gitea can emit push, tag-push, and release events; Bitbucket and Azure DevOps do not model releases at all. Azure DevOps goes further and delivers push and tag-push through a single `git.push` subscription, so you cannot subscribe to one without the other.
 
-Verification is the part that bites in production. GitHub, Bitbucket, and Gitea sign deliveries with HMAC-SHA256 — though Gitea sends the digest as bare hex in `X-Gitea-Signature`, without GitHub's `sha256=` prefix. GitLab uses a shared secret token compared against a header. Azure DevOps uses HTTP Basic auth on the receiving endpoint. Five events models, three verification schemes, and at least two signature encodings.
+Verification is the part that bites in production. GitHub, Bitbucket, and Gitea sign deliveries with HMAC-SHA256 — though Gitea sends the digest as bare hex in `X-Gitea-Signature`, without GitHub's `sha256=` prefix. GitLab uses a shared secret token compared against a header. Azure DevOps uses HTTP Basic auth on the receiving endpoint. Five events models, three verification schemes, and at least two signature encodings. Each one, with working code, is covered in [How to Verify Webhook Signatures from GitHub, GitLab, Bitbucket, and Azure DevOps](/blog/verify-webhook-signatures-github-gitlab-bitbucket-azure-devops).
 
 repo-sdk ships `verifyWebhook` and `parseWebhookEvent` per provider as standalone exports that take a Web-standard `Request`, so they drop into Next.js route handlers, Hono, and workers without a client.
 
@@ -136,6 +136,8 @@ if (client.capabilities.webhookEvents.includes('release')) {
   // Only GitHub, GitLab, and Gitea reach here
 }
 ```
+
+If you are on Octokit today and weighing whether a unified layer is worth the swap, [Octokit Alternatives for Multi-Provider Git Integrations](/blog/octokit-alternatives-multi-provider) compares that path against maintaining one SDK per provider.
 
 ## FAQ
 

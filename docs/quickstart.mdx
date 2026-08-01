@@ -143,6 +143,10 @@ export async function POST(request: Request): Promise<Response> {
 }
 ```
 
+A single endpoint can also serve several providers at once, and each provider verifies differently —
+see [Receiving webhooks](/docs/guides/webhooks-receiving) for `detectWebhookProvider` and the
+per-provider verification schemes.
+
 ## Next steps
 
 <CardGroup cols={2}>

@@ -41,6 +41,11 @@ the provider you use. Each provider subpath also exports the webhook helpers (`v
 | `repo-sdk/git-http`       | `gitHttp` (no webhook helpers — git-http remotes emit no webhooks)      |
 | `repo-sdk/testing`        | `createInMemoryProvider`                                                 |
 
+:::note
+`repo-sdk/testing` is meant for your test suite only — it provides a seedable in-memory provider so you
+don't have to stub `fetch`. See [Testing](/docs/testing).
+:::
+
 ## Import the client and a provider
 
 ```ts

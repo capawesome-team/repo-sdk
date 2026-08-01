@@ -9,6 +9,10 @@ sidebar:
 a normalized contract, and a **single fat client** layers all the cross-provider behavior on top —
 validation, capability gating, retries, and the `listAll` iterators.
 
+If you're weighing this shape against running one SDK per provider,
+[Octokit alternatives for multi-provider integrations](/blog/octokit-alternatives-multi-provider) covers
+the trade-offs — including where a dedicated SDK is still the better call.
+
 ## createClient
 
 `createClient` takes a provider and returns a `RepoClient` with grouped namespaces:

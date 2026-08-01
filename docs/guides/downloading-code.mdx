@@ -47,6 +47,9 @@ const file = createWriteStream(archive.filename ?? 'archive.tar.gz');
 await archive.stream.pipeTo(Writable.toWeb(file));
 ```
 
+For the per-provider format rules and when buffering beats streaming, see
+[downloading repository archives programmatically](/blog/download-repository-archives-programmatically).
+
 :::warning
 **Azure DevOps only supports `zip`** (`capabilities.archiveFormats` is `['zip']`). Requesting `tar.gz`
 throws a `RepoError` with `code: 'unsupported'`. Bitbucket archive downloads additionally require API

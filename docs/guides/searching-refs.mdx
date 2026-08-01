@@ -27,6 +27,10 @@ Matching is by **prefix** on the ref name. Results are ordered branches → tags
 `limit` (default 20). Requires the `refSearch` capability — all current providers support it, but gate
 on `client.capabilities.refSearch` if you accept arbitrary providers.
 
+A match carries only the ref's `name` and `sha`. Once the user picks one, fetch the full normalized
+model with [`branches.get`](/docs/guides/branches) or [`tags.get`](/docs/guides/tags) — the latter also
+returns the tag `message`, `date`, and `isAnnotated`.
+
 ## Parameters
 
 <TypeTable

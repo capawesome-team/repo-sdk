@@ -47,7 +47,10 @@ lazy, you can `break` out early and no further pages are fetched.
 
 Treat the `cursor` as a **black box**. It is not a page number or a URL you should parse, build, or
 persist across provider changes — its contents are an implementation detail (it may encode a provider
-URL, an offset, or a continuation token, depending on the provider).
+URL, an offset, or a continuation token, depending on the provider). The native paging styles behind it
+differ widely — `Link` headers, offset and keyset paging, `next` URL fields, and one provider that
+doesn't paginate repositories at all — and are compared in
+[how the five REST APIs differ](/blog/github-gitlab-bitbucket-azure-devops-api-differences).
 
 :::warning
 Only pass a cursor back to the **same list call on the same client** that produced it. Don't hand-craft
@@ -64,6 +67,11 @@ it. A cursor that resolves to a different origin is rejected rather than fetched
 This means cursors are safe to round-trip through your own storage or query strings: a tampered cursor
 that tries to change the request's origin will not be honored.
 
-<Card title="Next: Errors" icon="shield-alert" href="/docs/concepts/errors">
-  The RepoError code union, retries, and secret redaction.
-</Card>
+<CardGroup cols={2}>
+  <Card title="Next: Errors" icon="shield-alert" href="/docs/concepts/errors">
+    The RepoError code union, retries, and secret redaction.
+  </Card>
+  <Card title="Working with commits" icon="git-commit" href="/docs/guides/commits">
+    Pagination in practice — page or iterate a repository's history.
+  </Card>
+</CardGroup>

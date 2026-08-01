@@ -24,7 +24,7 @@ Each provider has its own ecosystem, and the SDKs do not share a shape:
 - **Azure DevOps** — Microsoft's `azure-devops-node-api` exposes the Azure DevOps services.
 - **Gitea** — the community `gitea-js` client wraps Gitea's `/api/v1` surface.
 
-Each is a reasonable choice on its own. The difficulty is not any single library — it is that they were designed independently, so covering five providers means learning and maintaining five unrelated clients.
+Each is a reasonable choice on its own. The difficulty is not any single library — it is that they were designed independently, so covering five providers means learning and maintaining five unrelated clients. The APIs underneath them diverge just as much; [GitHub vs GitLab vs Bitbucket vs Azure DevOps: How Their REST APIs Differ](/blog/github-gitlab-bitbucket-azure-devops-api-differences) walks through where.
 
 ## What does maintaining five SDKs actually cost?
 

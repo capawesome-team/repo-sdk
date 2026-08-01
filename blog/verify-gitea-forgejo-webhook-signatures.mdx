@@ -80,7 +80,7 @@ Yes. Forgejo signs deliveries identically and keeps sending the `X-Gitea-*` head
 
 ## What does the parsed event look like?
 
-After verification, `parseWebhookEvent` normalizes the payload: `type` is `push`, `tag_push` (covering both tag pushes and Gitea's `create`/`delete` tag events), `release`, or `unknown`; `repo`, `ref`, and `commits` come from the payload; `deliveryId` carries `X-Gitea-Delivery`; and a push that deletes its branch reports `headCommitSha: undefined` instead of the all-zero SHA. The untouched payload stays available on `raw`. See [receiving webhooks](/docs/guides/webhooks-receiving) for the full workflow.
+After verification, `parseWebhookEvent` normalizes the payload: `type` is `push`, `tag_push` (covering both tag pushes and Gitea's `create`/`delete` tag events), `release`, or `unknown`; `repo`, `ref`, and `commits` come from the payload; `deliveryId` carries `X-Gitea-Delivery`; and a push that deletes its branch reports `headCommitSha: undefined` instead of the all-zero SHA. The untouched payload stays available on `raw`. See [receiving webhooks](/docs/guides/webhooks-receiving) for the full workflow, and [How to Use the Gitea API from TypeScript](/blog/gitea-api-typescript) for the rest of the API surface — token auth, pagination, commits, tags, and archives.
 
 ## FAQ
 

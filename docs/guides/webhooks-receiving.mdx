@@ -102,6 +102,11 @@ returns `false` (never throws) on a missing or mismatched signature, and compari
 | Azure DevOps | basic auth   | `Authorization: Basic` header (hook registered with the secret) |
 | Gitea        | HMAC-SHA256  | `x-gitea-signature` over the raw body (bare hex, no `sha256=` prefix) |
 
+Each scheme is walked through in detail — including the raw Web Crypto equivalent — in
+[verifying webhook signatures across providers](/blog/verify-webhook-signatures-github-gitlab-bitbucket-azure-devops).
+Gitea's bare-hex header is the one most often ported wrong from GitHub and has
+[its own walkthrough](/blog/verify-gitea-forgejo-webhook-signatures).
+
 :::note
 git-http remotes emit no webhooks — `repo-sdk/git-http` exports no `verifyWebhook` / `parseWebhookEvent`.
 Poll refs to detect changes instead.
@@ -144,6 +149,10 @@ compared against that header in constant time.
 `parseWebhookEvent` does not verify — call `verifyWebhook` first and reject invalid deliveries before
 acting on the parsed event.
 :::
+
+`ref` comes back fully qualified (`refs/heads/main`, `refs/tags/v1.0.0`) and is accepted as-is by
+`refs.resolve`, so a delivery can be turned into a commit in one call — see
+[Resolving refs](/docs/guides/resolving-refs).
 
 <Card title="Reference: Provider support" icon="table" href="/docs/reference/provider-support">
   The full feature-by-provider matrix, including webhooks.
