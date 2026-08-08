@@ -73,115 +73,25 @@ const features = [
   },
 ];
 
-const providerTabs = [
-  {
-    id: 'github',
-    label: 'GitHub',
-    code: `import { createClient } from 'repo-sdk';
+const providers = ['GitHub', 'GitLab', 'Bitbucket', 'Azure DevOps', 'Gitea'];
+
+const heroSwapCode = `import { createClient } from 'repo-sdk';
 import { github } from 'repo-sdk/github';
 
 const client = createClient({
+  // Swap in gitlab(), bitbucket(), azureDevOps(), gitea(), or gitHttp() —
+  // every call below keeps the same normalized shape.
   provider: github({ auth: { token: process.env.GITHUB_TOKEN! } }),
 });
 
-// Resolve a ref (branch, tag, or SHA) to a single commit.
 const head = await client.commits.get({
   repo: 'capawesome-team/repo-sdk',
   ref: 'main',
 });
-console.log(head.sha, head.message);`,
-  },
-  {
-    id: 'gitlab',
-    label: 'GitLab',
-    code: `import { createClient } from 'repo-sdk';
-import { gitlab } from 'repo-sdk/gitlab';
 
-const client = createClient({
-  provider: gitlab({ auth: { token: process.env.GITLAB_TOKEN! } }),
-});
-
-// Same call, same shape — only the provider changed.
-const head = await client.commits.get({
-  repo: 'my-group/my-project',
-  ref: 'main',
-});
-console.log(head.sha, head.message);`,
-  },
-  {
-    id: 'bitbucket',
-    label: 'Bitbucket',
-    code: `import { createClient } from 'repo-sdk';
-import { bitbucket } from 'repo-sdk/bitbucket';
-
-const client = createClient({
-  provider: bitbucket({
-    auth: {
-      email: process.env.BITBUCKET_EMAIL!,
-      apiToken: process.env.BITBUCKET_API_TOKEN!,
-    },
-  }),
-});
-
-const head = await client.commits.get({
-  repo: 'my-workspace/my-repo',
-  ref: 'main',
-});`,
-  },
-  {
-    id: 'azure-devops',
-    label: 'Azure DevOps',
-    code: `import { createClient } from 'repo-sdk';
-import { azureDevOps } from 'repo-sdk/azure-devops';
-
-const client = createClient({
-  provider: azureDevOps({
-    organization: 'my-org',
-    auth: { pat: process.env.AZURE_PAT! },
-  }),
-});
-
-const head = await client.commits.get({
-  repo: 'my-project/my-repo',
-  ref: 'main',
-});`,
-  },
-  {
-    id: 'gitea',
-    label: 'Gitea',
-    code: `import { createClient } from 'repo-sdk';
-import { gitea } from 'repo-sdk/gitea';
-
-const client = createClient({
-  provider: gitea({
-    auth: { token: process.env.GITEA_TOKEN! },
-    baseUrl: 'https://gitea.example.com/api/v1',
-  }),
-});
-
-const head = await client.commits.get({
-  repo: 'my-owner/my-repo',
-  ref: 'main',
-});`,
-  },
-  {
-    id: 'git-http',
-    label: 'Git HTTP',
-    code: `import { createClient } from 'repo-sdk';
-import { gitHttp } from 'repo-sdk/git-http';
-
-// Any plain git remote over smart-HTTP — the repo is the URL.
-const client = createClient({
-  provider: gitHttp({ auth: { password: process.env.GIT_TOKEN! } }),
-});
-
-const { data: branches } = await client.branches.list({
-  repo: 'https://git.example.com/team/app.git',
-});`,
-  },
-];
-
-const forgeProviders = providerTabs.filter((tab) => tab.id !== 'git-http');
+for await (const tag of client.tags.listAll({ repo: 'capawesome-team/repo-sdk' })) {
+  console.log(tag.name, head.sha);
+}`;
 
 const iterateCode = `// Mirror every repository the token can reach.
 for await (const repo of client.repos.listAll({ owned: true })) {
@@ -378,22 +288,20 @@ const faqLd = {
     <script type="application/ld+json" is:inline set:html={JSON.stringify(faqLd)} />
 
     <!-- Hero -->
-    <section class="grid grid-cols-1 items-center gap-12 py-16 sm:py-24 lg:grid-cols-2">
-      <div class="text-center lg:text-left">
+    <section class="py-16 sm:py-24">
+      <div class="text-center">
         <span class="inline-flex items-center gap-1.5 rounded-blume border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
           <Icon name="feather" size={13} />
           Zero dependencies · Edge-compatible · MIT
         </span>
-        <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-          One git API.<br />Every provider.
+        <h1 class="mx-auto mt-6 max-w-[30ch] text-balance text-4xl font-semibold tracking-tight sm:text-5xl">
+          The unified TypeScript SDK for every git provider.
         </h1>
-        <p class="mt-5 max-w-xl text-lg text-muted-foreground lg:pr-6">
-          A unified, fully typed TypeScript SDK over the GitHub, GitLab, Bitbucket Cloud, Azure DevOps,
-          and Gitea REST APIs — plus any plain git remote. Write your repository discovery, commit, tag,
-          download, and webhook logic once. Ship it everywhere your users host code.
+        <p class="mx-auto mt-5 max-w-[48ch] text-pretty text-lg text-muted-foreground">
+          One normalized API over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea — plus any
+          plain git remote.
         </p>
-
-        <div class="mt-8 flex max-w-md items-center lg:max-w-none">
+        <div class="mx-auto mt-8 flex max-w-md items-center">
           <div class="flex w-full items-center justify-between gap-2 rounded-blume border border-border bg-code-background px-4 py-3 font-mono text-sm">
             <span><span class="select-none text-muted-foreground">$ </span>npm install repo-sdk</span>
             <button
@@ -407,8 +315,7 @@ const faqLd = {
             </button>
           </div>
         </div>
-
-        <div class="mt-8 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+        <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
             href="/docs"
             class="inline-flex items-center gap-1.5 rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
@@ -431,42 +338,16 @@ const faqLd = {
           </a>
         </div>
       </div>
-
-      <!-- Tabbed provider sample -->
-      <div class="overflow-hidden rounded-blume border border-border bg-code-background text-left">
-        <div class="flex items-center gap-1 overflow-x-auto border-b border-border px-2 pt-2" role="tablist" aria-label="Provider">
-          {
-            providerTabs.map((tab, index) => (
-              <button
-                type="button"
-                role="tab"
-                id={`tab-${tab.id}`}
-                aria-controls={`panel-${tab.id}`}
-                aria-selected={index === 0 ? 'true' : 'false'}
-                class:list={[
-                  'provider-tab -mb-px whitespace-nowrap rounded-t-blume border-b-2 px-3 py-2 text-xs font-medium transition-colors',
-                  index === 0
-                    ? 'border-accent text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
-                ]}
-              >
-                {tab.label}
-              </button>
-            ))
-          }
+      <div class="mx-auto mt-14 max-w-4xl overflow-hidden rounded-blume border border-border bg-code-background text-left">
+        <div class="flex items-center gap-1.5 border-b border-border px-4 py-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-border"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-border"></span>
+          <span class="h-2.5 w-2.5 rounded-full bg-border"></span>
+          <span class="ml-2 font-mono text-xs text-muted-foreground">integration.ts</span>
         </div>
-        {
-          providerTabs.map((tab, index) => (
-            <div
-              role="tabpanel"
-              id={`panel-${tab.id}`}
-              aria-labelledby={`tab-${tab.id}`}
-              class:list={['provider-panel overflow-x-auto p-5 text-sm', index === 0 ? '' : 'hidden']}
-            >
-              <Code code={tab.code} lang="ts" themes={codeThemes} />
-            </div>
-          ))
-        }
+        <div class="overflow-x-auto p-5 text-sm">
+          <Code code={heroSwapCode} lang="ts" themes={codeThemes} />
+        </div>
       </div>
     </section>
 
@@ -475,8 +356,8 @@ const faqLd = {
       <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Works with</p>
       <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
         {
-          forgeProviders.map((provider) => (
-            <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider.label}</span>
+          providers.map((provider) => (
+            <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider}</span>
           ))
         }
         <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">Any git remote</span>
@@ -611,7 +492,7 @@ const faqLd = {
             <thead>
               <tr class="border-b border-border bg-muted/50 text-left">
                 <th class="px-4 py-2.5 font-medium">Capability</th>
-                {forgeProviders.map((provider) => <th class="px-4 py-2.5 text-center font-medium">{provider.label}</th>)}
+                {providers.map((provider) => <th class="px-4 py-2.5 text-center font-medium">{provider}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -776,24 +657,6 @@ const faqLd = {
         button.querySelector('.copy-idle')?.classList.remove('hidden');
         button.querySelector('.copy-done')?.classList.add('hidden');
       }, 1500);
-    });
-  }
-
-  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.provider-tab'));
-  const panels = Array.from(document.querySelectorAll<HTMLElement>('.provider-panel'));
-  const activeClasses = ['border-accent', 'text-foreground'];
-  const inactiveClasses = ['border-transparent', 'text-muted-foreground', 'hover:text-foreground'];
-  for (const tab of tabs) {
-    tab.addEventListener('click', () => {
-      for (const other of tabs) {
-        const selected = other === tab;
-        other.setAttribute('aria-selected', String(selected));
-        other.classList.remove(...(selected ? inactiveClasses : activeClasses));
-        other.classList.add(...(selected ? activeClasses : inactiveClasses));
-      }
-      for (const panel of panels) {
-        panel.classList.toggle('hidden', panel.id !== tab.getAttribute('aria-controls'));
-      }
     });
   }
 </script>
