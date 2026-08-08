@@ -6,11 +6,15 @@ import data from 'blume:data';
 
 const { config } = data;
 
+const pageTitle = 'repo-sdk — Unified TypeScript SDK for GitHub, GitLab, Bitbucket, Azure DevOps & Gitea APIs';
+const pageDescription =
+  'A zero-dependency TypeScript SDK that unifies the GitHub, GitLab, Bitbucket, Azure DevOps, and Gitea APIs — repositories, commits, tags, branches, webhooks, and archive downloads through one normalized, edge-ready interface.';
+
 const features = [
   {
     icon: 'layers',
     title: 'One unified API',
-    description: 'Discovery, commits, tags, downloads, and webhooks over five providers — one interface.',
+    description: 'Discovery, commits, tags, branches, refs, downloads, and webhooks — one interface over every provider.',
   },
   {
     icon: 'feather',
@@ -20,7 +24,7 @@ const features = [
   {
     icon: 'zap',
     title: 'Edge-compatible',
-    description: 'Runs on Node.js ≥ 20, Cloudflare Workers, and any Web-standard runtime.',
+    description: 'Runs on Node.js ≥ 20, Cloudflare Workers, and any Web-standard runtime — no node:* imports anywhere.',
   },
   {
     icon: 'box',
@@ -43,9 +47,29 @@ const features = [
     description: 'Providers differ. Unsupported options throw instead of being silently dropped.',
   },
   {
+    icon: 'list',
+    title: 'Pagination that walks itself',
+    description: 'list returns a page and an opaque cursor; the listAll async iterators follow cursors for you.',
+  },
+  {
+    icon: 'refresh-cw',
+    title: 'Resilient by default',
+    description: 'Bounded retry on rate limits honoring Retry-After, and an AbortSignal on every request.',
+  },
+  {
+    icon: 'key-round',
+    title: 'GitHub App auth',
+    description: 'Installation tokens minted in pure Web Crypto — RS256 JWTs, PKCS#1 or PKCS#8 keys.',
+  },
+  {
+    icon: 'server',
+    title: 'Self-hosted friendly',
+    description: 'GitHub Enterprise Server, self-managed GitLab, Azure DevOps Server, and Gitea or Forgejo via baseUrl.',
+  },
+  {
     icon: 'flask-conical',
     title: 'In-memory testing provider',
-    description: 'Exercise your integration end to end without hitting a real provider.',
+    description: 'Exercise your integration end to end without hitting a real provider — repo-sdk/testing.',
   },
 ];
 
@@ -140,7 +164,35 @@ const head = await client.commits.get({
   ref: 'main',
 });`,
   },
+  {
+    id: 'git-http',
+    label: 'Git HTTP',
+    code: `import { createClient } from 'repo-sdk';
+import { gitHttp } from 'repo-sdk/git-http';
+
+// Any plain git remote over smart-HTTP — the repo is the URL.
+const client = createClient({
+  provider: gitHttp({ auth: { password: process.env.GIT_TOKEN! } }),
+});
+
+const { data: branches } = await client.branches.list({
+  repo: 'https://git.example.com/team/app.git',
+});`,
+  },
 ];
+
+const forgeProviders = providerTabs.filter((tab) => tab.id !== 'git-http');
+
+const iterateCode = `// Mirror every repository the token can reach.
+for await (const repo of client.repos.listAll({ owned: true })) {
+  const archive = await client.repos.downloadArchive({
+    repo: repo.path,
+    ref: repo.defaultBranch ?? 'main',
+    format: 'tar.gz',
+  });
+  // archive.stream is a Web ReadableStream<Uint8Array>
+  await uploadToStorage(repo.path, archive.stream);
+}`;
 
 const webhookCode = `import { verifyWebhook, parseWebhookEvent } from 'repo-sdk/github';
 
@@ -155,11 +207,100 @@ export async function POST(request: Request): Promise<Response> {
   return new Response(null, { status: 204 });
 }`;
 
+const useCases = [
+  {
+    icon: 'workflow',
+    title: 'CI/CD & build platforms',
+    description:
+      'List a user’s repositories, resolve a ref to an exact SHA, then stream a tar.gz or mint an authenticated clone URL — the whole build-input pipeline, one code path for every provider.',
+    href: '/docs/guides/downloading-code',
+  },
+  {
+    icon: 'webhook',
+    title: 'Webhook ingestion at the edge',
+    description:
+      'Terminate push, tag, and release deliveries from all providers in one handler: verify the signature, parse to one event shape, react.',
+    href: '/docs/guides/webhooks-receiving',
+  },
+  {
+    icon: 'plug',
+    title: '“Connect a repository” flows',
+    description:
+      'Power the repo picker in your SaaS: namespaces, repository search, and owned filters — with capability flags telling you what to render per provider.',
+    href: '/docs/guides/repositories',
+  },
+  {
+    icon: 'tag',
+    title: 'Release & tag automation',
+    description:
+      'Watch tags and branches, resolve refs to commits, and drive changelogs, deploy triggers, and version checks from normalized data.',
+    href: '/docs/guides/tags',
+  },
+  {
+    icon: 'database-backup',
+    title: 'Backup & mirroring',
+    description:
+      'Walk every repository with listAll and stream archives to storage — cursors, rate limits, and retries handled for you.',
+    href: '/docs/concepts/pagination',
+  },
+  {
+    icon: 'bot',
+    title: 'Agents & internal tools',
+    description:
+      'Give an AI agent or internal dashboard one typed surface over all the git hosting your org uses — stable error codes, secrets redacted.',
+    href: '/docs/concepts/errors',
+  },
+];
+
 const capabilityRows = [
   { label: 'Repository search', values: [true, true, true, false, true] },
   { label: 'Tag dates', values: [false, true, true, false, false] },
   { label: 'Release webhooks', values: [true, true, false, false, true] },
   { label: 'tar.gz archives', values: [true, true, true, false, true] },
+];
+
+const faqs = [
+  {
+    question: 'Which git providers does repo-sdk support?',
+    answer:
+      'repo-sdk ships dedicated providers for GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and Gitea, plus a gitHttp provider that talks to any plain git remote over the smart-HTTP protocol. Self-hosted deployments are covered too: GitHub Enterprise Server, self-managed GitLab, Azure DevOps Server, and Gitea or Forgejo instances via a baseUrl option.',
+    link: { href: '/docs/authentication', label: 'Authentication per provider' },
+  },
+  {
+    question: 'Is repo-sdk an alternative to Octokit?',
+    answer:
+      'For multi-provider integrations, yes: instead of stitching together Octokit plus one SDK per provider, you write against one normalized API. If you only ever talk to GitHub, a dedicated SDK exposes more endpoints — repo-sdk focuses on the surface integrations actually share.',
+    link: { href: '/blog/octokit-alternatives-multi-provider', label: 'Octokit alternatives compared' },
+  },
+  {
+    question: 'Does repo-sdk run on Cloudflare Workers and other edge runtimes?',
+    answer:
+      'Yes. repo-sdk has zero runtime dependencies and no node:* imports — it is built on fetch, Web Crypto, and Web streams only, so it runs on Node.js 20+, Cloudflare Workers, and any Web-standard runtime.',
+  },
+  {
+    question: 'How does repo-sdk handle feature differences between providers?',
+    answer:
+      'Every provider declares a typed RepoCapabilities object and the client gates on it: an option a provider cannot honor throws a RepoError with code unsupported instead of being silently dropped. You can also branch on client.capabilities at runtime to decide which features to offer.',
+    link: { href: '/docs/concepts/capabilities', label: 'How capability gating works' },
+  },
+  {
+    question: 'How does webhook signature verification work across providers?',
+    answer:
+      'verifyWebhook is a standalone helper that takes a Web-standard Request and knows each provider’s scheme — HMAC-SHA256 signatures for GitHub, Bitbucket, and Gitea, a shared token for GitLab, and Basic auth for Azure DevOps. All comparisons run in constant time, and parseWebhookEvent then normalizes the delivery into one event shape.',
+    link: { href: '/docs/guides/webhooks-receiving', label: 'Receiving webhooks guide' },
+  },
+  {
+    question: 'Does repo-sdk support GitHub App authentication?',
+    answer:
+      'Yes. Pass an appId and privateKey and the SDK mints installation tokens itself, signing RS256 JWTs with pure Web Crypto. Both PKCS#1 and PKCS#8 keys are accepted, and getInstallationToken() exposes the current token for use outside the SDK — in a git clone URL, for example.',
+    link: { href: '/docs/authentication/github', label: 'GitHub authentication' },
+  },
+  {
+    question: 'How do I test code that uses repo-sdk?',
+    answer:
+      'Import the in-memory provider from repo-sdk/testing: it implements the same contract as the real providers with seedable state, so integration tests run without a network. Every provider factory also accepts an injectable fetch for wire-level tests.',
+    link: { href: '/docs/testing', label: 'Testing guide' },
+  },
 ];
 
 const docCards = [
@@ -191,6 +332,31 @@ const docCards = [
 
 const runtimes = ['Node.js ≥ 20', 'Cloudflare Workers', 'Web-standard runtimes'];
 const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
+
+const softwareLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'repo-sdk',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Node.js 20+, Cloudflare Workers, Web-standard runtimes',
+  description: pageDescription,
+  url: config.site ?? undefined,
+  downloadUrl: 'https://www.npmjs.com/package/repo-sdk',
+  sameAs: ['https://github.com/capawesome-team/repo-sdk', 'https://www.npmjs.com/package/repo-sdk'],
+  license: 'https://opensource.org/license/mit/',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+  author: { '@type': 'Organization', name: 'Genz IT Solutions GmbH', url: 'https://genz-its.de/' },
+};
+
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: faqs.map((faq) => ({
+    '@type': 'Question',
+    name: faq.question,
+    acceptedAnswer: { '@type': 'Answer', text: faq.answer },
+  })),
+};
 ---
 
 <PageLayout
@@ -205,22 +371,26 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
   searchEnabled={config.search.enabled}
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
-  page={{ title: 'repo-sdk — one unified API over five git providers', description: config.description }}
+  page={{ title: pageTitle, description: pageDescription }}
 >
   <main class="mx-auto w-full max-w-6xl px-6">
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(softwareLd)} />
+    <script type="application/ld+json" is:inline set:html={JSON.stringify(faqLd)} />
+
     <!-- Hero -->
     <section class="grid grid-cols-1 items-center gap-12 py-16 sm:py-24 lg:grid-cols-2">
       <div class="text-center lg:text-left">
         <span class="inline-flex items-center gap-1.5 rounded-blume border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
           <Icon name="feather" size={13} />
-          Zero dependencies · Edge-compatible
+          Zero dependencies · Edge-compatible · MIT
         </span>
         <h1 class="mt-6 text-4xl font-semibold tracking-tight sm:text-5xl">
-          One git API.<br />Five providers.
+          One git API.<br />Every provider.
         </h1>
         <p class="mt-5 max-w-xl text-lg text-muted-foreground lg:pr-6">
-          A unified, normalized TypeScript API over GitHub, GitLab, Bitbucket Cloud, Azure DevOps, and
-          Gitea. Write your discovery, commit, tag, download, and webhook logic once — not five times.
+          A unified, fully typed TypeScript SDK over the GitHub, GitLab, Bitbucket Cloud, Azure DevOps,
+          and Gitea REST APIs — plus any plain git remote. Write your repository discovery, commit, tag,
+          download, and webhook logic once. Ship it everywhere your users host code.
         </p>
 
         <div class="mt-8 flex max-w-md items-center lg:max-w-none">
@@ -305,19 +475,30 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
       <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Works with</p>
       <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
         {
-          providerTabs.map((provider) => (
+          forgeProviders.map((provider) => (
             <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">{provider.label}</span>
           ))
         }
+        <span class="rounded-blume border border-border px-4 py-1.5 text-sm font-medium">Any git remote</span>
       </div>
       <div class="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
         {runtimes.map((runtime) => <span>{runtime}</span>)}
       </div>
+      <p class="mt-2 text-sm text-muted-foreground">
+        Including self-hosted: GitHub Enterprise Server, GitLab self-managed, Azure DevOps Server, Gitea &amp; Forgejo
+      </p>
     </section>
 
     <!-- Features -->
     <section class="py-16">
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-2xl font-semibold tracking-tight">Everything a git integration needs</h2>
+        <p class="mt-3 text-sm text-muted-foreground">
+          Auth, pagination, rate limits, errors, and webhooks — repo-sdk normalizes the messy parts of
+          every provider's REST API behind one typed interface.
+        </p>
+      </div>
+      <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {
           features.map((feature) => (
             <div class="rounded-blume border border-border p-5 text-left">
@@ -332,8 +513,35 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
       </div>
     </section>
 
-    <!-- Webhooks -->
+    <!-- Pagination + streaming -->
     <section class="py-8">
+      <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
+        <div class="overflow-x-auto rounded-blume border border-border bg-code-background p-5 text-left text-sm lg:order-1">
+          <Code code={iterateCode} lang="ts" themes={codeThemes} />
+        </div>
+        <div class="text-center lg:order-2 lg:text-left">
+          <h2 class="text-2xl font-semibold tracking-tight">Pagination that walks itself</h2>
+          <p class="mt-3 text-sm text-muted-foreground lg:pr-8">
+            <code class="font-mono">list</code> returns one page and an opaque cursor; the
+            <code class="font-mono">listAll</code> async iterators follow the cursors for you — and every
+            cursor is a tamper-guarded envelope that can't redirect an authenticated request. Pair it
+            with <code class="font-mono">downloadArchive</code>, which hands you a Web
+            <code class="font-mono">ReadableStream</code> instead of a buffer, and walking an entire
+            account fits in a single <code class="font-mono">for await</code> loop.
+          </p>
+          <a
+            href="/docs/concepts/pagination"
+            class="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+          >
+            Read the pagination guide
+            <Icon name="arrow-right" size={14} />
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Webhooks -->
+    <section class="py-16">
       <div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
         <div class="text-center lg:text-left">
           <h2 class="text-2xl font-semibold tracking-tight">Webhooks without the ceremony</h2>
@@ -341,7 +549,8 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
             <code class="font-mono">verifyWebhook</code> and <code class="font-mono">parseWebhookEvent</code> are
             standalone helpers that take a Web-standard <code class="font-mono">Request</code> — no client needed.
             They drop straight into Next.js route handlers, Hono, and workers, and they know each provider's
-            signature scheme so you don't have to.
+            signature scheme — HMAC-SHA256, shared token, or Basic auth — comparing in constant time so you
+            don't have to.
           </p>
           <a
             href="/docs/guides/webhooks-receiving"
@@ -354,6 +563,38 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
         <div class="overflow-x-auto rounded-blume border border-border bg-code-background p-5 text-left text-sm">
           <Code code={webhookCode} lang="ts" themes={codeThemes} />
         </div>
+      </div>
+    </section>
+
+    <!-- Use cases -->
+    <section class="py-8">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-2xl font-semibold tracking-tight">What you can build with repo-sdk</h2>
+        <p class="mt-3 text-sm text-muted-foreground">
+          Anywhere your product meets a git repository — and your users get to choose where that
+          repository lives.
+        </p>
+      </div>
+      <div class="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {
+          useCases.map((useCase) => (
+            <a
+              href={useCase.href}
+              class="group rounded-blume border border-border p-5 text-left transition-colors hover:bg-muted"
+            >
+              <span class="text-accent">
+                <Icon name={useCase.icon} size={18} />
+              </span>
+              <h3 class="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold">
+                {useCase.title}
+                <span class="opacity-0 transition-opacity group-hover:opacity-100">
+                  <Icon name="arrow-right" size={13} />
+                </span>
+              </h3>
+              <p class="mt-2 text-sm text-muted-foreground">{useCase.description}</p>
+            </a>
+          ))
+        }
       </div>
     </section>
 
@@ -370,7 +611,7 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
             <thead>
               <tr class="border-b border-border bg-muted/50 text-left">
                 <th class="px-4 py-2.5 font-medium">Capability</th>
-                {providerTabs.map((provider) => <th class="px-4 py-2.5 text-center font-medium">{provider.label}</th>)}
+                {forgeProviders.map((provider) => <th class="px-4 py-2.5 text-center font-medium">{provider.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -407,8 +648,39 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
       </div>
     </section>
 
+    <!-- FAQ -->
+    <section class="py-8">
+      <h2 class="text-center text-2xl font-semibold tracking-tight">Frequently asked questions</h2>
+      <div class="mx-auto mt-8 max-w-3xl space-y-3">
+        {
+          faqs.map((faq) => (
+            <details class="group rounded-blume border border-border">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+                {faq.question}
+                <span class="shrink-0 text-muted-foreground transition-transform group-open:rotate-180">
+                  <Icon name="chevron-down" size={16} />
+                </span>
+              </summary>
+              <div class="px-5 pb-5 text-sm text-muted-foreground">
+                <p>{faq.answer}</p>
+                {faq.link && (
+                  <a
+                    href={faq.link.href}
+                    class="mt-3 inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
+                  >
+                    {faq.link.label}
+                    <Icon name="arrow-right" size={13} />
+                  </a>
+                )}
+              </div>
+            </details>
+          ))
+        }
+      </div>
+    </section>
+
     <!-- Doc entry cards -->
-    <section class="pb-24">
+    <section class="py-16">
       <h2 class="text-center text-2xl font-semibold tracking-tight">Start here</h2>
       <div class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {
@@ -430,6 +702,35 @@ const codeThemes = { light: 'github-light', dark: 'github-dark' } as const;
             </a>
           ))
         }
+      </div>
+    </section>
+
+    <!-- Closing CTA -->
+    <section class="pb-24">
+      <div class="rounded-blume border border-border px-6 py-14 text-center">
+        <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Write it once. Run it everywhere your users host code.
+        </h2>
+        <p class="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+          MIT licensed, zero dependencies, TypeScript all the way down. Your first cross-provider
+          integration is one install away.
+        </p>
+        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="/docs/quickstart"
+            class="inline-flex items-center gap-1.5 rounded-blume bg-accent px-5 py-2.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+          >
+            Get started
+            <Icon name="arrow-right" size={15} />
+          </a>
+          <a
+            href="https://github.com/capawesome-team/repo-sdk"
+            class="inline-flex items-center gap-1.5 rounded-blume border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            <Icon name="github" size={15} />
+            Star on GitHub
+          </a>
+        </div>
       </div>
     </section>
   </main>
