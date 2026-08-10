@@ -19,7 +19,8 @@ PLAN.md
 # Installed third-party agent skills (our own skills live in skills/)
 .agents
 skills-lock.json
+.claude/skills
 
 # Local tooling
-.claude
+.claude/settings.local.json
 *.tgz

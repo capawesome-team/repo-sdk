@@ -39,8 +39,10 @@ Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip t
 - **Zero runtime dependencies** and **no `node:*` imports** in `src/` — Web Crypto, `btoa`/`atob`, `TextEncoder`, Web streams only. This is the package's core promise; don't add a dependency to solve a problem.
 - Plain vitest with the `createFetchStub` helper (`test/helpers/fetch-stub.ts`) for provider contract tests; `repo-sdk/testing` exposes an in-memory provider (page size 2 to force cursor pagination in consumer tests).
 - Releases via release-please: **Conventional Commit messages determine the changelog and version** (`feat:`/`fix:`/`docs:`/etc.).
-- The Blume docs site lives in `docs/` (guides, authentication, reference) — user-facing behavior changes should update the matching page; the reference section includes a per-provider capability matrix that must stay in sync with `RepoCapabilities`.
-- **Docs drift checklist** — these spots hardcode API facts and have gone stale before; sweep them whenever the corresponding code changes:
-  - New provider: the inline `ProviderName` unions written out in prose/TypeTables (`grep -r "azure-devops'" docs/` finds them), the subpath-exports table in `docs/installation.mdx`, the factory-import block in `docs/concepts/client-and-providers.mdx`, an `docs/authentication/<name>.mdx` page (must include a Scopes section), and this file's provider lists.
-  - New client namespace or method: the namespace overview in `docs/concepts/client-and-providers.mdx`, the capability-gating list in `docs/concepts/capabilities.mdx` if gated, and the in-memory provider docs in `docs/testing.mdx` (seed TypeTable + `provider.state` shape).
-  - New `RepoCapabilities` field: the TypeTable in `docs/concepts/capabilities.mdx` and `docs/reference/capability-matrix.mdx`. Capability-gated facts live ONLY in the capability matrix — don't re-add per-capability rows to `docs/reference/provider-support.mdx` (that page covers what flags can't express).
+- The Blume docs site lives in `docs/` (guides, authentication, reference), the marketing surfaces in `pages/` and `blog/` — user-facing behavior changes should update the matching page; the reference section includes a per-provider capability matrix that must stay in sync with `RepoCapabilities`.
+
+## Deep-dive rules (`.claude/rules/`)
+
+Auto-loaded (via `paths:` frontmatter) when a matching file is touched. Consult before changing anything in their area:
+
+- `docs-drift.md` — single-home rule + the checklist of docs, README, blog and landing-page spots to update in the same PR
