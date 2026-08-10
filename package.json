@@ -22,7 +22,7 @@
     "version-control",
     "webhooks"
   ],
-  "homepage": "https://github.com/capawesome-team/repo-sdk",
+  "homepage": "https://repo-sdk.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/capawesome-team/repo-sdk"
