@@ -525,6 +525,23 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       }
 
       if (params.namespace) {
+        // Under app auth the `/users/{username}/repos` fallback below would hide
+        // private repositories on user accounts (it only ever lists public
+        // ones), so list the installation's own repositories instead. The owner
+        // filter is a guard: an installation belongs to exactly one account.
+        if (tokenSource.kind === 'app') {
+          const namespaceLower = params.namespace.toLowerCase();
+          const { data, response } = await http.json<{ repositories?: GitHubRepo[] }>(
+            '/installation/repositories',
+            { query: { per_page: perPage }, signal: params.signal },
+          );
+          return {
+            data: reposFromBody(data)
+              .filter((repo) => repo.owner.login.toLowerCase() === namespaceLower)
+              .map(mapRepository),
+            cursor: nextCursor(response),
+          };
+        }
         try {
           const { data, response } = await http.json<GitHubRepo[]>(
             `/orgs/${encodeURIComponent(params.namespace)}/repos`,
@@ -534,17 +551,13 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         } catch (error) {
           if (!(error instanceof RepoError && error.code === 'not_found')) throw error;
         }
-        // Installation tokens have no user identity, so skip the self-namespace
-        // comparison (which needs `/user`) and resolve the account directly.
-        if (tokenSource.kind === 'token') {
-          const login = await getLogin(params.signal);
-          if (params.namespace.toLowerCase() === login.toLowerCase()) {
-            const { data, response } = await http.json<GitHubRepo[]>('/user/repos', {
-              query: { affiliation: 'owner', per_page: perPage },
-              signal: params.signal,
-            });
-            return { data: data.map(mapRepository), cursor: nextCursor(response) };
-          }
+        const login = await getLogin(params.signal);
+        if (login.toLowerCase() === params.namespace.toLowerCase()) {
+          const { data, response } = await http.json<GitHubRepo[]>('/user/repos', {
+            query: { affiliation: 'owner', per_page: perPage },
+            signal: params.signal,
+          });
+          return { data: data.map(mapRepository), cursor: nextCursor(response) };
         }
         const { data, response } = await http.json<GitHubRepo[]>(
           `/users/${encodeURIComponent(params.namespace)}/repos`,

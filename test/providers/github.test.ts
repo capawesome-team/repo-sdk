@@ -873,17 +873,29 @@ describe('GitHub App auth avoids user-scoped endpoints', () => {
     expect(paths).not.toContain('/user/repos');
   });
 
-  it('keeps the namespace-scoped org path under app auth', async () => {
+  it('lists installation repositories for a namespace instead of the public-only user path', async () => {
+    const privateUserRepoPayload = {
+      id: 7,
+      name: 'private-playground',
+      full_name: 'acme-user/private-playground',
+      owner: { login: 'acme-user', type: 'User' },
+      private: true,
+    };
     const { provider, stub } = appSetup((request) => {
       const url = new URL(request.url);
-      if (url.pathname === '/orgs/capawesome-team/repos') return { json: [appRepoPayload] };
+      if (url.pathname === '/installation/repositories') {
+        return { json: { repositories: [privateUserRepoPayload] } };
+      }
       return { status: 404, json: {} };
     });
 
-    await provider.listRepositories({ namespace: 'capawesome-team' });
+    const page = await provider.listRepositories({ namespace: 'Acme-User' });
+    expect(page.data[0]?.path).toBe('acme-user/private-playground');
+
     const paths = stub.requests.map((r) => new URL(r.url).pathname);
-    expect(paths).toContain('/orgs/capawesome-team/repos');
-    expect(paths).not.toContain('/user');
+    expect(paths).toContain('/installation/repositories');
+    expect(paths).not.toContain('/orgs/Acme-User/repos');
+    expect(paths).not.toContain('/users/Acme-User/repos');
   });
 
   it('rejects search-by-self (query + owned) as unsupported', async () => {

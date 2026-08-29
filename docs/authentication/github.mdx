@@ -92,9 +92,9 @@ exclusive — passing both throws a `validation` error.
 
 :::warning
 An installation token has **no user identity**, so GitHub App auth cannot call user-scoped endpoints.
-Namespace and owned-repository listing fall back to the installation's accessible repositories
-(`/installation/repositories`) rather than `/user`. Attempting to resolve the authenticated user throws
-`unsupported`.
+Namespace, owned-repository, and namespace-scoped repository listing fall back to the installation's
+accessible repositories (`/installation/repositories`) rather than the user- and org-scoped endpoints.
+Attempting to resolve the authenticated user throws `unsupported`.
 :::
 
 ### Using the installation token outside the SDK
