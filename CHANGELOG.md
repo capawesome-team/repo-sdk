@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/capawesome-team/repo-sdk/compare/v0.2.1...v0.2.2) (2026-08-29)
+
+
+### Bug Fixes
+
+* **github:** list installation repositories for namespace-scoped listing under app auth ([deeaec7](https://github.com/capawesome-team/repo-sdk/commit/deeaec725c225f929b7550a8e3aae57f87560929))
+
 ## [0.2.1](https://github.com/capawesome-team/repo-sdk/compare/v0.2.0...v0.2.1) (2026-07-30)
 
 
