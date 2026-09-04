@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/capawesome-team/repo-sdk/compare/v0.3.0...v0.3.1) (2026-09-04)
+
+
+### Features
+
+* **github:** restrict app installation tokens to selected repositories ([#14](https://github.com/capawesome-team/repo-sdk/issues/14)) ([960f1f9](https://github.com/capawesome-team/repo-sdk/commit/960f1f92842b223e12fb236c02f1b9cbe6e8d4d1))
+
 ## [0.3.0](https://github.com/capawesome-team/repo-sdk/compare/v0.2.2...v0.3.0) (2026-09-04)
 
 
