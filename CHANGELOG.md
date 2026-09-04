@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/capawesome-team/repo-sdk/compare/v0.2.2...v0.3.0) (2026-09-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* `getCloneCredentials` is a new required method on the `RepoProvider` interface. Custom provider implementations must add it; the built-in providers already do. `getCloneUrl` can be derived from it with `toCloneUrl` semantics: embed `username` and `password` as percent-encoded userinfo in `url`.
+
+### Features
+
+* add `repos.getCloneCredentials` ([#12](https://github.com/capawesome-team/repo-sdk/issues/12)) ([08bdb50](https://github.com/capawesome-team/repo-sdk/commit/08bdb508ff32b87e1b8032369dae88e4ba94cc89))
+
 ## [0.2.2](https://github.com/capawesome-team/repo-sdk/compare/v0.2.1...v0.2.2) (2026-08-29)
 
 
