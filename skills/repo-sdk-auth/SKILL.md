@@ -32,6 +32,7 @@ github({ auth: { token }, baseUrl: 'https://ghe.example.com/api/v3' });
 
 - `privateKey` accepts both **PKCS#8** (`BEGIN PRIVATE KEY`) and **PKCS#1** (`BEGIN RSA PRIVATE KEY`) PEMs — PKCS#1 is wrapped automatically.
 - `installationId` is optional. Omit it for a **single-installation** app and the SDK auto-detects it. If the app is installed in **zero** places it throws `unauthorized`; in **multiple** places it throws `validation` ("pass installationId to select one").
+- `repositories` (optional) restricts the minted token to those repository names within the installation's account — least-privilege tokens for CI consumers that hand the token to build steps. Omitted, the token covers every repository the installation can access.
 - Under App auth, user-scoped resolution isn't available: `owned`/search-by-self and `/user`-based namespace listing throw `unsupported`. Installation-accessible repositories are used instead.
 - Clone URLs / archive redirects use short-lived tokens; `getCloneUrl(...)` returns `expiresAt` (~1h).
 

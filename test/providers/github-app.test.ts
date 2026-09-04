@@ -107,7 +107,12 @@ function appHandler(options: AppHandlerOptions = {}): StubHandler {
 
 function setup(
   handler: StubHandler,
-  auth: { privateKey: string; installationId?: string | number; owner?: string },
+  auth: {
+    privateKey: string;
+    installationId?: string | number;
+    owner?: string;
+    repositories?: string[];
+  },
   baseUrl?: string,
 ) {
   const stub = createFetchStub(handler);
@@ -117,6 +122,7 @@ function setup(
       privateKey: auth.privateKey,
       installationId: auth.installationId,
       owner: auth.owner,
+      repositories: auth.repositories,
     },
     fetch: stub.fetch,
     baseUrl,
@@ -156,6 +162,34 @@ describe('GitHub App auth', () => {
       (r) => new URL(r.url).pathname === '/repos/capawesome-team/repo-sdk',
     )!;
     expect(apiRequest.headers.authorization).toBe(`Bearer ${INSTALLATION_TOKEN}`);
+  });
+
+  it('restricts the minted token to the configured repositories', async () => {
+    const { provider, stub } = setup(appHandler(), {
+      privateKey: pkcs8Pem,
+      installationId: 99,
+      repositories: ['repo-sdk', 'repo-demo'],
+    });
+    const repo = await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(repo.path).toBe('capawesome-team/repo-sdk');
+
+    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
+    expect(mintRequest.headers['content-type']).toBe('application/json');
+    expect(JSON.parse(mintRequest.body!)).toEqual({ repositories: ['repo-sdk', 'repo-demo'] });
+
+    const apiRequest = stub.requests.find(
+      (r) => new URL(r.url).pathname === '/repos/capawesome-team/repo-sdk',
+    )!;
+    expect(apiRequest.headers.authorization).toBe(`Bearer ${INSTALLATION_TOKEN}`);
+  });
+
+  it('sends no request body when repositories is omitted', async () => {
+    const { provider, stub } = setup(appHandler(), { privateKey: pkcs8Pem, installationId: 99 });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+
+    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
+    expect(mintRequest.body).toBeUndefined();
+    expect(mintRequest.headers['content-type']).toBeUndefined();
   });
 
   it('produces a JWT verifiable with the app public key', async () => {

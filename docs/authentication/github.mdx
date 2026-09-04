@@ -51,6 +51,7 @@ const client = createClient({
     privateKey: { type: 'string', description: 'The app private key, PEM-encoded (PKCS#1 or PKCS#8).' },
     installationId: { type: 'string | number', required: false, description: 'The installation to act as. Optional for single-installation apps.' },
     owner: { type: 'string', required: false, description: 'Org or user whose installation to act as; alternative to installationId.' },
+    repositories: { type: 'string[]', required: false, description: 'Repository names the minted token is restricted to. Defaults to every repository the installation can access.' },
   }}
 />
 
@@ -96,6 +97,25 @@ Namespace, owned-repository, and namespace-scoped repository listing fall back t
 accessible repositories (`/installation/repositories`) rather than the user- and org-scoped endpoints.
 Attempting to resolve the authenticated user throws `unsupported`.
 :::
+
+### Restricting the token to specific repositories
+
+By default the minted token reaches every repository the installation can access. Pass `repositories`
+— repository names without the owner — and the SDK asks GitHub for a token scoped to just those:
+
+```ts
+github({
+  auth: {
+    appId: process.env.GITHUB_APP_ID!,
+    privateKey: process.env.GITHUB_APP_PRIVATE_KEY!,
+    owner: 'capawesome-team',
+    repositories: ['repo-sdk'],
+  },
+});
+```
+
+Use it for least-privilege tokens for CI consumers that hand the token to build steps. The restriction
+is fixed for the lifetime of the provider, so create one provider per set of repositories.
 
 ### Using the installation token outside the SDK
 

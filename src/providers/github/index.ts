@@ -60,6 +60,11 @@ export interface GitHubAppAuth {
   installationId?: string | number;
   /** Account (org or user) whose installation to act as; alternative to installationId. */
   owner?: string;
+  /**
+   * Restrict the minted installation token to these repository names within the
+   * installation's account. Omitted: every repository the installation can access.
+   */
+  repositories?: string[];
 }
 
 export interface GitHubTokenProviderAuth {
@@ -137,6 +142,7 @@ function createTokenSource(
     privateKey: auth.privateKey,
     installationId: auth.installationId,
     owner: auth.owner,
+    repositories: auth.repositories,
     baseUrl,
     fetchImpl,
     apiVersion: API_VERSION,
