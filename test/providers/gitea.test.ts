@@ -535,6 +535,22 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('returns the token in the username slot with no password', async () => {
+    const { provider, stub } = setup(() => ({ status: 500, json: {} }));
+    const credentials = await provider.getCloneCredentials({
+      repo: 'capawesome-team/repo-sdk',
+    });
+    expect(stub.requests).toHaveLength(0);
+    expect(credentials).toEqual({
+      password: null,
+      url: 'https://gitea.com/capawesome-team/repo-sdk.git',
+      username: TOKEN,
+    });
+    expect(new URL(credentials.url).username).toBe('');
+  });
+});
+
 describe('webhooks', () => {
   const hookPayload = {
     id: 99,

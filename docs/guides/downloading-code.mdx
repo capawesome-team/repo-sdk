@@ -6,8 +6,9 @@ sidebar:
 ---
 
 There are two ways to get repository contents: `repos.downloadArchive` streams a `zip` or `tar.gz`
-archive at a ref, and `repos.getCloneUrl` returns an authenticated clone URL. The clone URL embeds
-credentials — treat it as a secret and never log it.
+archive at a ref, or you clone an authenticated remote. For cloning, `repos.getCloneUrl` returns a URL
+with the credential embedded — treat it as a secret and never log it — while
+`repos.getCloneCredentials` returns that credential next to a credential-free URL.
 
 ## Downloading an archive
 
@@ -88,6 +89,38 @@ Both an OAuth `accessToken` and an Entra ID `tokenProvider` embed the token in t
 `oauth2` username (`https://oauth2:<token>@dev.azure.com/...`). Entra tokens are short-lived
 (typically ~1 hour) and the URL carries no `expiresAt`, so fetch the clone URL just before cloning
 rather than storing it.
+
+## Getting clone credentials
+
+`repos.getCloneCredentials` returns the same credential split from the URL, so you can feed it to a
+git credential helper instead of persisting a tokenized remote in `.git/config`:
+
+<TypeTable
+  type={{
+    expiresAt: { type: 'Date', required: false, description: 'When the credential expires (e.g. GitHub App tokens, ~1h).' },
+    password: { type: 'string | null', description: 'The secret. Null when the provider carries the token in username, or when access is anonymous.' },
+    url: { type: 'string', description: 'The clone URL, without any embedded credential.' },
+    username: { type: 'string | null', description: 'The username the provider expects. Null for anonymous access.' },
+  }}
+/>
+
+```ts
+const { url, username, password } = await client.repos.getCloneCredentials({
+  repo: 'capawesome-team/repo-sdk',
+});
+// url: 'https://github.com/capawesome-team/repo-sdk.git'
+```
+
+`username` and `password` are raw values — percent-encode them yourself if you put them back into a
+URL. `getCloneUrl` is exactly that: these credentials embedded as userinfo.
+
+Two shapes need a branch. Gitea passes the token as the username with no password, so `password` is
+`null`. A `git-http` remote configured without `auth` clones anonymously, so both are `null`.
+
+:::warning
+`password` — and `username` where the token sits there — is a credential. **Treat it as a secret and
+never log it.**
+:::
 
 <Card title="Next: Managing webhooks" icon="webhook" href="/docs/guides/webhooks-managing">
   Register and manage repository webhooks.

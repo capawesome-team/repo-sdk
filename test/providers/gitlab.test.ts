@@ -480,6 +480,26 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('takes the credential-free URL from the project for a numeric id', async () => {
+    const { provider, stub } = setup(() => ({ json: projectPayload }));
+    const credentials = await provider.getCloneCredentials({ repo: '42' });
+    expect(new URL(stub.requests[0]!.url).pathname).toBe('/api/v4/projects/42');
+    expect(credentials).toEqual({
+      password: TOKEN,
+      url: 'https://gitlab.com/capawesome-team/repo-sdk.git',
+      username: 'oauth2',
+    });
+  });
+
+  it('constructs the credential-free URL from the path without an API call', async () => {
+    const { provider, stub } = setup(() => ({ status: 500, json: {} }));
+    const credentials = await provider.getCloneCredentials({ repo: 'capawesome-team/repo-sdk' });
+    expect(stub.requests).toHaveLength(0);
+    expect(credentials.url).toBe('https://gitlab.com/capawesome-team/repo-sdk.git');
+  });
+});
+
 describe('webhooks', () => {
   it('sends all three event flags explicitly on create', async () => {
     const { provider, stub } = setup(() => ({

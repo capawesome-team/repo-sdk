@@ -43,6 +43,7 @@ function fakeProvider(overrides: Partial<RepoProvider> = {}): RepoProvider {
     getTag: notImplemented,
     searchRefs: notImplemented,
     downloadArchive: notImplemented,
+    getCloneCredentials: notImplemented,
     getCloneUrl: notImplemented,
     createWebhook: notImplemented,
     listWebhooks: notImplemented,

@@ -7,11 +7,13 @@ import {
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
+  toCloneUrl,
 } from '../shared.ts';
 import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -19,6 +21,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -303,10 +306,6 @@ function assertActiveSupported(active: boolean | undefined): void {
   }
 }
 
-function injectCredentials(cloneUrl: string, token: string): string {
-  return cloneUrl.replace('://', `://oauth2:${encodeURIComponent(token)}@`);
-}
-
 function gitHostFromBaseUrl(baseUrl: string): string {
   return new URL(baseUrl).host;
 }
@@ -359,6 +358,19 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
 
   function hooksPath(repo: string): string {
     return `/projects/${projectId(repo)}/hooks`;
+  }
+
+  async function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const password = await tokenSource.getToken();
+    // A numeric id carries no path to build the URL from, so ask the API for it.
+    if (isNumericId(params.repo)) {
+      const { data } = await http.json<GitLabProject>(`/projects/${params.repo}`, {
+        signal: params.signal,
+      });
+      return { password, url: data.http_url_to_repo, username: 'oauth2' };
+    }
+    const host = gitHostFromBaseUrl(baseUrl);
+    return { password, url: `https://${host}/${params.repo}.git`, username: 'oauth2' };
   }
 
   return {
@@ -596,16 +608,10 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       };
     },
 
+    getCloneCredentials,
+
     async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const token = await tokenSource.getToken();
-      if (isNumericId(params.repo)) {
-        const { data } = await http.json<GitLabProject>(`/projects/${params.repo}`, {
-          signal: params.signal,
-        });
-        return { url: injectCredentials(data.http_url_to_repo, token) };
-      }
-      const host = gitHostFromBaseUrl(baseUrl);
-      return { url: `https://oauth2:${encodeURIComponent(token)}@${host}/${params.repo}.git` };
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

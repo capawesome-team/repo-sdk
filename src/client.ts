@@ -3,6 +3,7 @@ import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -10,6 +11,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -63,6 +65,7 @@ export interface RepoClient {
     listAll(params?: Omit<ListRepositoriesParams, 'cursor'>): AsyncGenerator<Repository, void>;
     get(params: GetRepositoryParams): Promise<Repository>;
     downloadArchive(params: DownloadArchiveParams): Promise<Archive>;
+    getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials>;
     getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl>;
   };
   commits: {
@@ -238,6 +241,10 @@ export function createClient(options: CreateClientOptions): RepoClient {
           fail('unsupported', `${provider.name} does not support the "${format}" archive format`);
         }
         return withRetry(() => provider.downloadArchive({ ...params, format }));
+      },
+      getCloneCredentials: async (params) => {
+        requireNonEmpty(params.repo, 'repo');
+        return withRetry(() => provider.getCloneCredentials(params));
       },
       getCloneUrl: async (params) => {
         requireNonEmpty(params.repo, 'repo');

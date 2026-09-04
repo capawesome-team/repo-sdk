@@ -8,11 +8,13 @@ import {
   filenameFromContentDisposition,
   isRecord,
   parseLinkNext,
+  toCloneUrl,
 } from '../shared.ts';
 import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -20,6 +22,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -363,6 +366,16 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     return `/repos/${repo}`;
   }
 
+  async function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const host = new URL(baseUrl).host;
+    // Gitea accepts the access token as the basic-auth username with no password.
+    return {
+      password: null,
+      url: `https://${host}/${params.repo}.git`,
+      username: await currentToken(false),
+    };
+  }
+
   return {
     name: 'gitea',
     capabilities: CAPABILITIES,
@@ -600,13 +613,10 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
       };
     },
 
+    getCloneCredentials,
+
     async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const host = new URL(baseUrl).host;
-      // Gitea accepts the access token as the basic-auth username with no password.
-      const token = await currentToken(false);
-      return {
-        url: `https://${encodeURIComponent(token)}@${host}/${params.repo}.git`,
-      };
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

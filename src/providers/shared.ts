@@ -1,3 +1,5 @@
+import type { CloneCredentials, CloneUrl } from '../types.ts';
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -35,4 +37,18 @@ export function filenameFromContentDisposition(header: string | null): string | 
   }
   const plain = header.match(/filename="?([^";]+)"?/i);
   return plain?.[1]?.trim();
+}
+
+/**
+ * Embeds clone credentials into their credential-free URL as percent-encoded
+ * userinfo — the single place every provider's tokenized clone URL is built.
+ * A `null` password yields a bare `user@host` (Gitea puts the token in the
+ * username slot); anonymous credentials return the URL untouched.
+ */
+export function toCloneUrl(credentials: CloneCredentials): CloneUrl {
+  const { expiresAt, password, url, username } = credentials;
+  if (username === null && password === null) return { url, expiresAt };
+  const user = username === null ? '' : encodeURIComponent(username);
+  const userinfo = password === null ? user : `${user}:${encodeURIComponent(password)}`;
+  return { url: url.replace('://', `://${userinfo}@`), expiresAt };
 }

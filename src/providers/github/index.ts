@@ -9,11 +9,13 @@ import {
   encodeRefPath,
   filenameFromContentDisposition,
   isRecord,
+  toCloneUrl,
 } from '../shared.ts';
 import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -21,6 +23,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -437,6 +440,16 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     return { data: [namespace] };
   }
 
+  function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const host = gitHostFromBaseUrl(baseUrl);
+    return tokenSource.getTokenWithExpiry().then(({ token, expiresAt }) => ({
+      expiresAt,
+      password: token,
+      url: `https://${host}/${params.repo}.git`,
+      username: 'x-access-token',
+    }));
+  }
+
   return {
     name: 'github',
     // Installation tokens have no user identity, so `/user` 403s under App auth.
@@ -776,12 +789,10 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       };
     },
 
-    getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const host = gitHostFromBaseUrl(baseUrl);
-      return tokenSource.getTokenWithExpiry().then(({ token, expiresAt }) => ({
-        url: `https://x-access-token:${token}@${host}/${params.repo}.git`,
-        expiresAt,
-      }));
+    getCloneCredentials,
+
+    async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

@@ -382,6 +382,18 @@ describe('GitHub App auth', () => {
     expect(clone.expiresAt!.toISOString()).toBe(expiresAt);
   });
 
+  it('returns the installation token and its expiry as clone credentials', async () => {
+    const expiresAt = futureIso(60 * 60 * 1000);
+    const { provider } = setup(appHandler({ expiresAt }), {
+      privateKey: pkcs8Pem,
+      installationId: 99,
+    });
+    const credentials = await provider.getCloneCredentials({ repo: 'capawesome-team/repo-sdk' });
+    expect(credentials.password).toBe(INSTALLATION_TOKEN);
+    expect(credentials.url).toBe('https://github.com/capawesome-team/repo-sdk.git');
+    expect(credentials.expiresAt!.toISOString()).toBe(expiresAt);
+  });
+
   it('invokes fetch detached from the AppTokenSource instance', async () => {
     function strictFetch(this: unknown, ...args: Parameters<typeof fetch>): Promise<Response> {
       if (this !== undefined && this !== globalThis) {

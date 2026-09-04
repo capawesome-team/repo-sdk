@@ -587,6 +587,30 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('returns the PAT with the pat username and a credential-free URL', async () => {
+    const { provider } = setup(() => ({ json: {} }));
+    const credentials = await provider.getCloneCredentials({ repo: 'core/repo-sdk' });
+    expect(credentials).toEqual({
+      password: PAT,
+      url: 'https://dev.azure.com/contoso/core/_git/repo-sdk',
+      username: 'pat',
+    });
+  });
+
+  it('returns an OAuth access token with the oauth2 username', async () => {
+    const stub = createFetchStub(() => ({ json: {} }));
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { accessToken: 'oauth-access-token' },
+      fetch: stub.fetch,
+    });
+    const credentials = await provider.getCloneCredentials({ repo: 'core/repo-sdk' });
+    expect(credentials.username).toBe('oauth2');
+    expect(credentials.password).toBe('oauth-access-token');
+  });
+});
+
 describe('webhooks', () => {
   const subscription = {
     id: 'sub-1',

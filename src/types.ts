@@ -53,6 +53,21 @@ export interface CloneUrl {
   expiresAt?: Date;
 }
 
+/**
+ * Clone credentials kept separate from the URL, for handing to a git credential
+ * helper instead of persisting a tokenized remote in `.git/config`. Both
+ * components are raw, never percent-encoded.
+ */
+export interface CloneCredentials {
+  expiresAt?: Date;
+  /** The secret, or `null` when the provider carries the token in `username` (Gitea) or access is anonymous. */
+  password: string | null;
+  /** Clone URL without any embedded credential. */
+  url: string;
+  /** The static username the provider expects, the token itself for Gitea, or `null` for anonymous access. */
+  username: string | null;
+}
+
 /** The account behind the configured credentials (see the `userProfile` capability). */
 export interface AuthenticatedUser {
   id: string;
@@ -248,6 +263,10 @@ export interface DownloadArchiveParams extends BaseParams {
   format?: ArchiveFormat;
 }
 
+export interface GetCloneCredentialsParams extends BaseParams {
+  repo: string;
+}
+
 export interface GetCloneUrlParams extends BaseParams {
   repo: string;
 }
@@ -316,6 +335,8 @@ export interface RepoProvider {
   /** Prefix-match refs of the requested types, branches before tags, at most `limit` results. */
   searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]>;
   downloadArchive(params: DownloadArchiveParams): Promise<Archive>;
+  getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials>;
+  /** The same credentials embedded in the URL; derived from `getCloneCredentials`. */
   getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl>;
   createWebhook(params: CreateWebhookParams): Promise<Webhook>;
   listWebhooks(params: ListWebhooksParams): Promise<Page<Webhook>>;

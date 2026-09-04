@@ -379,6 +379,18 @@ describe('createInMemoryProvider through createClient', () => {
     });
   });
 
+  describe('getCloneCredentials', () => {
+    it('returns in-memory clone credentials', async () => {
+      const { client } = setup();
+      const credentials = await client.repos.getCloneCredentials({ repo: 'acme/service' });
+      expect(credentials).toEqual({
+        password: 'test',
+        url: 'https://in-memory.invalid/acme/service.git',
+        username: 'x-token',
+      });
+    });
+  });
+
   describe('webhooks round-trip', () => {
     it('creates, lists, gets, updates and deletes while mutating state', async () => {
       const { provider, client } = setup();

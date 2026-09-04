@@ -367,6 +367,26 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('returns null credentials for anonymous access', async () => {
+    const { provider } = setup();
+    await expect(provider.getCloneCredentials({ repo: REPO })).resolves.toEqual({
+      password: null,
+      url: REPO,
+      username: null,
+    });
+  });
+
+  it('returns the configured basic-auth credentials unencoded', async () => {
+    const { provider } = setup(undefined, {
+      auth: { username: 'basic-user', password: 'p@ss word' },
+    });
+    const credentials = await provider.getCloneCredentials({ repo: REPO });
+    expect(credentials).toEqual({ password: 'p@ss word', url: REPO, username: 'basic-user' });
+    expect(new URL(credentials.url).username).toBe('');
+  });
+});
+
 describe('repository URL validation', () => {
   it.each([
     'git@git.example.com:team/app.git',
