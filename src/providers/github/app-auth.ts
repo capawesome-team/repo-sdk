@@ -34,6 +34,7 @@ export interface AppTokenSourceOptions {
   privateKey: string;
   installationId?: string | number;
   owner?: string;
+  repositories?: string[];
   baseUrl: string;
   fetchImpl: typeof fetch;
   apiVersion: string;
@@ -163,6 +164,7 @@ export class AppTokenSource implements TokenSource {
   private readonly userAgent: string;
   private installationId?: string;
   private readonly owner?: string;
+  private readonly repositories?: string[];
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
@@ -182,6 +184,7 @@ export class AppTokenSource implements TokenSource {
     this.installationId =
       options.installationId === undefined ? undefined : String(options.installationId);
     this.owner = options.owner;
+    this.repositories = options.repositories;
   }
 
   async getToken(): Promise<string> {
@@ -218,10 +221,13 @@ export class AppTokenSource implements TokenSource {
   private async mintInstallationToken(): Promise<InstallationToken> {
     const jwt = await createAppJwt({ appId: this.appId, privateKey: this.privateKey });
     const installationId = await this.resolveInstallationId(jwt);
+    // The repository restriction is fixed for the lifetime of this instance and
+    // the cache is per instance, so every cached token already matches it.
     const data = await this.appRequest<AccessTokenResponse>(
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
+      this.repositories === undefined ? undefined : { repositories: this.repositories },
     );
     const token: InstallationToken = { token: data.token, expiresAt: new Date(data.expires_at) };
     this.cached = token;
@@ -276,19 +282,29 @@ export class AppTokenSource implements TokenSource {
     return String(installations[0]!.id);
   }
 
-  private async appRequest<T>(path: string, method: string, jwt: string): Promise<T> {
+  private async appRequest<T>(
+    path: string,
+    method: string,
+    jwt: string,
+    body?: unknown,
+  ): Promise<T> {
     const url = joinUrl(this.baseUrl, path);
     const { fetchImpl } = this;
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${jwt}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': this.apiVersion,
+      'User-Agent': this.userAgent,
+    };
+    if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+    }
     let response: Response;
     try {
       response = await fetchImpl(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${jwt}`,
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': this.apiVersion,
-          'User-Agent': this.userAgent,
-        },
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
     } catch (error) {
       throw new RepoError(`Request to ${path} failed`, {
