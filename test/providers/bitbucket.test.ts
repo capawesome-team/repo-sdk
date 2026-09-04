@@ -483,6 +483,26 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('returns the api token unencoded with the static username', async () => {
+    const token = 'tok/with+special';
+    const { provider } = setup(() => ({ json: {} }), { email: EMAIL, apiToken: token });
+    const credentials = await provider.getCloneCredentials({ repo: 'o/r' });
+    expect(credentials).toEqual({
+      password: token,
+      url: 'https://bitbucket.org/o/r.git',
+      username: 'x-bitbucket-api-token-auth',
+    });
+  });
+
+  it('returns the access token with x-token-auth', async () => {
+    const { provider } = setup(() => ({ json: {} }), { accessToken: ACCESS_TOKEN });
+    const credentials = await provider.getCloneCredentials({ repo: 'o/r' });
+    expect(credentials.username).toBe('x-token-auth');
+    expect(credentials.password).toBe(ACCESS_TOKEN);
+  });
+});
+
 describe('webhooks', () => {
   it('maps push/tag_push to a single repo:push event and reverses the response', async () => {
     const { provider, stub } = setup(() => ({

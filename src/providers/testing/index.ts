@@ -1,17 +1,20 @@
 import { RepoError } from '../../errors.ts';
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
+import { toCloneUrl } from '../shared.ts';
 import type {
   Archive,
   ArchiveFormat,
   AuthenticatedUser,
   ProviderName,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
   DeleteWebhookParams,
   DownloadArchiveParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -318,6 +321,15 @@ export function createInMemoryProvider(
     return repository;
   }
 
+  function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    requireRepository(params.repo);
+    return Promise.resolve({
+      password: 'test',
+      url: `https://in-memory.invalid/${params.repo}.git`,
+      username: 'x-token',
+    });
+  }
+
   return {
     name,
     capabilities,
@@ -465,11 +477,10 @@ export function createInMemoryProvider(
       });
     },
 
-    getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      requireRepository(params.repo);
-      return Promise.resolve({
-        url: `https://x-token:test@in-memory.invalid/${params.repo}.git`,
-      });
+    getCloneCredentials,
+
+    async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     createWebhook(params: CreateWebhookParams): Promise<Webhook> {

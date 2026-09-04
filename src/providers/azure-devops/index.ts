@@ -5,6 +5,7 @@ import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -12,6 +13,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -36,7 +38,12 @@ import type {
   Webhook,
   WebhookEventType,
 } from '../../types.ts';
-import { commitWebUrlBuilder, filenameFromContentDisposition, isRecord } from '../shared.ts';
+import {
+  commitWebUrlBuilder,
+  filenameFromContentDisposition,
+  isRecord,
+  toCloneUrl,
+} from '../shared.ts';
 import {
   API_VERSION,
   authHeader,
@@ -346,6 +353,16 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     return ref;
   }
 
+  async function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const { project, repository } = splitRepo(params.repo);
+    const host = new URL(baseUrl).host;
+    const url = `https://${host}/${enc(options.organization)}/${enc(project)}/_git/${enc(repository)}`;
+    if ('pat' in auth) return { password: auth.pat, url, username: 'pat' };
+    if ('accessToken' in auth) return { password: auth.accessToken, url, username: 'oauth2' };
+    const token = await auth.tokenProvider({ forceRefresh: false });
+    return { password: token, url, username: 'oauth2' };
+  }
+
   return {
     name: 'azure-devops',
     capabilities: CAPABILITIES,
@@ -583,20 +600,10 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       };
     },
 
+    getCloneCredentials,
+
     async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const { project, repository } = splitRepo(params.repo);
-      const host = new URL(baseUrl).host;
-      const repoPath = `${enc(options.organization)}/${enc(project)}/_git/${enc(repository)}`;
-      if ('pat' in auth) {
-        return { url: `https://pat:${encodeURIComponent(auth.pat)}@${host}/${repoPath}` };
-      }
-      if ('accessToken' in auth) {
-        return {
-          url: `https://oauth2:${encodeURIComponent(auth.accessToken)}@${host}/${repoPath}`,
-        };
-      }
-      const token = await auth.tokenProvider({ forceRefresh: false });
-      return { url: `https://oauth2:${encodeURIComponent(token)}@${host}/${repoPath}` };
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

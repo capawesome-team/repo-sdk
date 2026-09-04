@@ -98,16 +98,16 @@ export async function POST(request: Request): Promise<Response> {
 
 ## API at a glance
 
-| Namespace    | Methods                                                        |
-| ------------ | -------------------------------------------------------------- |
-| `users`      | `me`                                                           |
-| `namespaces` | `list` · `listAll`                                             |
-| `repos`      | `list` · `listAll` · `get` · `downloadArchive` · `getCloneUrl` |
-| `commits`    | `list` · `listAll` · `get`                                     |
-| `branches`   | `list` · `listAll` · `get`                                     |
-| `tags`       | `list` · `listAll` · `get`                                     |
-| `refs`       | `resolve` · `search`                                           |
-| `webhooks`   | `create` · `list` · `get` · `update` · `delete`                |
+| Namespace    | Methods                                                                                |
+| ------------ | -------------------------------------------------------------------------------------- |
+| `users`      | `me`                                                                                   |
+| `namespaces` | `list` · `listAll`                                                                     |
+| `repos`      | `list` · `listAll` · `get` · `downloadArchive` · `getCloneCredentials` · `getCloneUrl` |
+| `commits`    | `list` · `listAll` · `get`                                                             |
+| `branches`   | `list` · `listAll` · `get`                                                             |
+| `tags`       | `list` · `listAll` · `get`                                                             |
+| `refs`       | `resolve` · `search`                                                                   |
+| `webhooks`   | `create` · `list` · `get` · `update` · `delete`                                        |
 
 Every list returns an opaque cursor and has a `listAll` async generator that walks the pages for you. Cursors are provider-tagged and origin-checked, so a forged one cannot redirect an authenticated request. Every method accepts a `signal` for cancellation. Rate-limited requests are retried once when the provider's `Retry-After` fits the budget (10 seconds by default, configurable via `retry`).
 
@@ -162,7 +162,7 @@ try {
 }
 ```
 
-Errors also carry `provider`, `status`, `retryAfter` and `retryable`; `cause` is the underlying JS `Error`. Token values are redacted from every message, so a leaked stack trace cannot leak a credential. The one deliberate exception is `repos.getCloneUrl`, which returns a URL with the credential embedded because that is what `git clone` needs — treat it as a secret.
+Errors also carry `provider`, `status`, `retryAfter` and `retryable`; `cause` is the underlying JS `Error`. Token values are redacted from every message, so a leaked stack trace cannot leak a credential. The deliberate exceptions are `repos.getCloneUrl`, which returns a URL with the credential embedded because that is what `git clone` needs, and `repos.getCloneCredentials`, which returns that credential next to a credential-free URL for a git credential helper — treat both as secrets.
 
 ## Runtime support
 

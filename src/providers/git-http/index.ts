@@ -2,11 +2,13 @@ import { stringToBase64 } from '../../base64.ts';
 import { RepoError } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
-import { clampPerPage } from '../shared.ts';
+import { clampPerPage, toCloneUrl } from '../shared.ts';
 import type {
   Branch,
+  CloneCredentials,
   CloneUrl,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetRepositoryParams,
   GetTagParams,
@@ -298,6 +300,12 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
     };
   }
 
+  async function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const url = normalizeRepoUrl(params.repo);
+    if (!auth) return { password: null, url, username: null };
+    return { password: await currentSecret(false), url, username };
+  }
+
   return {
     name: 'git-http',
     capabilities: CAPABILITIES,
@@ -421,13 +429,10 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
       throw unsupported('archive downloads');
     },
 
+    getCloneCredentials,
+
     async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      const repoUrl = normalizeRepoUrl(params.repo);
-      if (!auth) return { url: repoUrl };
-      const url = new URL(repoUrl);
-      url.username = username;
-      url.password = await currentSecret(false);
-      return { url: url.toString() };
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(): Promise<never> {

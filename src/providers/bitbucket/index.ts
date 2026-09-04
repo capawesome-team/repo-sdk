@@ -6,11 +6,13 @@ import {
   commitWebUrlBuilder,
   filenameFromContentDisposition,
   isRecord,
+  toCloneUrl,
 } from '../shared.ts';
 import type {
   Archive,
   AuthenticatedUser,
   Branch,
+  CloneCredentials,
   CloneUrl,
   Commit,
   CreateWebhookParams,
@@ -18,6 +20,7 @@ import type {
   DownloadArchiveParams,
   GetAuthenticatedUserParams,
   GetBranchParams,
+  GetCloneCredentialsParams,
   GetCloneUrlParams,
   GetCommitParams,
   GetRepositoryParams,
@@ -334,6 +337,14 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     return `${repoPath(repo)}/hooks/${encodeURIComponent(id)}`;
   }
 
+  async function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
+    const url = `https://${GIT_HOST}/${params.repo}.git`;
+    if (isApiTokenAuth(auth)) {
+      return { password: auth.apiToken, url, username: 'x-bitbucket-api-token-auth' };
+    }
+    return { password: await currentToken(false), url, username: 'x-token-auth' };
+  }
+
   return {
     name: 'bitbucket',
     capabilities: CAPABILITIES,
@@ -541,16 +552,10 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       };
     },
 
+    getCloneCredentials,
+
     async getCloneUrl(params: GetCloneUrlParams): Promise<CloneUrl> {
-      if (isApiTokenAuth(auth)) {
-        return {
-          url: `https://x-bitbucket-api-token-auth:${encodeURIComponent(auth.apiToken)}@${GIT_HOST}/${params.repo}.git`,
-        };
-      }
-      const token = await currentToken(false);
-      return {
-        url: `https://x-token-auth:${encodeURIComponent(token)}@${GIT_HOST}/${params.repo}.git`,
-      };
+      return toCloneUrl(await getCloneCredentials(params));
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {

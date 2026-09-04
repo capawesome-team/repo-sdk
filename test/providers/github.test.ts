@@ -580,6 +580,18 @@ describe('getCloneUrl', () => {
   });
 });
 
+describe('getCloneCredentials', () => {
+  it('returns the token as the password with a credential-free URL', async () => {
+    const { provider } = setup(() => ({ json: {} }));
+    const credentials = await provider.getCloneCredentials({ repo: 'o/r' });
+    expect(credentials).toEqual({
+      password: TOKEN,
+      url: 'https://github.com/o/r.git',
+      username: 'x-access-token',
+    });
+  });
+});
+
 describe('webhooks', () => {
   it('maps tag_push to create+delete and normalizes the response back', async () => {
     const { provider, stub } = setup(() => ({
