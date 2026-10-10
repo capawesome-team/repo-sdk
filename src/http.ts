@@ -110,8 +110,25 @@ export class HttpClient {
     options: HttpRequestOptions = {},
   ): Promise<{ data: T; response: Response }> {
     const response = await this.raw(path, options);
-    const data = response.status === 204 ? (undefined as T) : ((await response.json()) as T);
-    return { data, response };
+    if (response.status === 204) {
+      return { data: undefined as T, response };
+    }
+    const text = await response.text();
+    try {
+      return { data: JSON.parse(text) as T, response };
+    } catch (error) {
+      const url = this.buildUrl(path, options.query);
+      throw new RepoError(
+        `${this.options.provider} returned a non-JSON response from ${url.origin}${url.pathname}`,
+        {
+          code: 'invalid_response',
+          provider: this.options.provider,
+          status: response.status,
+          cause: error,
+          secrets: this.options.secrets?.() ?? [],
+        },
+      );
+    }
   }
 
   private async toError(response: Response): Promise<RepoError> {

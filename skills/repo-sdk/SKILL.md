@@ -124,7 +124,7 @@ try {
 } catch (error) {
   if (error instanceof RepoError) {
     error.code; // 'unauthorized' | 'forbidden' | 'not_found' | 'rate_limited'
-    // | 'validation' | 'unsupported' | 'provider_error' | 'network_error'
+    // | 'validation' | 'unsupported' | 'provider_error' | 'invalid_response' | 'network_error'
     error.provider; // 'github' | 'gitlab' | 'bitbucket' | 'azure-devops'
     error.status; // HTTP status, when available
     error.retryable; // whether retrying may succeed (rate_limited, network_error, 5xx)
