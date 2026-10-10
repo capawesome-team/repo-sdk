@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/capawesome-team/repo-sdk/compare/v0.3.1...v0.3.2) (2026-10-10)
+
+
+### Bug Fixes
+
+* throw `RepoError` with code `invalid_response` for non-JSON responses ([#16](https://github.com/capawesome-team/repo-sdk/issues/16)) ([c7bafa2](https://github.com/capawesome-team/repo-sdk/commit/c7bafa278a0fc027e548da827d311274d311c18d))
+
 ## [0.3.1](https://github.com/capawesome-team/repo-sdk/compare/v0.3.0...v0.3.1) (2026-09-04)
 
 
