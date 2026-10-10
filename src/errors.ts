@@ -8,6 +8,7 @@ export type RepoErrorCode =
   | 'validation'
   | 'unsupported'
   | 'provider_error'
+  | 'invalid_response'
   | 'network_error';
 
 export interface RepoErrorOptions {

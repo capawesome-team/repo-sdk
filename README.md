@@ -148,7 +148,7 @@ It reports every capability enabled by default, and a second options argument si
 
 ## Errors
 
-Every failure is a `RepoError` with a closed `code` union: `unauthorized`, `forbidden`, `not_found`, `rate_limited`, `validation`, `unsupported`, `provider_error`, `network_error`.
+Every failure is a `RepoError` with a closed `code` union: `unauthorized`, `forbidden`, `not_found`, `rate_limited`, `validation`, `unsupported`, `provider_error`, `invalid_response`, `network_error`.
 
 ```ts
 import { RepoError } from 'repo-sdk';

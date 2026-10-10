@@ -6,8 +6,8 @@ sidebar:
 ---
 
 A complete reference of the `RepoErrorCode` union — `unauthorized`, `forbidden`, `not_found`,
-`rate_limited`, `validation`, `unsupported`, `provider_error`, and `network_error` — with typical causes
-and retry semantics.
+`rate_limited`, `validation`, `unsupported`, `provider_error`, `invalid_response`, and `network_error` —
+with typical causes and retry semantics.
 
 Every failure throws a single type — **`RepoError`** — with a normalized `code`, so you branch on the
 failure without parsing provider-specific statuses or messages. For the conceptual overview see
@@ -27,18 +27,19 @@ failure without parsing provider-specific statuses or messages. For the conceptu
 
 ## The code union
 
-`RepoErrorCode` is a closed union of eight values:
+`RepoErrorCode` is a closed union of nine values:
 
-| `code`           | Typical cause                                            | HTTP        | `retryable`   |
-| ---------------- | -------------------------------------------------------- | ----------- | ------------- |
-| `unauthorized`   | Missing or invalid credentials                           | `401`       | no            |
-| `forbidden`      | Authenticated but not allowed                            | `403`       | no            |
-| `not_found`      | Repository/resource missing                              | `404` / `410` | no          |
-| `rate_limited`   | Rate limit hit                                           | `429`       | yes           |
-| `validation`     | Bad parameters (or a client-side check)                  | `400` / `422` | no          |
-| `unsupported`    | The provider can't do what was requested                 | —           | no            |
-| `provider_error` | An unclassified provider response                        | other       | only when `5xx` |
-| `network_error`  | The request never completed (DNS, connection, timeout)   | —           | yes           |
+| `code`             | Typical cause                                                                          | HTTP          | `retryable`     |
+| ------------------ | -------------------------------------------------------------------------------------- | ------------- | --------------- |
+| `unauthorized`     | Missing or invalid credentials                                                         | `401`         | no              |
+| `forbidden`        | Authenticated but not allowed                                                          | `403`         | no              |
+| `not_found`        | Repository/resource missing                                                            | `404` / `410` | no              |
+| `rate_limited`     | Rate limit hit                                                                         | `429`         | yes             |
+| `validation`       | Bad parameters (or a client-side check)                                                | `400` / `422` | no              |
+| `unsupported`      | The provider can't do what was requested                                               | —             | no              |
+| `provider_error`   | An unclassified provider response                                                      | other         | only when `5xx` |
+| `invalid_response` | A successful response whose body isn't JSON (e.g. an HTML page from a wrong `baseUrl`) | `2xx`         | no              |
+| `network_error`    | The request never completed (DNS, connection, timeout)                                 | —             | yes             |
 
 `unsupported` and `validation` are frequently raised **before any request is made** — capability gating
 (`query`/`owned`/`format`/webhook events) and required-parameter checks (`repo`, `ref`, `url`, `id`) are
