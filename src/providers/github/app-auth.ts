@@ -35,6 +35,7 @@ export interface AppTokenSourceOptions {
   installationId?: string | number;
   owner?: string;
   repositories?: string[];
+  repositoryIds?: Array<string | number>;
   baseUrl: string;
   fetchImpl: typeof fetch;
   apiVersion: string;
@@ -165,6 +166,7 @@ export class AppTokenSource implements TokenSource {
   private installationId?: string;
   private readonly owner?: string;
   private readonly repositories?: string[];
+  private readonly repositoryIds?: number[];
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
@@ -174,6 +176,15 @@ export class AppTokenSource implements TokenSource {
         code: 'validation',
         provider: 'github',
       });
+    }
+    if (options.repositories !== undefined && options.repositoryIds !== undefined) {
+      throw new RepoError(
+        'GitHub App auth accepts either repositories or repositoryIds, not both',
+        {
+          code: 'validation',
+          provider: 'github',
+        },
+      );
     }
     this.appId = String(options.appId);
     this.privateKey = options.privateKey;
@@ -185,6 +196,7 @@ export class AppTokenSource implements TokenSource {
       options.installationId === undefined ? undefined : String(options.installationId);
     this.owner = options.owner;
     this.repositories = options.repositories;
+    this.repositoryIds = options.repositoryIds?.map(Number);
   }
 
   async getToken(): Promise<string> {
@@ -227,11 +239,18 @@ export class AppTokenSource implements TokenSource {
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
-      this.repositories === undefined ? undefined : { repositories: this.repositories },
+      this.tokenScope(),
     );
     const token: InstallationToken = { token: data.token, expiresAt: new Date(data.expires_at) };
     this.cached = token;
     return token;
+  }
+
+  /** Body of the access-token request; `undefined` mints an unrestricted token. */
+  private tokenScope(): Record<string, unknown> | undefined {
+    if (this.repositoryIds !== undefined) return { repository_ids: this.repositoryIds };
+    if (this.repositories !== undefined) return { repositories: this.repositories };
+    return undefined;
   }
 
   private async resolveInstallationId(jwt: string): Promise<string> {

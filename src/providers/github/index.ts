@@ -65,6 +65,12 @@ export interface GitHubAppAuth {
    * installation's account. Omitted: every repository the installation can access.
    */
   repositories?: string[];
+  /**
+   * Restrict the minted installation token to these repository ids. Ids survive a
+   * repository rename, so prefer them over `repositories` when the repository is
+   * stored long-term. Mutually exclusive with `repositories`.
+   */
+  repositoryIds?: Array<string | number>;
 }
 
 export interface GitHubTokenProviderAuth {
@@ -143,6 +149,7 @@ function createTokenSource(
     installationId: auth.installationId,
     owner: auth.owner,
     repositories: auth.repositories,
+    repositoryIds: auth.repositoryIds,
     baseUrl,
     fetchImpl,
     apiVersion: API_VERSION,

@@ -112,6 +112,7 @@ function setup(
     installationId?: string | number;
     owner?: string;
     repositories?: string[];
+    repositoryIds?: Array<string | number>;
   },
   baseUrl?: string,
 ) {
@@ -123,6 +124,7 @@ function setup(
       installationId: auth.installationId,
       owner: auth.owner,
       repositories: auth.repositories,
+      repositoryIds: auth.repositoryIds,
     },
     fetch: stub.fetch,
     baseUrl,
@@ -181,6 +183,29 @@ describe('GitHub App auth', () => {
       (r) => new URL(r.url).pathname === '/repos/capawesome-team/repo-sdk',
     )!;
     expect(apiRequest.headers.authorization).toBe(`Bearer ${INSTALLATION_TOKEN}`);
+  });
+
+  it('restricts the minted token to the configured repository ids', async () => {
+    const { provider, stub } = setup(appHandler(), {
+      privateKey: pkcs8Pem,
+      installationId: 99,
+      repositoryIds: ['1103903692', 42],
+    });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+
+    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
+    expect(JSON.parse(mintRequest.body!)).toEqual({ repository_ids: [1103903692, 42] });
+  });
+
+  it('rejects repositories together with repositoryIds', () => {
+    expect(() =>
+      setup(appHandler(), {
+        privateKey: pkcs8Pem,
+        installationId: 99,
+        repositories: ['repo-sdk'],
+        repositoryIds: [42],
+      }),
+    ).toThrow(RepoError);
   });
 
   it('sends no request body when repositories is omitted', async () => {
