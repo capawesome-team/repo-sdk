@@ -52,6 +52,7 @@ const client = createClient({
     installationId: { type: 'string | number', required: false, description: 'The installation to act as. Optional for single-installation apps.' },
     owner: { type: 'string', required: false, description: 'Org or user whose installation to act as; alternative to installationId.' },
     repositories: { type: 'string[]', required: false, description: 'Repository names the minted token is restricted to. Defaults to every repository the installation can access.' },
+    repositoryIds: { type: 'Array<string | number>', required: false, description: 'Repository ids the minted token is restricted to. Ids survive a rename; may be combined with repositories.' },
   }}
 />
 
@@ -116,6 +117,10 @@ github({
 
 Use it for least-privilege tokens for CI consumers that hand the token to build steps. The restriction
 is fixed for the lifetime of the provider, so create one provider per set of repositories.
+
+Names break when a repository is renamed: GitHub rejects the token request for the old name. If you
+store the repository long-term, pass its id via `repositoryIds` instead (`repositoryIds: [1103903692]`);
+ids are stable across renames. Both options can be combined.
 
 ### Using the installation token outside the SDK
 

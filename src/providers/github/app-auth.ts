@@ -35,6 +35,7 @@ export interface AppTokenSourceOptions {
   installationId?: string | number;
   owner?: string;
   repositories?: string[];
+  repositoryIds?: Array<string | number>;
   baseUrl: string;
   fetchImpl: typeof fetch;
   apiVersion: string;
@@ -165,6 +166,7 @@ export class AppTokenSource implements TokenSource {
   private installationId?: string;
   private readonly owner?: string;
   private readonly repositories?: string[];
+  private readonly repositoryIds?: number[];
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
@@ -185,6 +187,7 @@ export class AppTokenSource implements TokenSource {
       options.installationId === undefined ? undefined : String(options.installationId);
     this.owner = options.owner;
     this.repositories = options.repositories;
+    this.repositoryIds = options.repositoryIds?.map(Number);
   }
 
   async getToken(): Promise<string> {
@@ -227,11 +230,20 @@ export class AppTokenSource implements TokenSource {
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
-      this.repositories === undefined ? undefined : { repositories: this.repositories },
+      this.tokenScope(),
     );
     const token: InstallationToken = { token: data.token, expiresAt: new Date(data.expires_at) };
     this.cached = token;
     return token;
+  }
+
+  /** Body of the access-token request; `undefined` mints an unrestricted token. */
+  private tokenScope(): Record<string, unknown> | undefined {
+    if (this.repositories === undefined && this.repositoryIds === undefined) return undefined;
+    return {
+      ...(this.repositories === undefined ? {} : { repositories: this.repositories }),
+      ...(this.repositoryIds === undefined ? {} : { repository_ids: this.repositoryIds }),
+    };
   }
 
   private async resolveInstallationId(jwt: string): Promise<string> {
