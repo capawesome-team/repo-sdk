@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/capawesome-team/repo-sdk/compare/v0.3.2...v0.3.3) (2026-10-14)
+
+
+### Features
+
+* **github:** scope app installation tokens by repository id ([#18](https://github.com/capawesome-team/repo-sdk/issues/18)) ([3f2a2c8](https://github.com/capawesome-team/repo-sdk/commit/3f2a2c81897557bd1030129e56b5a5c70330f0f8))
+
 ## [0.3.2](https://github.com/capawesome-team/repo-sdk/compare/v0.3.1...v0.3.2) (2026-10-10)
 
 
