@@ -197,6 +197,12 @@ describe('GitHub App auth', () => {
     expect(JSON.parse(mintRequest.body!)).toEqual({ repository_ids: [1103903692, 42] });
   });
 
+  it.each(['owner/repo', '0x2a', '-1', '1.5', ''])('rejects the invalid repository id %j', (id) => {
+    expect(() =>
+      setup(appHandler(), { privateKey: pkcs8Pem, installationId: 99, repositoryIds: [id] }),
+    ).toThrow(RepoError);
+  });
+
   it('rejects repositories together with repositoryIds', () => {
     expect(() =>
       setup(appHandler(), {
