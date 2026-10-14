@@ -177,6 +177,15 @@ export class AppTokenSource implements TokenSource {
         provider: 'github',
       });
     }
+    if (options.repositories !== undefined && options.repositoryIds !== undefined) {
+      throw new RepoError(
+        'GitHub App auth accepts either repositories or repositoryIds, not both',
+        {
+          code: 'validation',
+          provider: 'github',
+        },
+      );
+    }
     this.appId = String(options.appId);
     this.privateKey = options.privateKey;
     this.baseUrl = options.baseUrl;
@@ -239,11 +248,9 @@ export class AppTokenSource implements TokenSource {
 
   /** Body of the access-token request; `undefined` mints an unrestricted token. */
   private tokenScope(): Record<string, unknown> | undefined {
-    if (this.repositories === undefined && this.repositoryIds === undefined) return undefined;
-    return {
-      ...(this.repositories === undefined ? {} : { repositories: this.repositories }),
-      ...(this.repositoryIds === undefined ? {} : { repository_ids: this.repositoryIds }),
-    };
+    if (this.repositoryIds !== undefined) return { repository_ids: this.repositoryIds };
+    if (this.repositories !== undefined) return { repositories: this.repositories };
+    return undefined;
   }
 
   private async resolveInstallationId(jwt: string): Promise<string> {

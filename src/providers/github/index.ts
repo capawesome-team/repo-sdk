@@ -68,7 +68,7 @@ export interface GitHubAppAuth {
   /**
    * Restrict the minted installation token to these repository ids. Ids survive a
    * repository rename, so prefer them over `repositories` when the repository is
-   * stored long-term. May be combined with `repositories`.
+   * stored long-term. Mutually exclusive with `repositories`.
    */
   repositoryIds?: Array<string | number>;
 }

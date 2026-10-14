@@ -197,20 +197,15 @@ describe('GitHub App auth', () => {
     expect(JSON.parse(mintRequest.body!)).toEqual({ repository_ids: [1103903692, 42] });
   });
 
-  it('combines repository names and ids in the token restriction', async () => {
-    const { provider, stub } = setup(appHandler(), {
-      privateKey: pkcs8Pem,
-      installationId: 99,
-      repositories: ['repo-sdk'],
-      repositoryIds: [42],
-    });
-    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
-
-    const mintRequest = stub.requests.find((r) => r.url.endsWith('/access_tokens'))!;
-    expect(JSON.parse(mintRequest.body!)).toEqual({
-      repositories: ['repo-sdk'],
-      repository_ids: [42],
-    });
+  it('rejects repositories together with repositoryIds', () => {
+    expect(() =>
+      setup(appHandler(), {
+        privateKey: pkcs8Pem,
+        installationId: 99,
+        repositories: ['repo-sdk'],
+        repositoryIds: [42],
+      }),
+    ).toThrow(RepoError);
   });
 
   it('sends no request body when repositories is omitted', async () => {
