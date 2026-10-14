@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/capawesome-team/repo-sdk/compare/v0.3.3...v0.3.4) (2026-10-14)
+
+
+### Bug Fixes
+
+* **github:** validate repository ids before minting an installation token ([#20](https://github.com/capawesome-team/repo-sdk/issues/20)) ([a2fae83](https://github.com/capawesome-team/repo-sdk/commit/a2fae832c46bd3975653e7ba5460c51eeab1a0df))
+
 ## [0.3.3](https://github.com/capawesome-team/repo-sdk/compare/v0.3.2...v0.3.3) (2026-10-14)
 
 
