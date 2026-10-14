@@ -120,7 +120,8 @@ is fixed for the lifetime of the provider, so create one provider per set of rep
 
 Names break when a repository is renamed: GitHub rejects the token request for the old name. If you
 store the repository long-term, pass its id via `repositoryIds` instead (`repositoryIds: [1103903692]`);
-ids are stable across renames. Pass one of the two options, not both.
+ids are stable across renames. The id is the `id` of the repository returned by `repos.get` or
+`repos.list`. Pass one of the two options, not both.
 
 ### Using the installation token outside the SDK
 

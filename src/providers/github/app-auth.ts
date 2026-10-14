@@ -42,6 +42,18 @@ export interface AppTokenSourceOptions {
   userAgent: string;
 }
 
+/** GitHub repository ids are positive integers; anything else would only surface as an opaque 422. */
+function toRepositoryId(value: string | number): number {
+  const id = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+    throw new RepoError(`Invalid GitHub repository id: ${String(value)}`, {
+      code: 'validation',
+      provider: 'github',
+    });
+  }
+  return id;
+}
+
 export interface InstallationToken {
   token: string;
   expiresAt: Date;
@@ -196,7 +208,7 @@ export class AppTokenSource implements TokenSource {
       options.installationId === undefined ? undefined : String(options.installationId);
     this.owner = options.owner;
     this.repositories = options.repositories;
-    this.repositoryIds = options.repositoryIds?.map(Number);
+    this.repositoryIds = options.repositoryIds?.map(toRepositoryId);
   }
 
   async getToken(): Promise<string> {
