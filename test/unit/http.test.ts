@@ -26,3 +26,40 @@ describe('HttpClient.json', () => {
     });
   });
 });
+
+describe('HttpClient.buildUrl', () => {
+  const http = new HttpClient({
+    provider: 'github',
+    baseUrl: 'https://api.github.com',
+    authHeaders: () => ({}),
+  });
+
+  it.each([
+    '/repos/o/r/git/matching-refs/heads/../../../other/repo',
+    '/repos/o/r/./branches',
+    '/repos/o/r/..',
+    '../repos/o/r',
+    '/repos/o/r/%2e%2e/other',
+    '/repos/o/r/.%2E/other',
+    '/repos/o/r/%2E/branches',
+    '/repos/o/r?per_page=1',
+    '/repos/o/r#branches',
+    '/repos/o/r\\..\\other',
+  ])('rejects the relative path %s', (path) => {
+    expect(() => http.buildUrl(path)).toThrow(
+      expect.objectContaining({ code: 'validation', provider: 'github' }),
+    );
+  });
+
+  it.each(['/repos/o/.github/branches/feature/v1.2', '/repos/o/r/branches/a..b', '/repos/o/r/...'])(
+    'keeps the relative path %s',
+    (path) => {
+      expect(http.buildUrl(path).pathname).toBe(path);
+    },
+  );
+
+  it('keeps absolute URLs unchanged', () => {
+    const url = 'https://api.github.com/repositories/42/branches?page=2';
+    expect(http.buildUrl(url).toString()).toBe(url);
+  });
+});

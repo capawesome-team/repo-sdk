@@ -487,6 +487,20 @@ describe('searchRefs', () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]?.name).toBe('feature/login');
   });
+
+  it('rejects a query with dot segments without sending a request', async () => {
+    const { provider, stub } = setup(() => ({ json: [] }));
+    await expectRepoError(
+      provider.searchRefs({
+        repo: 'o/r',
+        query: '../../other/r/git/refs/heads/',
+        types: ['branch'],
+        limit: 20,
+      }),
+      'validation',
+    );
+    expect(stub.requests).toHaveLength(0);
+  });
 });
 
 describe('downloadArchive', () => {

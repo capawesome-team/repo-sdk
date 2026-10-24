@@ -5,6 +5,11 @@ export type QueryValue = string | number | boolean | string[] | undefined;
 
 const USER_AGENT = 'repo-sdk';
 
+// Dot segments (literal or percent-encoded) would be collapsed by `new URL()`,
+// and `?`, `#` or `\` would change the parsed path, so the request could leave
+// the endpoint the caller values were meant to address.
+const UNSAFE_RELATIVE_PATH = /(^|\/)(\.|%2e){1,2}(\/|$)|[?#\\]/i;
+
 export interface HttpRequestOptions {
   method?: string;
   query?: Record<string, QueryValue>;
@@ -42,9 +47,7 @@ export class HttpClient {
   constructor(private readonly options: HttpClientOptions) {}
 
   buildUrl(path: string, query?: Record<string, QueryValue>): URL {
-    const url = /^https?:\/\//.test(path)
-      ? new URL(path)
-      : new URL(this.options.baseUrl.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, ''));
+    const url = /^https?:\/\//.test(path) ? new URL(path) : this.resolveRelativePath(path);
     if (query) {
       for (const [key, value] of Object.entries(query)) {
         if (value === undefined) continue;
@@ -58,6 +61,20 @@ export class HttpClient {
       }
     }
     return url;
+  }
+
+  private resolveRelativePath(path: string): URL {
+    if (UNSAFE_RELATIVE_PATH.test(path)) {
+      throw new RepoError(
+        `${this.options.provider} request path must not contain '.' or '..' segments, '?', '#' or '\\'`,
+        {
+          code: 'validation',
+          provider: this.options.provider,
+          secrets: this.options.secrets?.() ?? [],
+        },
+      );
+    }
+    return new URL(this.options.baseUrl.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, ''));
   }
 
   async raw(path: string, options: HttpRequestOptions = {}): Promise<Response> {
