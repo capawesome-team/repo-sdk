@@ -116,6 +116,18 @@ describe('listNamespaces', () => {
     expect(second.data[0]).toMatchObject({ slug: 'third-org', name: 'third-org' });
     expect(second.cursor).toBeUndefined();
   });
+
+  it('throws invalid_response when the organizations endpoint answers with an object', async () => {
+    const { provider } = setup((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/api/v1/user') {
+        return { json: { id: 1, login: 'robin', full_name: 'Robin Genz' } };
+      }
+      return { json: { message: 'this is not a Gitea server' } };
+    });
+
+    await expectRepoError(provider.listNamespaces({ limit: 20 }), 'invalid_response');
+  });
 });
 
 describe('listRepositories', () => {

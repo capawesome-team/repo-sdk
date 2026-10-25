@@ -166,6 +166,16 @@ function reposFromBody(body: unknown): GiteaRepo[] {
   return [];
 }
 
+// A server that is not Gitea may answer the organizations path with a JSON object; mapping it
+// would throw a bare TypeError, so it fails as a RepoError like every other bad response.
+function orgsFromBody(body: unknown): GiteaOrg[] {
+  if (Array.isArray(body)) return body as GiteaOrg[];
+  throw new RepoError('gitea returned an unexpected response for the organizations list', {
+    code: 'invalid_response',
+    provider: 'gitea',
+  });
+}
+
 function toUserNamespace(user: GiteaUser): Namespace {
   const slug = user.login ?? user.username ?? '';
   return {
@@ -396,16 +406,16 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('gitea', params.cursor);
         assertSameOriginUrl('gitea', baseUrl, url);
-        const { data, response } = await http.json<GiteaOrg[]>(url, { signal: params.signal });
-        return { data: data.map(toOrgNamespace), cursor: nextCursor(response) };
+        const { data, response } = await http.json<unknown>(url, { signal: params.signal });
+        return { data: orgsFromBody(data).map(toOrgNamespace), cursor: nextCursor(response) };
       }
       const { data: user } = await http.json<GiteaUser>('/user', { signal: params.signal });
-      const { data: orgs, response } = await http.json<GiteaOrg[]>('/user/orgs', {
+      const { data: orgs, response } = await http.json<unknown>('/user/orgs', {
         query: { limit: clampPerPage(params.limit) },
         signal: params.signal,
       });
       return {
-        data: [toUserNamespace(user), ...orgs.map(toOrgNamespace)],
+        data: [toUserNamespace(user), ...orgsFromBody(orgs).map(toOrgNamespace)],
         cursor: nextCursor(response),
       };
     },
