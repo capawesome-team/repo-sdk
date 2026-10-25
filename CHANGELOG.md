@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.5](https://github.com/capawesome-team/repo-sdk/compare/v0.3.4...v0.3.5) (2026-10-25)
+
+
+### Bug Fixes
+
+* fail with `invalid_response` when a provider response has an unexpected shape ([#23](https://github.com/capawesome-team/repo-sdk/issues/23)) ([a343287](https://github.com/capawesome-team/repo-sdk/commit/a3432873ed001304bb36d45e87832fb2bc6edfb6))
+* reject dot segments and reserved characters in request paths ([#22](https://github.com/capawesome-team/repo-sdk/issues/22)) ([140ba04](https://github.com/capawesome-team/repo-sdk/commit/140ba04cea89b571264d4eabc3ea75b0e3f5a828))
+
 ## [0.3.4](https://github.com/capawesome-team/repo-sdk/compare/v0.3.3...v0.3.4) (2026-10-14)
 
 
