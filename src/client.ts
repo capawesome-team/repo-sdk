@@ -134,19 +134,34 @@ export function createClient(options: CreateClientOptions): RepoClient {
   const retryRateLimit = options.retry?.rateLimit ?? true;
   const maxRetryAfterSeconds = options.retry?.maxRetryAfterSeconds ?? 10;
 
+  // A provider trusts the shape of a JSON body; a body of another shape fails inside its mapping
+  // code with a bare TypeError. Every failure leaves the client as a RepoError.
+  function toRepoError(error: unknown): RepoError {
+    if (error instanceof RepoError) return error;
+    return new RepoError(`${provider.name} returned a response the SDK could not read`, {
+      code: 'invalid_response',
+      provider: provider.name,
+      cause: error,
+    });
+  }
+
   async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
-    } catch (error) {
+    } catch (caught) {
+      const error = toRepoError(caught);
       if (
         retryRateLimit &&
-        error instanceof RepoError &&
         error.code === 'rate_limited' &&
         error.retryAfter !== undefined &&
         error.retryAfter <= maxRetryAfterSeconds
       ) {
         await delay(error.retryAfter * 1000);
-        return operation();
+        try {
+          return await operation();
+        } catch (retried) {
+          throw toRepoError(retried);
+        }
       }
       throw error;
     }

@@ -667,3 +667,23 @@ describe('rate-limit retry', () => {
     expect(calls()).toBe(1);
   });
 });
+
+describe('unexpected provider failures', () => {
+  it('wraps an error that is not a RepoError into invalid_response', async () => {
+    const cause = new TypeError('orgs.map is not a function');
+    const provider = fakeProvider({
+      listNamespaces: async () => {
+        throw cause;
+      },
+    });
+    const client = createClient({ provider });
+    try {
+      await client.namespaces.list();
+      expect.unreachable('expected RepoError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RepoError);
+      expect((error as RepoError).code).toBe('invalid_response');
+      expect((error as RepoError).cause).toBe(cause);
+    }
+  });
+});
