@@ -64,7 +64,11 @@ export class HttpClient {
   }
 
   private resolveRelativePath(path: string): URL {
-    if (UNSAFE_RELATIVE_PATH.test(path)) {
+    // `new URL()` drops tabs and newlines and trims trailing controls and
+    // spaces before it resolves dot segments, so check the path it will see.
+    // eslint-disable-next-line no-control-regex -- the URL parser trims exactly U+0000 to U+0020
+    const parsedPath = path.replace(/[\t\n\r]/g, '').replace(/[\u0000- ]+$/, '');
+    if (UNSAFE_RELATIVE_PATH.test(parsedPath)) {
       throw new RepoError(
         `${this.options.provider} request path must not contain '.' or '..' segments, '?', '#' or '\\'`,
         {

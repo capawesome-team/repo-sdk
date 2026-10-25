@@ -45,7 +45,10 @@ describe('HttpClient.buildUrl', () => {
     '/repos/o/r?per_page=1',
     '/repos/o/r#branches',
     '/repos/o/r\\..\\other',
-  ])('rejects the relative path %s', (path) => {
+    '/repos/o/r/hooks/.\t./.\n./r',
+    '/repos/o/r/hooks/.\r.',
+    '/repos/o/r/hooks/.. ',
+  ])('rejects the relative path %j', (path) => {
     expect(() => http.buildUrl(path)).toThrow(
       expect.objectContaining({ code: 'validation', provider: 'github' }),
     );
