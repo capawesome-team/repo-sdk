@@ -43,7 +43,8 @@ failure without parsing provider-specific statuses or messages. For the conceptu
 
 `unsupported` and `validation` are frequently raised **before any request is made** — capability gating
 (`query`/`owned`/`format`/webhook events) and required-parameter checks (`repo`, `ref`, `url`, `id`) are
-enforced client-side.
+enforced client-side. Parameters that would put a `.` or `..` segment, `?`, `#` or `\` into a request
+path also throw `validation`.
 
 ## retryable & retryAfter
 
