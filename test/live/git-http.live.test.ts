@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { gitHttp } from '../../src/git-http.ts';
 import { createClient } from '../../src/index.ts';
 
-const url = process.env.REPO_SDK_LIVE_GIT_HTTP_URL;
-const username = process.env.REPO_SDK_LIVE_GIT_HTTP_USERNAME;
-const password = process.env.REPO_SDK_LIVE_GIT_HTTP_PASSWORD;
+const url = process.env.LIVE_GIT_HTTP_URL;
+const username = process.env.LIVE_GIT_HTTP_USERNAME;
+const password = process.env.LIVE_GIT_HTTP_PASSWORD;
 
 describe.skipIf(!url)('git-http live (read-only)', () => {
   const client = createClient({

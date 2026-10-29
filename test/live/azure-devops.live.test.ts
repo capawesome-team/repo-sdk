@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { azureDevOps } from '../../src/azure-devops.ts';
 import { createClient } from '../../src/index.ts';
 
-const organization = process.env.REPO_SDK_LIVE_AZURE_ORG;
-const pat = process.env.REPO_SDK_LIVE_AZURE_PAT;
-const repo = process.env.REPO_SDK_LIVE_AZURE_REPO;
+const organization = process.env.LIVE_AZURE_ORG;
+const pat = process.env.LIVE_AZURE_PAT;
+const repo = process.env.LIVE_AZURE_REPO;
 
 describe.skipIf(!organization || !pat || !repo)('Azure DevOps live (read-only)', () => {
   const client = createClient({

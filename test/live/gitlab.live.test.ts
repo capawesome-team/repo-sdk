@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { gitlab } from '../../src/gitlab.ts';
 import { createClient } from '../../src/index.ts';
 
-const token = process.env.REPO_SDK_LIVE_GITLAB_TOKEN;
-const repo = process.env.REPO_SDK_LIVE_GITLAB_REPO;
+const token = process.env.LIVE_GITLAB_TOKEN;
+const repo = process.env.LIVE_GITLAB_REPO;
 
 describe.skipIf(!token || !repo)('GitLab live (read-only)', () => {
   const client = createClient({ provider: gitlab({ auth: { token: token! } }) });

@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { gitea } from '../../src/gitea.ts';
 import { createClient } from '../../src/index.ts';
 
-const token = process.env.REPO_SDK_LIVE_GITEA_TOKEN;
-const repo = process.env.REPO_SDK_LIVE_GITEA_REPO;
-const baseUrl = process.env.REPO_SDK_LIVE_GITEA_BASE_URL;
+const token = process.env.LIVE_GITEA_TOKEN;
+const repo = process.env.LIVE_GITEA_REPO;
+// The workflow sets an unset secret to an empty string, which is not a URL.
+const baseUrl = process.env.LIVE_GITEA_BASE_URL || undefined;
 
 describe.skipIf(!token || !repo)('Gitea live (read-only)', () => {
   const client = createClient({ provider: gitea({ auth: { token: token! }, baseUrl }) });

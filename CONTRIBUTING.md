@@ -35,15 +35,15 @@ Live tests run only when their credentials are present:
 npm run test:live
 ```
 
-Provide the variables for whichever providers you want to exercise (all prefixed `REPO_SDK_LIVE_`):
+Provide the variables for whichever providers you want to exercise (all prefixed `LIVE_`):
 
-| Provider     | Environment variables                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------- |
-| GitHub       | `REPO_SDK_LIVE_GITHUB_TOKEN`, `REPO_SDK_LIVE_GITHUB_REPO`                                            |
-| GitLab       | `REPO_SDK_LIVE_GITLAB_TOKEN`, `REPO_SDK_LIVE_GITLAB_REPO`                                            |
-| Bitbucket    | `REPO_SDK_LIVE_BITBUCKET_EMAIL`, `REPO_SDK_LIVE_BITBUCKET_API_TOKEN`, `REPO_SDK_LIVE_BITBUCKET_REPO` |
-| Azure DevOps | `REPO_SDK_LIVE_AZURE_ORG`, `REPO_SDK_LIVE_AZURE_PAT`, `REPO_SDK_LIVE_AZURE_REPO`                     |
-| Gitea        | `REPO_SDK_LIVE_GITEA_TOKEN`, `REPO_SDK_LIVE_GITEA_REPO`, `REPO_SDK_LIVE_GITEA_BASE_URL` (optional)   |
+| Provider     | Environment variables                                                     |
+| ------------ | ------------------------------------------------------------------------- |
+| GitHub       | `LIVE_GITHUB_TOKEN`, `LIVE_GITHUB_REPO`                                   |
+| GitLab       | `LIVE_GITLAB_TOKEN`, `LIVE_GITLAB_REPO`                                   |
+| Bitbucket    | `LIVE_BITBUCKET_EMAIL`, `LIVE_BITBUCKET_API_TOKEN`, `LIVE_BITBUCKET_REPO` |
+| Azure DevOps | `LIVE_AZURE_ORG`, `LIVE_AZURE_PAT`, `LIVE_AZURE_REPO`                     |
+| Gitea        | `LIVE_GITEA_TOKEN`, `LIVE_GITEA_REPO`, `LIVE_GITEA_BASE_URL` (optional)   |
 
 Only the providers whose variables are set will run; the rest are skipped.
 
