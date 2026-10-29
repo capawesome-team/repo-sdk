@@ -712,9 +712,11 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     async downloadArchive(params: DownloadArchiveParams): Promise<Archive> {
       const format = params.format ?? 'zip';
       const extension = format === 'zip' ? 'zip' : 'tar.gz';
+      // GitLab's hotlinking detector answers 406 to archive requests whose `Sec-Fetch-Mode` is
+      // `cors`, which Node's fetch sends by default and only `mode` can change.
       const response = await http.raw(
         `/projects/${projectId(params.repo)}/repository/archive.${extension}`,
-        { query: { sha: params.ref }, signal: params.signal },
+        { query: { sha: params.ref }, mode: 'same-origin', signal: params.signal },
       );
       if (!response.body) {
         throw new RepoError('GitLab archive response has no body', {

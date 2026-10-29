@@ -79,6 +79,7 @@ export interface HttpRequestOptions {
   headers?: Record<string, string>;
   signal?: AbortSignal;
   redirect?: RequestRedirect;
+  mode?: RequestMode;
 }
 
 export interface ProviderErrorInfo {
@@ -164,6 +165,7 @@ export class HttpClient {
           body,
           signal: options.signal,
           redirect: options.redirect,
+          mode: options.mode,
         });
       } catch (error) {
         throw new RepoError(`Request to ${url.origin}${url.pathname} failed`, {

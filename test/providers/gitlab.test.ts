@@ -467,6 +467,7 @@ describe('downloadArchive', () => {
     const url = new URL(stub.requests[0]!.url);
     expect(url.pathname).toBe('/api/v4/projects/42/repository/archive.zip');
     expect(url.searchParams.get('sha')).toBe('v1.0.0');
+    expect(stub.requests[0]!.mode).toBe('same-origin');
     expect(archive.contentType).toBe('application/zip');
     expect(archive.filename).toBe('repo-sdk.zip');
     expect(await new Response(archive.stream).text()).toBe('ZIPDATA');
