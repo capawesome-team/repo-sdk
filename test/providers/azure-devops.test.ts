@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createClient } from '../../src/client.ts';
 import {
   azureDevOps,
   commitWebUrl,
@@ -609,6 +610,18 @@ describe('getCloneCredentials', () => {
     expect(credentials.username).toBe('oauth2');
     expect(credentials.password).toBe('oauth-access-token');
   });
+
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: createFetchStub(() => ({ json: {} })).fetch,
+    });
+    await expect(
+      createClient({ provider }).repos.getCloneCredentials({ repo: 'core/repo-sdk' }),
+    ).rejects.toBe(cause);
+  });
 });
 
 describe('webhooks', () => {
@@ -983,6 +996,20 @@ describe('getAuthenticatedUser', () => {
 });
 
 describe('tokenProvider refresh', () => {
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = azureDevOps({
+      organization: ORG,
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: stub.fetch,
+    });
+    await expect(createClient({ provider }).repos.get({ repo: 'core/repo-sdk' })).rejects.toBe(
+      cause,
+    );
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('re-invokes the tokenProvider with forceRefresh and retries once on a 401', async () => {
     const contexts: boolean[] = [];
     const stub = createFetchStub((request) =>

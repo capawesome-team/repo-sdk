@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createClient } from '../../src/client.ts';
 import { commitWebUrl, gitea, parseWebhookEvent, verifyWebhook } from '../../src/gitea.ts';
 import { RepoError } from '../../src/errors.ts';
 import { HttpClient } from '../../src/http.ts';
@@ -794,6 +795,17 @@ describe('getAuthenticatedUser', () => {
 });
 
 describe('tokenProvider auth', () => {
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const stub = createFetchStub(() => ({ json: {} }));
+    const provider = gitea({
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: stub.fetch,
+    });
+    await expect(createClient({ provider }).repos.get({ repo: 'acme/app' })).rejects.toBe(cause);
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('uses the Bearer scheme (not token) and retries once on a 401', async () => {
     const contexts: boolean[] = [];
     const stub = createFetchStub((request) =>

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createClient } from '../../src/client.ts';
 import { commitWebUrl, github, parseWebhookEvent, verifyWebhook } from '../../src/github.ts';
 import { RepoError } from '../../src/errors.ts';
 import { encodeCursor } from '../../src/pagination.ts';
@@ -942,6 +943,19 @@ describe('commitWebUrl', () => {
 });
 
 describe('tokenProvider auth', () => {
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = github({
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: stub.fetch,
+    });
+    await expect(
+      createClient({ provider }).repos.get({ repo: 'capawesome-team/repo-sdk' }),
+    ).rejects.toBe(cause);
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('sends the minted token as a bearer token', async () => {
     const stub = createFetchStub(() => ({ json: repoPayload }));
     const provider = github({

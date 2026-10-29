@@ -1,4 +1,5 @@
 import { RepoError } from './errors.ts';
+import { TokenProviderError } from './token-provider.ts';
 import type {
   Archive,
   AuthenticatedUser,
@@ -135,9 +136,11 @@ export function createClient(options: CreateClientOptions): RepoClient {
   const maxRetryAfterSeconds = options.retry?.maxRetryAfterSeconds ?? 10;
 
   // A provider trusts the shape of a JSON body; a body of another shape fails inside its mapping
-  // code with a bare TypeError. Every failure leaves the client as a RepoError.
+  // code with a bare TypeError. Every failure leaves the client as a RepoError, except an error
+  // thrown by the caller's own `tokenProvider`: that one is the caller's and passes through untouched.
   function toRepoError(error: unknown): RepoError {
     if (error instanceof RepoError) return error;
+    if (error instanceof TokenProviderError) throw error.cause;
     return new RepoError(`${provider.name} returned a response the SDK could not read`, {
       code: 'invalid_response',
       provider: provider.name,
