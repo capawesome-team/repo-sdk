@@ -89,6 +89,30 @@ describe('listNamespaces', () => {
 });
 
 describe('listRepositories', () => {
+  it.each([
+    ['a bare array', [repoPayload]],
+    ['a search envelope', { items: [repoPayload] }],
+    ['an installation envelope', { repositories: [repoPayload] }],
+  ])('reads a cursor page that is %s', async (_label, json) => {
+    const { provider } = setup(() => ({ json }));
+    const page = await provider.listRepositories({
+      cursor: encodeCursor('github', { url: 'https://api.github.com/user/repos?page=2' }),
+    });
+    expect(page.data).toHaveLength(1);
+  });
+
+  it('throws invalid_response for a cursor page without a list', async () => {
+    const { provider } = setup(() => ({ json: { total_count: 0 } }));
+    await expect(
+      provider.listRepositories({
+        cursor: encodeCursor('github', { url: 'https://api.github.com/user/repos?page=2' }),
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of repositories'),
+    });
+  });
+
   it('returns validation for a cursor without page state', async () => {
     const { provider } = setup(() => ({ json: [] }));
     await expect(

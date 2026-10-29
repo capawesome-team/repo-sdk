@@ -271,7 +271,8 @@ function decodeUser(value: unknown): GitHubUser {
 }
 
 function decodeEmail(value: unknown): GitHubEmail {
-  expectRecord(value, 'email');
+  const email = expectRecord(value, 'email');
+  expectString(email.email, 'email.email');
   return value as GitHubEmail;
 }
 
@@ -309,7 +310,7 @@ function decodeSearchRepositories(value: unknown): GitHubRepo[] {
 }
 
 function decodeInstallationRepositories(value: unknown): GitHubRepo[] {
-  return decodeRepositories(expectRecord(value, 'repositories').repositories ?? []);
+  return decodeRepositories(expectRecord(value, 'repositories').repositories);
 }
 
 // The list endpoints answer with a bare array, search wraps its page in `{ items }` and the

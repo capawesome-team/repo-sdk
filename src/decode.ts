@@ -1,8 +1,9 @@
 /**
- * Building blocks for the hand-written decoder each endpoint runs on its response body. A decoder
- * checks the fields the SDK reads without a fallback and leaves the rest to the raw type, so an
- * answer from the wrong server or endpoint fails with a precise `invalid_response` while a real
- * provider's optional fields never do.
+ * Building blocks for the hand-written decoders each provider runs on its response bodies. A
+ * decoder defines what a valid entity of its raw type is for this SDK: it checks every field the
+ * SDK reads anywhere without a fallback and leaves the rest to the raw type, so an answer from the
+ * wrong server or endpoint fails with a precise `invalid_response` while a real provider's optional
+ * fields never do.
  */
 export class DecodeError extends Error {
   constructor(message: string) {

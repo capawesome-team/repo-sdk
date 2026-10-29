@@ -167,7 +167,8 @@ function decodeUser(value: unknown): BitbucketUser {
 }
 
 function decodeEmail(value: unknown): BitbucketEmail {
-  expectRecord(value, 'email');
+  const email = expectRecord(value, 'email');
+  expectString(email.email, 'email.email');
   return value as BitbucketEmail;
 }
 
