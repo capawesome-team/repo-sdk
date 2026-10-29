@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.6](https://github.com/capawesome-team/repo-sdk/compare/v0.3.5...v0.3.6) (2026-10-29)
+
+
+### Bug Fixes
+
+* pass errors thrown by the caller's `tokenProvider` through untouched ([#25](https://github.com/capawesome-team/repo-sdk/issues/25)) ([781d768](https://github.com/capawesome-team/repo-sdk/commit/781d7685729492d10cbb55d1ca46b6b8dedc5d94))
+
 ## [0.3.5](https://github.com/capawesome-team/repo-sdk/compare/v0.3.4...v0.3.5) (2026-10-25)
 
 
