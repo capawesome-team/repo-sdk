@@ -1,6 +1,7 @@
 import { RepoError } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo, type QueryValue } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
+import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -91,7 +92,7 @@ function createTokenSource(auth: GitLabProviderOptions['auth']): TokenSource {
   let lastToken: string | undefined;
   return {
     getToken: async (forceRefresh = false) => {
-      lastToken = await auth.tokenProvider({ forceRefresh });
+      lastToken = await mintToken(auth.tokenProvider, { forceRefresh });
       return lastToken;
     },
     getSecrets: () => (lastToken === undefined ? [] : [lastToken]),

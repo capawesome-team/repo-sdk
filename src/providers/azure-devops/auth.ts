@@ -1,3 +1,4 @@
+import { mintToken } from '../../token-provider.ts';
 import type { TokenProvider } from '../../types.ts';
 
 export const API_VERSION = '7.1';
@@ -29,7 +30,7 @@ export function authHeader(
   if ('accessToken' in auth) {
     return Promise.resolve(`Bearer ${auth.accessToken}`);
   }
-  return auth.tokenProvider(context).then((token) => `Bearer ${token}`);
+  return mintToken(auth.tokenProvider, context).then((token) => `Bearer ${token}`);
 }
 
 export function authSecrets(auth: AzureDevOpsAuth): string[] {

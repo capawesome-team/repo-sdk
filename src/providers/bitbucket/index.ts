@@ -1,6 +1,7 @@
 import { RepoError, type RepoErrorCode } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
+import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -297,7 +298,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   async function currentToken(forceRefresh: boolean): Promise<string> {
     if (isApiTokenAuth(auth)) return auth.apiToken;
     if ('accessToken' in auth) return auth.accessToken;
-    lastToken = await auth.tokenProvider({ forceRefresh });
+    lastToken = await mintToken(auth.tokenProvider, { forceRefresh });
     return lastToken;
   }
   async function authorizationHeader(forceRefresh: boolean): Promise<string> {

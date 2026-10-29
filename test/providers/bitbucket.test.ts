@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createClient } from '../../src/client.ts';
 import { bitbucket, commitWebUrl, parseWebhookEvent, verifyWebhook } from '../../src/bitbucket.ts';
 import type { BitbucketProviderOptions } from '../../src/bitbucket.ts';
 import { RepoError } from '../../src/errors.ts';
@@ -788,6 +789,19 @@ describe('getAuthenticatedUser', () => {
 });
 
 describe('tokenProvider auth', () => {
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = bitbucket({
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: stub.fetch,
+    });
+    await expect(
+      createClient({ provider }).repos.get({ repo: 'capawesome-team/repo-sdk' }),
+    ).rejects.toBe(cause);
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('sends the minted token and retries once with forceRefresh on a 401', async () => {
     const contexts: boolean[] = [];
     const stub = createFetchStub((request) =>

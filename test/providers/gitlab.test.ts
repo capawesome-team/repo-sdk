@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createClient } from '../../src/client.ts';
 import { commitWebUrl, gitlab, parseWebhookEvent, verifyWebhook } from '../../src/gitlab.ts';
 import { RepoError } from '../../src/errors.ts';
 import { encodeCursor } from '../../src/pagination.ts';
@@ -743,6 +744,19 @@ describe('getAuthenticatedUser', () => {
 });
 
 describe('tokenProvider auth', () => {
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const stub = createFetchStub(() => ({ json: projectPayload }));
+    const provider = gitlab({
+      auth: { tokenProvider: () => Promise.reject(cause) },
+      fetch: stub.fetch,
+    });
+    await expect(createClient({ provider }).repos.get({ repo: 'group/repo-sdk' })).rejects.toBe(
+      cause,
+    );
+    expect(stub.requests).toHaveLength(0);
+  });
+
   it('sends the minted token and retries once with forceRefresh on a 401', async () => {
     const contexts: boolean[] = [];
     const stub = createFetchStub((request) =>

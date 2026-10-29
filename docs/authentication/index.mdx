@@ -65,6 +65,9 @@ retries that request a single time. `forceRefresh` means the previous token was 
 your cache** and mint a fresh token, otherwise the retry replays the same stale credential and the
 call fails with `unauthorized`. There is no second retry.
 
+An error thrown by the callback reaches you unchanged — it is not wrapped in a `RepoError` — so a
+refresh failure keeps the type and message your own auth layer gave it.
+
 Two caveats:
 
 - `repos.getCloneUrl` embeds the current token in the returned URL (or `headers` on Azure DevOps with
