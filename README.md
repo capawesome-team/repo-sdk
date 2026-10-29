@@ -148,7 +148,7 @@ It reports every capability enabled by default, and a second options argument si
 
 ## Errors
 
-Every failure is a `RepoError` with a closed `code` union: `unauthorized`, `forbidden`, `not_found`, `rate_limited`, `validation`, `unsupported`, `provider_error`, `invalid_response`, `network_error`. The one exception is an error thrown by your own `tokenProvider`, which passes through untouched.
+Every failure the SDK produces is a `RepoError` with a closed `code` union: `unauthorized`, `forbidden`, `not_found`, `rate_limited`, `validation`, `unsupported`, `provider_error`, `invalid_response`, `network_error`. Errors thrown by your own code, such as a `tokenProvider` or a provider you implement, pass through untouched.
 
 ```ts
 import { RepoError } from 'repo-sdk';

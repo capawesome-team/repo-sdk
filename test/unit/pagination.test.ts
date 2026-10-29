@@ -27,4 +27,16 @@ describe('cursor encoding', () => {
   it('rejects garbage cursors', () => {
     expect(() => decodeCursor('github', 'not-a-cursor')).toThrowError(RepoError);
   });
+
+  it.each([
+    ['null', 'null'],
+    ['a string', '"cursor"'],
+    ['an envelope without state', JSON.stringify({ p: 'github' })],
+    ['an envelope with a primitive state', JSON.stringify({ p: 'github', s: 'page-2' })],
+  ])('rejects a cursor that decodes to %s', (_label, json) => {
+    const cursor = btoa(json).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    expect(() => decodeCursor('github', cursor)).toThrow(
+      expect.objectContaining({ code: 'validation', provider: 'github' }),
+    );
+  });
 });

@@ -20,6 +20,18 @@ describe('HttpClient.json', () => {
     expect(data).toBe('robin');
   });
 
+  it('hands parse an undefined body on a 204', async () => {
+    const stub = createFetchStub(() => ({ status: 204 }));
+    const http = new HttpClient({
+      provider: 'gitea',
+      baseUrl: 'https://git.example.com/api/v1',
+      fetchImpl: stub.fetch,
+      authHeaders: () => ({}),
+    });
+    const { data } = await http.json('hooks/1', (body) => body);
+    expect(data).toBeUndefined();
+  });
+
   it('throws invalid_response when a successful response is not JSON', async () => {
     const http = setup('<!DOCTYPE html><html></html>');
 

@@ -89,6 +89,13 @@ describe('listNamespaces', () => {
 });
 
 describe('listRepositories', () => {
+  it('returns validation for a cursor without page state', async () => {
+    const { provider } = setup(() => ({ json: [] }));
+    await expect(
+      createClient({ provider }).repos.list({ cursor: encodeCursor('github', undefined) }),
+    ).rejects.toMatchObject({ code: 'validation', provider: 'github' });
+  });
+
   it('uses affiliation=owner when owned is set', async () => {
     const { provider, stub } = setup(() => ({ json: [repoPayload] }));
     await provider.listRepositories({ owned: true });
@@ -852,6 +859,19 @@ describe('GitHub App auth avoids user-scoped endpoints', () => {
     });
     return { provider, stub };
   }
+
+  it('throws invalid_response when the installation token response is not JSON', async () => {
+    const stub = createFetchStub((request) => {
+      const url = new URL(request.url);
+      if (url.pathname === '/app/installations') return { json: [{ id: 99 }] };
+      return { body: '<!DOCTYPE html><html></html>' };
+    });
+    const provider = github({
+      auth: { appId: APP_ID, privateKey: appPem, installationId: 99 },
+      fetch: stub.fetch,
+    });
+    await expectRepoError(provider.getRepository({ repo: 'o/r' }), 'invalid_response');
+  });
 
   it('listNamespaces uses /installation/repositories instead of /user', async () => {
     const { provider, stub } = appSetup((request) => {

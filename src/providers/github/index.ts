@@ -1,7 +1,7 @@
 import { AppTokenSource, type InstallationToken, type TokenSource } from './app-auth.ts';
 import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
-import { HttpClient } from '../../http.ts';
+import { HttpClient, trusted } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
@@ -359,9 +359,7 @@ function fromGitHubEvents(events: string[]): WebhookEventType[] {
   return [...result];
 }
 
-function parseWebhook(body: unknown): Webhook {
-  return toWebhook(body as GitHubHook);
-}
+const parseWebhook = trusted(toWebhook);
 
 function toWebhook(hook: GitHubHook): Webhook {
   return {
@@ -385,8 +383,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
-  const parseRepositories = (body: unknown): Repository[] =>
-    (body as GitHubRepo[]).map(mapRepository);
+  const parseRepositories = trusted((repos: GitHubRepo[]) => repos.map(mapRepository));
 
   const http = new HttpClient({
     provider: 'github',
@@ -410,7 +407,9 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     try {
       const { data } = await http.json(
         '/user/emails',
-        (body) => (body as GitHubEmail[]).find((entry) => entry.primary && entry.verified)?.email,
+        trusted(
+          (emails: GitHubEmail[]) => emails.find((entry) => entry.primary && entry.verified)?.email,
+        ),
         { signal },
       );
       return data;
@@ -431,7 +430,11 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       );
     }
     if (cachedLogin === undefined) {
-      const { data } = await http.json('/user', (body) => (body as GitHubUser).login, { signal });
+      const { data } = await http.json(
+        '/user',
+        trusted((user: GitHubUser) => user.login),
+        { signal },
+      );
       cachedLogin = data;
     }
     return cachedLogin;
@@ -448,8 +451,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   async function listAppNamespaces(signal?: AbortSignal): Promise<Page<Namespace>> {
     const { data } = await http.json(
       '/installation/repositories',
-      (body): Page<Namespace> => {
-        const owner = (body as { repositories?: GitHubRepo[] }).repositories?.[0]?.owner;
+      trusted((result: { repositories?: GitHubRepo[] }): Page<Namespace> => {
+        const owner = result.repositories?.[0]?.owner;
         if (!owner) return { data: [] };
         const namespace: Namespace = {
           id: owner.login,
@@ -460,7 +463,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
           raw: owner,
         };
         return { data: [namespace] };
-      },
+      }),
       { query: { per_page: 1 }, signal },
     );
     return data;
@@ -490,8 +493,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       }
       const { data: user } = await http.json(
         '/user',
-        (body): AuthenticatedUser => {
-          const data = body as GitHubUser;
+        trusted((data: GitHubUser): AuthenticatedUser => {
           return {
             id: String(data.id),
             username: data.login,
@@ -500,7 +502,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
             avatarUrl: data.avatar_url,
             raw: data,
           };
-        },
+        }),
         { signal: params.signal },
       );
       // `/user` hides the email for private-email accounts; `includeEmail`
@@ -533,19 +535,17 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GitHubOrg[]).map(toOrgNamespace),
+          trusted((orgs: GitHubOrg[]) => orgs.map(toOrgNamespace)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
-      const { data: user } = await http.json(
-        '/user',
-        (body) => toUserNamespace(body as GitHubUser),
-        { signal: params.signal },
-      );
+      const { data: user } = await http.json('/user', trusted(toUserNamespace), {
+        signal: params.signal,
+      });
       const { data: orgs, response } = await http.json(
         '/user/orgs',
-        (body) => (body as GitHubOrg[]).map(toOrgNamespace),
+        trusted((orgs: GitHubOrg[]) => orgs.map(toOrgNamespace)),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return {
@@ -574,7 +574,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         else if (params.owned) q += ` user:${await getLogin(params.signal)}`;
         const { data, response } = await http.json(
           '/search/repositories',
-          (body) => (body as { items: GitHubRepo[] }).items.map(mapRepository),
+          trusted((result: { items: GitHubRepo[] }) => result.items.map(mapRepository)),
           {
             query: { q, per_page: perPage },
             signal: params.signal,
@@ -645,11 +645,9 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json(
-        repoPath(params.repo),
-        (body) => mapRepository(body as GitHubRepo),
-        { signal: params.signal },
-      );
+      const { data } = await http.json(repoPath(params.repo), trusted(mapRepository), {
+        signal: params.signal,
+      });
       return data;
     },
 
@@ -659,14 +657,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GitHubCommit[]).map(toCommit),
+          trusted((commits: GitHubCommit[]) => commits.map(toCommit)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/commits`,
-        (body) => (body as GitHubCommit[]).map(toCommit),
+        trusted((commits: GitHubCommit[]) => commits.map(toCommit)),
         {
           query: {
             sha: params.ref,
@@ -685,7 +683,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/commits/${encodeURIComponent(params.ref)}`,
-        (body) => toCommit(body as GitHubCommit),
+        trusted(toCommit),
         { signal: params.signal },
       );
       return data;
@@ -697,14 +695,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GitHubTag[]).map(toTag),
+          trusted((tags: GitHubTag[]) => tags.map(toTag)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/tags`,
-        (body) => (body as GitHubTag[]).map(toTag),
+        trusted((tags: GitHubTag[]) => tags.map(toTag)),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };
@@ -716,14 +714,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GitHubBranch[]).map(toBranch),
+          trusted((branches: GitHubBranch[]) => branches.map(toBranch)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/branches`,
-        (body) => (body as GitHubBranch[]).map(toBranch),
+        trusted((branches: GitHubBranch[]) => branches.map(toBranch)),
         {
           query: { per_page: clampPerPage(params.limit) },
           signal: params.signal,
@@ -735,7 +733,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getBranch(params: GetBranchParams): Promise<Branch> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
-        (body) => toBranch(body as GitHubBranch),
+        trusted(toBranch),
         { signal: params.signal },
       );
       return data;
@@ -744,15 +742,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getTag(params: GetTagParams): Promise<Tag> {
       const { data: ref } = await http.json(
         `${repoPath(params.repo)}/git/ref/tags/${encodeRefPath(params.name)}`,
-        (body) => {
-          const ref = body as GitHubRef;
+        trusted((ref: GitHubRef) => {
           return {
             name: ref.ref.replace(/^refs\/tags\//, ''),
             type: ref.object.type,
             sha: ref.object.sha,
             raw: ref,
           };
-        },
+        }),
         { signal: params.signal },
       );
       const name = ref.name;
@@ -764,8 +761,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       for (let hops = 0; hops < 5; hops++) {
         const { data } = await http.json(
           `${repoPath(params.repo)}/git/tags/${sha}`,
-          (body) => {
-            const tag = body as GitHubTagObject;
+          trusted((tag: GitHubTagObject) => {
             return {
               type: tag.object.type,
               sha: tag.object.sha,
@@ -773,7 +769,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
               date: tag.tagger?.date ? new Date(tag.tagger.date) : undefined,
               raw: tag,
             };
-          },
+          }),
           { signal: params.signal },
         );
         sha = data.sha;
@@ -804,13 +800,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
             const prefix = `refs/${namespaces[type]}/`;
             const { data } = await http.json(
               `${repoPath(params.repo)}/git/matching-refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
-              (body) =>
-                (body as GitHubRef[]).map((ref): ProviderRefMatch => ({
+              trusted((refs: GitHubRef[]) =>
+                refs.map((ref): ProviderRefMatch => ({
                   type,
                   name: ref.ref.slice(prefix.length),
                   sha: ref.object.sha,
                   raw: ref,
                 })),
+              ),
               { signal: params.signal },
             );
             return data;
@@ -905,14 +902,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GitHubHook[]).map(toWebhook),
+          trusted((hooks: GitHubHook[]) => hooks.map(toWebhook)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/hooks`,
-        (body) => (body as GitHubHook[]).map(toWebhook),
+        trusted((hooks: GitHubHook[]) => hooks.map(toWebhook)),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };
@@ -939,14 +936,13 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (needsConfig) {
         const { data: existingConfig } = await http.json(
           hookPath,
-          (body): GitHubHookConfig => {
-            const existing = body as GitHubHook;
+          trusted((existing: GitHubHook): GitHubHookConfig => {
             return {
               url: params.url ?? existing.config?.url,
               content_type: existing.config?.content_type ?? 'json',
               insecure_ssl: existing.config?.insecure_ssl ?? '0',
             };
-          },
+          }),
           { signal: params.signal },
         );
         config = existingConfig;

@@ -12,15 +12,18 @@ export function encodeCursor<T>(provider: ProviderName, state: T): string {
 }
 
 export function decodeCursor<T>(provider: ProviderName, cursor: string): T {
-  let envelope: CursorEnvelope<T>;
+  let envelope: unknown;
   try {
-    envelope = JSON.parse(base64UrlToString(cursor)) as CursorEnvelope<T>;
+    envelope = JSON.parse(base64UrlToString(cursor));
   } catch (error) {
     throw new RepoError('Invalid pagination cursor', {
       code: 'validation',
       provider,
       cause: error,
     });
+  }
+  if (!isEnvelope(envelope)) {
+    throw new RepoError('Invalid pagination cursor', { code: 'validation', provider });
   }
   if (envelope.p !== provider) {
     throw new RepoError(
@@ -31,7 +34,19 @@ export function decodeCursor<T>(provider: ProviderName, cursor: string): T {
       },
     );
   }
-  return envelope.s;
+  return envelope.s as T;
+}
+
+// Every provider stores its page state as an object, so anything else is not a cursor this
+// package issued.
+function isEnvelope(value: unknown): value is CursorEnvelope<object> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { p?: unknown }).p === 'string' &&
+    typeof (value as { s?: unknown }).s === 'object' &&
+    (value as { s?: unknown }).s !== null
+  );
 }
 
 /**

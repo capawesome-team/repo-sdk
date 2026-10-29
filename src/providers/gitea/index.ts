@@ -1,5 +1,5 @@
 import { RepoError } from '../../errors.ts';
-import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
+import { HttpClient, trusted, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
@@ -303,9 +303,7 @@ function toWebhook(hook: GiteaHook): Webhook {
   };
 }
 
-function parseWebhook(body: unknown): Webhook {
-  return toWebhook(body as GiteaHook);
-}
+const parseWebhook = trusted(toWebhook);
 
 function mapError(_status: number, body: unknown): ProviderErrorInfo {
   const message = isRecord(body) && typeof body.message === 'string' ? body.message : undefined;
@@ -326,8 +324,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
   const auth = options.auth;
   const webBase = new URL(baseUrl).origin;
   const mapRepository = (repo: GiteaRepo): Repository => toRepository(repo, webBase);
-  const parseRepositories = (body: unknown): Repository[] =>
-    (body as GiteaRepo[]).map(mapRepository);
+  const parseRepositories = trusted((repos: GiteaRepo[]) => repos.map(mapRepository));
 
   let lastToken: string | undefined = 'token' in auth ? auth.token : undefined;
   async function currentToken(forceRefresh: boolean): Promise<string> {
@@ -355,7 +352,11 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
   let cachedUid: number | undefined;
   async function getUid(signal?: AbortSignal): Promise<number> {
     if (cachedUid === undefined) {
-      const { data } = await http.json('/user', (body) => (body as GiteaUser).id, { signal });
+      const { data } = await http.json(
+        '/user',
+        trusted((user: GiteaUser) => user.id),
+        { signal },
+      );
       cachedUid = data;
     }
     return cachedUid;
@@ -367,7 +368,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     try {
       const { data } = await http.json(
         `/orgs/${encodeURIComponent(namespace)}`,
-        (body) => (body as GiteaOrg).id,
+        trusted((org: GiteaOrg) => org.id),
         { signal },
       );
       return data;
@@ -376,7 +377,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     }
     const { data } = await http.json(
       `/users/${encodeURIComponent(namespace)}`,
-      (body) => (body as GiteaUser).id,
+      trusted((user: GiteaUser) => user.id),
       { signal },
     );
     return data;
@@ -403,8 +404,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
       const { data } = await http.json(
         '/user',
-        (body) => {
-          const user = body as GiteaUser;
+        trusted((user: GiteaUser) => {
           return {
             id: String(user.id),
             username: user.login ?? user.username ?? '',
@@ -413,7 +413,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
             avatarUrl: user.avatar_url,
             raw: user,
           };
-        },
+        }),
         { signal: params.signal },
       );
       return data;
@@ -430,11 +430,9 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         );
         return { data, cursor: nextCursor(response) };
       }
-      const { data: user } = await http.json(
-        '/user',
-        (body) => toUserNamespace(body as GiteaUser),
-        { signal: params.signal },
-      );
+      const { data: user } = await http.json('/user', trusted(toUserNamespace), {
+        signal: params.signal,
+      });
       const { data: orgs, response } = await http.json(
         '/user/orgs',
         (body) => orgsFromBody(body).map(toOrgNamespace),
@@ -468,7 +466,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
             : undefined;
         const { data, response } = await http.json(
           '/repos/search',
-          (body) => ((body as { data?: GiteaRepo[] }).data ?? []).map(mapRepository),
+          trusted((result: { data?: GiteaRepo[] }) => (result.data ?? []).map(mapRepository)),
           {
             query: {
               q: params.query,
@@ -509,11 +507,9 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json(
-        repoPath(params.repo),
-        (body) => mapRepository(body as GiteaRepo),
-        { signal: params.signal },
-      );
+      const { data } = await http.json(repoPath(params.repo), trusted(mapRepository), {
+        signal: params.signal,
+      });
       return data;
     },
 
@@ -523,14 +519,14 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         assertSameOriginUrl('gitea', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => filterByAuthor(body as GiteaCommit[], params.author).map(toCommit),
+          trusted((commits: GiteaCommit[]) => filterByAuthor(commits, params.author).map(toCommit)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/commits`,
-        (body) => filterByAuthor(body as GiteaCommit[], params.author).map(toCommit),
+        trusted((commits: GiteaCommit[]) => filterByAuthor(commits, params.author).map(toCommit)),
         {
           query: {
             sha: params.ref,
@@ -553,7 +549,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/git/commits/${encodeURIComponent(params.ref)}`,
-        (body) => toCommit(body as GiteaCommit),
+        trusted(toCommit),
         { signal: params.signal },
       );
       return data;
@@ -563,14 +559,18 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('gitea', params.cursor);
         assertSameOriginUrl('gitea', baseUrl, url);
-        const { data, response } = await http.json(url, (body) => (body as GiteaTag[]).map(toTag), {
-          signal: params.signal,
-        });
+        const { data, response } = await http.json(
+          url,
+          trusted((tags: GiteaTag[]) => tags.map(toTag)),
+          {
+            signal: params.signal,
+          },
+        );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/tags`,
-        (body) => (body as GiteaTag[]).map(toTag),
+        trusted((tags: GiteaTag[]) => tags.map(toTag)),
         { query: { limit: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };
@@ -582,14 +582,14 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         assertSameOriginUrl('gitea', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GiteaBranch[]).map(toBranch),
+          trusted((branches: GiteaBranch[]) => branches.map(toBranch)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/branches`,
-        (body) => (body as GiteaBranch[]).map(toBranch),
+        trusted((branches: GiteaBranch[]) => branches.map(toBranch)),
         {
           query: { limit: clampPerPage(params.limit) },
           signal: params.signal,
@@ -601,7 +601,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     async getBranch(params: GetBranchParams): Promise<Branch> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
-        (body) => toBranch(body as GiteaBranch),
+        trusted(toBranch),
         { signal: params.signal },
       );
       return data;
@@ -610,7 +610,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     async getTag(params: GetTagParams): Promise<Tag> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/tags/${encodeRefPath(params.name)}`,
-        (body) => toTag(body as GiteaTag),
+        trusted(toTag),
         { signal: params.signal },
       );
       return data;
@@ -625,29 +625,27 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
           .filter((type) => params.types.includes(type))
           .map(async (type) => {
             const prefix = `refs/${namespaces[type]}/`;
-            let refs: GiteaRef[];
             try {
               const { data } = await http.json(
                 `${repoPath(params.repo)}/git/refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
-                // A single exact match is returned as one object rather than an array.
-                (body) => {
-                  const found = body as GiteaRef | GiteaRef[];
-                  return Array.isArray(found) ? found : [found];
-                },
+                trusted((found: GiteaRef | GiteaRef[]) => {
+                  // A single exact match is returned as one object rather than an array.
+                  const refs = Array.isArray(found) ? found : [found];
+                  return refs.map((ref): ProviderRefMatch => ({
+                    type,
+                    name: ref.ref.slice(prefix.length),
+                    sha: ref.object.sha,
+                    raw: ref,
+                  }));
+                }),
                 { signal: params.signal },
               );
-              refs = data;
+              return data;
             } catch (error) {
               // Zero matches surface as a 404; normalize to an empty result.
               if (error instanceof RepoError && error.code === 'not_found') return [];
               throw error;
             }
-            return refs.map((ref): ProviderRefMatch => ({
-              type,
-              name: ref.ref.slice(prefix.length),
-              sha: ref.object.sha,
-              raw: ref,
-            }));
           }),
       );
       return matches.flat().slice(0, params.limit);
@@ -705,14 +703,14 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
         assertSameOriginUrl('gitea', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => (body as GiteaHook[]).map(toWebhook),
+          trusted((hooks: GiteaHook[]) => hooks.map(toWebhook)),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/hooks`,
-        (body) => (body as GiteaHook[]).map(toWebhook),
+        trusted((hooks: GiteaHook[]) => hooks.map(toWebhook)),
         { query: { limit: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };

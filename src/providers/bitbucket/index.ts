@@ -1,5 +1,5 @@
 import { RepoError, type RepoErrorCode } from '../../errors.ts';
-import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
+import { HttpClient, trusted, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
@@ -258,9 +258,7 @@ function toWebhook(hook: BitbucketHook): Webhook {
   };
 }
 
-function parseWebhook(body: unknown): Webhook {
-  return toWebhook(body as BitbucketHook);
-}
+const parseWebhook = trusted(toWebhook);
 
 function mapError(status: number, body: unknown): ProviderErrorInfo {
   let message: string | undefined;
@@ -327,10 +325,10 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     try {
       const { data } = await http.json(
         '/user/emails',
-        (body) =>
-          ((body as BitbucketList<BitbucketEmail>).values ?? []).find(
-            (entry) => entry.is_primary && entry.is_confirmed,
-          )?.email,
+        trusted(
+          (page: BitbucketList<BitbucketEmail>) =>
+            (page.values ?? []).find((entry) => entry.is_primary && entry.is_confirmed)?.email,
+        ),
         { signal },
       );
       return data;
@@ -365,8 +363,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
       const { data } = await http.json(
         '/user',
-        (body) => {
-          const user = body as BitbucketUser;
+        trusted((user: BitbucketUser) => {
           return {
             id: user.uuid,
             username: user.username ?? user.nickname ?? '',
@@ -374,7 +371,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
             avatarUrl: user.links?.avatar?.href,
             raw: user,
           };
-        },
+        }),
         { signal: params.signal },
       );
       return {
@@ -398,10 +395,10 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         assertSameOriginUrl('bitbucket', BASE_URL, url);
         const { data } = await http.json(
           url,
-          (body) => {
-            const page = body as BitbucketList<BitbucketRepo>;
-            return { items: (page.values ?? []).map(toRepository), next: page.next };
-          },
+          trusted((page: BitbucketList<BitbucketRepo>) => ({
+            items: (page.values ?? []).map(toRepository),
+            next: page.next,
+          })),
           { signal: params.signal },
         );
         return { data: data.items, cursor: nextCursor(data) };
@@ -416,10 +413,10 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       }
       const { data } = await http.json(
         `/repositories/${encodeURIComponent(params.namespace)}`,
-        (body) => {
-          const page = body as BitbucketList<BitbucketRepo>;
-          return { items: (page.values ?? []).map(toRepository), next: page.next };
-        },
+        trusted((page: BitbucketList<BitbucketRepo>) => ({
+          items: (page.values ?? []).map(toRepository),
+          next: page.next,
+        })),
         {
           query: {
             role: params.owned ? 'owner' : 'member',
@@ -433,17 +430,14 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json(
-        repoPath(params.repo),
-        (body) => toRepository(body as BitbucketRepo),
-        { signal: params.signal },
-      );
+      const { data } = await http.json(repoPath(params.repo), trusted(toRepository), {
+        signal: params.signal,
+      });
       return data;
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {
-      const parsePage = (body: unknown) => {
-        const page = body as BitbucketList<BitbucketCommit>;
+      const parsePage = trusted((page: BitbucketList<BitbucketCommit>) => {
         // Bitbucket has no server-side since/until/author filters — filter the returned page locally.
         const filtered = (page.values ?? []).filter((commit) => {
           if (params.since && new Date(commit.date ?? 0) < params.since) return false;
@@ -452,7 +446,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
           return true;
         });
         return { items: filtered.map(toCommit), next: page.next };
-      };
+      });
       let data: { items: Commit[]; next?: string };
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
@@ -476,7 +470,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/commit/${encodeURIComponent(params.ref)}`,
-        (body) => toCommit(body as BitbucketCommit),
+        trusted(toCommit),
         { signal: params.signal },
       );
       return data;
@@ -488,20 +482,20 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         assertSameOriginUrl('bitbucket', BASE_URL, url);
         const { data } = await http.json(
           url,
-          (body) => {
-            const page = body as BitbucketList<BitbucketTag>;
-            return { items: (page.values ?? []).map(toTag), next: page.next };
-          },
+          trusted((page: BitbucketList<BitbucketTag>) => ({
+            items: (page.values ?? []).map(toTag),
+            next: page.next,
+          })),
           { signal: params.signal },
         );
         return { data: data.items, cursor: nextCursor(data) };
       }
       const { data } = await http.json(
         `${repoPath(params.repo)}/refs/tags`,
-        (body) => {
-          const page = body as BitbucketList<BitbucketTag>;
-          return { items: (page.values ?? []).map(toTag), next: page.next };
-        },
+        trusted((page: BitbucketList<BitbucketTag>) => ({
+          items: (page.values ?? []).map(toTag),
+          next: page.next,
+        })),
         {
           query: { sort: '-target.date', pagelen: clampPerPage(params.limit) },
           signal: params.signal,
@@ -516,20 +510,20 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         assertSameOriginUrl('bitbucket', BASE_URL, url);
         const { data } = await http.json(
           url,
-          (body) => {
-            const page = body as BitbucketList<BitbucketBranch>;
-            return { items: (page.values ?? []).map(toBranch), next: page.next };
-          },
+          trusted((page: BitbucketList<BitbucketBranch>) => ({
+            items: (page.values ?? []).map(toBranch),
+            next: page.next,
+          })),
           { signal: params.signal },
         );
         return { data: data.items, cursor: nextCursor(data) };
       }
       const { data } = await http.json(
         `${repoPath(params.repo)}/refs/branches`,
-        (body) => {
-          const page = body as BitbucketList<BitbucketBranch>;
-          return { items: (page.values ?? []).map(toBranch), next: page.next };
-        },
+        trusted((page: BitbucketList<BitbucketBranch>) => ({
+          items: (page.values ?? []).map(toBranch),
+          next: page.next,
+        })),
         {
           query: { pagelen: clampPerPage(params.limit) },
           signal: params.signal,
@@ -541,7 +535,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     async getBranch(params: GetBranchParams): Promise<Branch> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/refs/branches/${encodeURIComponent(params.name)}`,
-        (body) => toBranch(body as BitbucketBranch),
+        trusted(toBranch),
         { signal: params.signal },
       );
       return data;
@@ -550,7 +544,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     async getTag(params: GetTagParams): Promise<Tag> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/refs/tags/${encodeURIComponent(params.name)}`,
-        (body) => toTag(body as BitbucketTag),
+        trusted(toTag),
         { signal: params.signal },
       );
       return data;
@@ -569,8 +563,8 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
           .map(async (type) => {
             const { data } = await http.json(
               `${repoPath(params.repo)}/refs/${endpoints[type]}`,
-              (body) =>
-                ((body as BitbucketList<BitbucketBranch>).values ?? [])
+              trusted((page: BitbucketList<BitbucketBranch>) =>
+                (page.values ?? [])
                   .filter((ref) => ref.name.toLowerCase().startsWith(prefix))
                   .map((ref): ProviderRefMatch => ({
                     type,
@@ -578,6 +572,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
                     sha: ref.target.hash,
                     raw: ref,
                   })),
+              ),
               { query: { q, pagelen: params.limit }, signal: params.signal },
             );
             return data;
@@ -636,20 +631,20 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         assertSameOriginUrl('bitbucket', BASE_URL, url);
         const { data } = await http.json(
           url,
-          (body) => {
-            const page = body as BitbucketList<BitbucketHook>;
-            return { items: (page.values ?? []).map(toWebhook), next: page.next };
-          },
+          trusted((page: BitbucketList<BitbucketHook>) => ({
+            items: (page.values ?? []).map(toWebhook),
+            next: page.next,
+          })),
           { signal: params.signal },
         );
         return { data: data.items, cursor: nextCursor(data) };
       }
       const { data } = await http.json(
         `${repoPath(params.repo)}/hooks`,
-        (body) => {
-          const page = body as BitbucketList<BitbucketHook>;
-          return { items: (page.values ?? []).map(toWebhook), next: page.next };
-        },
+        trusted((page: BitbucketList<BitbucketHook>) => ({
+          items: (page.values ?? []).map(toWebhook),
+          next: page.next,
+        })),
         {
           query: { pagelen: clampPerPage(params.limit) },
           signal: params.signal,
@@ -671,9 +666,13 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         params.url === undefined || params.events === undefined || params.active === undefined;
       const existing = needsExisting
         ? (
-            await http.json(hookPath(params.repo, params.id), (body) => body as BitbucketHook, {
-              signal: params.signal,
-            })
+            await http.json(
+              hookPath(params.repo, params.id),
+              trusted((hook: BitbucketHook) => hook),
+              {
+                signal: params.signal,
+              },
+            )
           ).data
         : undefined;
       const body: Record<string, unknown> = {

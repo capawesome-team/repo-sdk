@@ -1,6 +1,6 @@
 import { createAppJwt } from './app-auth.ts';
 import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
-import { HttpClient } from '../../http.ts';
+import { HttpClient, trusted } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import { clampPerPage } from '../shared.ts';
 import type { Page } from '../../types.ts';
@@ -143,7 +143,7 @@ async function listPage<TPayload, TItem>(
   } else {
     query = { per_page: clampPerPage(params.limit) };
   }
-  const { data, response } = await http.json(path, (body) => toItems(body as TPayload), {
+  const { data, response } = await http.json(path, trusted(toItems), {
     query,
     signal: params.signal,
   });

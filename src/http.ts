@@ -6,6 +6,14 @@ export type QueryValue = string | number | boolean | string[] | undefined;
 /** Turns a decoded JSON body into the endpoint's result; it is the endpoint's only view of the payload. */
 export type BodyParser<T> = (body: unknown) => T;
 
+/**
+ * Maps a body of the shape the provider's API promises, without checking it. Each use is a
+ * trust to be replaced by a validating decoder for that endpoint.
+ */
+export function trusted<TBody, TResult>(map: (body: TBody) => TResult): BodyParser<TResult> {
+  return (body) => map(body as TBody);
+}
+
 export interface ReadJsonContext {
   provider: ProviderName;
   secrets: readonly string[];
@@ -23,9 +31,10 @@ export async function readJson<T>(
   parse: BodyParser<T>,
   context: ReadJsonContext,
 ): Promise<T> {
+  const text = response.status === 204 ? '' : await response.text();
   let body: unknown;
   try {
-    body = response.status === 204 ? undefined : JSON.parse(await response.text());
+    body = response.status === 204 ? undefined : JSON.parse(text);
   } catch (error) {
     throw invalidResponse('returned a non-JSON response', response, context, error);
   }

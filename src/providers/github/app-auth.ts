@@ -1,6 +1,6 @@
 import { bytesToBase64Url } from '../../base64.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
-import { readJson, type BodyParser } from '../../http.ts';
+import { readJson, trusted, type BodyParser } from '../../http.ts';
 
 /**
  * Indirection over the credential used for every request. Token auth resolves a
@@ -252,10 +252,9 @@ export class AppTokenSource implements TokenSource {
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
-      (body): InstallationToken => {
-        const data = body as AccessTokenResponse;
+      trusted((data: AccessTokenResponse): InstallationToken => {
         return { token: data.token, expiresAt: new Date(data.expires_at) };
-      },
+      }),
       this.tokenScope(),
     );
     this.cached = token;
@@ -288,7 +287,12 @@ export class AppTokenSource implements TokenSource {
     const encoded = encodeURIComponent(owner);
     for (const path of [`/orgs/${encoded}/installation`, `/users/${encoded}/installation`]) {
       try {
-        return await this.appRequest(path, 'GET', jwt, (body) => String((body as Installation).id));
+        return await this.appRequest(
+          path,
+          'GET',
+          jwt,
+          trusted((installation: Installation) => String(installation.id)),
+        );
       } catch (error) {
         if (!(error instanceof RepoError) || error.code !== 'not_found') throw error;
       }
@@ -300,8 +304,11 @@ export class AppTokenSource implements TokenSource {
   }
 
   private async lookupSingleInstallation(jwt: string): Promise<string> {
-    const installations = await this.appRequest('/app/installations', 'GET', jwt, (body) =>
-      (body as Installation[]).map((installation) => String(installation.id)),
+    const installations = await this.appRequest(
+      '/app/installations',
+      'GET',
+      jwt,
+      trusted((found: Installation[]) => found.map((installation) => String(installation.id))),
     );
     if (installations.length === 0) {
       throw new RepoError('GitHub App is not installed anywhere', {
