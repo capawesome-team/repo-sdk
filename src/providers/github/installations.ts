@@ -84,7 +84,7 @@ function decodeInstallation(value: unknown): GitHubInstallationPayload {
 }
 
 function decodeInstallations(value: unknown): GitHubInstallationPayload[] {
-  return expectArray(expectRecord(value, 'installations').installations ?? [], 'installations').map(
+  return expectArray(expectRecord(value, 'installations').installations, 'installations').map(
     decodeInstallation,
   );
 }

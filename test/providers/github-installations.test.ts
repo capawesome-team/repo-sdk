@@ -91,10 +91,12 @@ describe('listUserInstallations', () => {
     await expect(list({ cursor })).rejects.toMatchObject({ code: 'validation' });
   });
 
-  it('handles a missing installations array', async () => {
+  it('throws invalid_response for a page without an installations array', async () => {
     const { list } = setup(() => ({ json: { total_count: 0 } }));
-    const page = await list();
-    expect(page.data).toEqual([]);
+    await expect(list()).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of installations'),
+    });
   });
 
   it('omits the account for enterprise-level installations', async () => {

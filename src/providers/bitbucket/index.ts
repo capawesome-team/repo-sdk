@@ -156,7 +156,7 @@ function decodePage<T>(
   decodeItem: (item: unknown) => T,
 ): BitbucketList<T> {
   const page = expectRecord(value, what);
-  const values = expectArray(page.values ?? [], what).map(decodeItem);
+  const values = expectArray(page.values, what).map(decodeItem);
   return { ...(value as BitbucketList<T>), values };
 }
 

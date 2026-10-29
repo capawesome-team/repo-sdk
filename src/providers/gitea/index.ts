@@ -200,7 +200,7 @@ function decodeRepositories(value: unknown): GiteaRepo[] {
 // and a cursor may point at either.
 function decodeRepositoryPage(value: unknown): GiteaRepo[] {
   if (Array.isArray(value)) return decodeRepositories(value);
-  return decodeRepositories(expectRecord(value, 'repositories').data ?? []);
+  return decodeRepositories(expectRecord(value, 'repositories').data);
 }
 
 function decodeCommit(value: unknown): GiteaCommit {
