@@ -40,7 +40,7 @@ conceptual overview see
 | `validation`       | Bad parameters (or a client-side check)                                                | `400` / `422` | no              |
 | `unsupported`      | The provider can't do what was requested                                               | —             | no              |
 | `provider_error`   | An unclassified provider response                                                      | other         | only when `5xx` |
-| `invalid_response` | A successful response the SDK can't read: no JSON (e.g. an HTML page from a wrong `baseUrl`) or JSON of another shape than the provider's API | `2xx`         | no              |
+| `invalid_response` | A successful response the SDK can't read: no JSON (e.g. an HTML page from a wrong `baseUrl`) or JSON of another shape than the provider's API; the message names what was expected | `2xx`         | no              |
 | `network_error`    | The request never completed (DNS, connection, timeout)                                 | —             | yes             |
 
 `unsupported` and `validation` are frequently raised **before any request is made** — capability gating

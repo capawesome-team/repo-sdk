@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DecodeError } from '../../src/decode.ts';
 import { RepoError } from '../../src/errors.ts';
 import { HttpClient } from '../../src/http.ts';
 import { createFetchStub } from '../helpers/fetch-stub.ts';
@@ -66,6 +67,20 @@ describe('HttpClient.json', () => {
         'gitea returned a response the SDK could not read from https://git.example.com/acme/app.git/api/v1/user/orgs',
       provider: 'gitea',
       status: 200,
+    });
+  });
+
+  it('names the decode failure in the invalid_response message', async () => {
+    const http = setup('{"orgs":{}}');
+
+    await expect(
+      http.json('user/orgs', () => {
+        throw new DecodeError('expected an array of organizations');
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message:
+        'gitea returned a response the SDK could not read from https://git.example.com/acme/app.git/api/v1/user/orgs: expected an array of organizations',
     });
   });
 

@@ -1,4 +1,5 @@
-import { HttpClient, type ProviderErrorInfo, trusted } from '../../http.ts';
+import { expectArray, expectRecord, expectString } from '../../decode.ts';
+import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { isRecord } from '../shared.ts';
 import { API_VERSION, authHeader, authSecrets, type AzureDevOpsAuth } from './auth.ts';
 
@@ -23,6 +24,26 @@ interface AzureAccount {
 interface AzureAccountList {
   count: number;
   value: AzureAccount[];
+}
+
+function decodeProfile(value: unknown): AzureProfile {
+  const profile = expectRecord(value, 'profile');
+  expectString(profile.id, 'profile.id');
+  return value as AzureProfile;
+}
+
+function decodeAccount(value: unknown): AzureAccount {
+  const account = expectRecord(value, 'account');
+  expectString(account.accountId, 'account.accountId');
+  expectString(account.accountName, 'account.accountName');
+  expectString(account.accountUri, 'account.accountUri');
+  return value as AzureAccount;
+}
+
+function decodeAccountList(value: unknown): AzureAccountList {
+  const list = expectRecord(value, 'accounts');
+  expectArray(list.value, 'accounts').forEach(decodeAccount);
+  return value as AzureAccountList;
 }
 
 function mapError(status: number, body: unknown): ProviderErrorInfo {
@@ -50,18 +71,17 @@ export async function listOrganizations(
 
   const { data: memberId } = await http.json(
     '/_apis/profile/profiles/me',
-    trusted((profile: AzureProfile) => profile.id),
+    (body) => decodeProfile(body).id,
     { query: { 'api-version': API_VERSION } },
   );
   const { data } = await http.json(
     '/_apis/accounts',
-    trusted((accounts: AzureAccountList) =>
-      accounts.value.map((account): Organization => ({
+    (body) =>
+      decodeAccountList(body).value.map((account): Organization => ({
         id: account.accountId,
         name: account.accountName,
         url: account.accountUri,
       })),
-    ),
     { query: { memberId, 'api-version': API_VERSION } },
   );
   return data;

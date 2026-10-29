@@ -127,6 +127,31 @@ describe('repo parsing', () => {
   });
 });
 
+describe('response decoding', () => {
+  it.each([
+    ['an array instead of a repository', [], 'expected an object for repository'],
+    [
+      'a repository without a project',
+      { id: 'repo-guid-1', name: 'repo-sdk' },
+      'expected an object for repository.project',
+    ],
+  ])('throws invalid_response for %s', async (_label, json, detail) => {
+    const { provider } = setup(() => ({ json }));
+    await expect(provider.getRepository({ repo: 'core/repo-sdk' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(`: ${detail}`),
+    });
+  });
+
+  it('throws invalid_response for a list whose value is not an array', async () => {
+    const { provider } = setup(() => ({ json: { count: 0, value: null } }));
+    await expect(provider.listRepositories({})).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of repositories'),
+    });
+  });
+});
+
 describe('listNamespaces', () => {
   it('round-trips the continuation-token cursor', async () => {
     const { provider, stub } = setup((request) => {

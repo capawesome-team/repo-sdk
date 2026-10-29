@@ -1,14 +1,20 @@
 import { AppTokenSource, type InstallationToken, type TokenSource } from './app-auth.ts';
 import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
-import { HttpClient, trusted } from '../../http.ts';
+import {
+  expectArray,
+  expectBoolean,
+  expectNumber,
+  expectRecord,
+  expectString,
+} from '../../decode.ts';
+import { HttpClient } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
   encodeRefPath,
   filenameFromContentDisposition,
-  isRecord,
   toCloneUrl,
 } from '../shared.ts';
 import type {
@@ -257,11 +263,151 @@ function gitHostFromBaseUrl(baseUrl: string): string {
   return url.hostname === 'api.github.com' ? 'github.com' : url.host;
 }
 
-function reposFromBody(body: unknown): GitHubRepo[] {
-  if (Array.isArray(body)) return body as GitHubRepo[];
-  if (isRecord(body) && Array.isArray(body.items)) return body.items as GitHubRepo[];
-  if (isRecord(body) && Array.isArray(body.repositories)) return body.repositories as GitHubRepo[];
-  return [];
+function decodeUser(value: unknown): GitHubUser {
+  const user = expectRecord(value, 'user');
+  expectNumber(user.id, 'user.id');
+  expectString(user.login, 'user.login');
+  return value as GitHubUser;
+}
+
+function decodeEmail(value: unknown): GitHubEmail {
+  const email = expectRecord(value, 'email');
+  expectString(email.email, 'email.email');
+  return value as GitHubEmail;
+}
+
+function decodeEmails(value: unknown): GitHubEmail[] {
+  return expectArray(value, 'emails').map(decodeEmail);
+}
+
+function decodeOrg(value: unknown): GitHubOrg {
+  const org = expectRecord(value, 'organization');
+  expectNumber(org.id, 'organization.id');
+  expectString(org.login, 'organization.login');
+  return value as GitHubOrg;
+}
+
+function decodeOrgs(value: unknown): GitHubOrg[] {
+  return expectArray(value, 'organizations').map(decodeOrg);
+}
+
+function decodeRepository(value: unknown): GitHubRepo {
+  const repo = expectRecord(value, 'repository');
+  expectNumber(repo.id, 'repository.id');
+  expectString(repo.name, 'repository.name');
+  expectString(repo.full_name, 'repository.full_name');
+  expectString(expectRecord(repo.owner, 'repository.owner').login, 'repository.owner.login');
+  expectBoolean(repo.private, 'repository.private');
+  return value as GitHubRepo;
+}
+
+function decodeRepositories(value: unknown): GitHubRepo[] {
+  return expectArray(value, 'repositories').map(decodeRepository);
+}
+
+function decodeSearchRepositories(value: unknown): GitHubRepo[] {
+  return decodeRepositories(expectRecord(value, 'repositories').items);
+}
+
+function decodeInstallationRepositories(value: unknown): GitHubRepo[] {
+  return decodeRepositories(expectRecord(value, 'repositories').repositories);
+}
+
+// The list endpoints answer with a bare array, search wraps its page in `{ items }` and the
+// installation endpoint in `{ repositories }`, and a cursor may point at any of them.
+function decodeRepositoryPage(value: unknown): GitHubRepo[] {
+  if (Array.isArray(value)) return decodeRepositories(value);
+  const page = expectRecord(value, 'repositories');
+  return decodeRepositories(page.items ?? page.repositories);
+}
+
+function decodeCommit(value: unknown): GitHubCommit {
+  const commit = expectRecord(value, 'commit');
+  expectString(commit.sha, 'commit.sha');
+  return value as GitHubCommit;
+}
+
+function decodeCommits(value: unknown): GitHubCommit[] {
+  return expectArray(value, 'commits').map(decodeCommit);
+}
+
+function decodeTag(value: unknown): GitHubTag {
+  const tag = expectRecord(value, 'tag');
+  expectString(tag.name, 'tag.name');
+  expectString(expectRecord(tag.commit, 'tag.commit').sha, 'tag.commit.sha');
+  return value as GitHubTag;
+}
+
+function decodeTags(value: unknown): GitHubTag[] {
+  return expectArray(value, 'tags').map(decodeTag);
+}
+
+function decodeBranch(value: unknown): GitHubBranch {
+  const branch = expectRecord(value, 'branch');
+  expectString(branch.name, 'branch.name');
+  expectString(expectRecord(branch.commit, 'branch.commit').sha, 'branch.commit.sha');
+  return value as GitHubBranch;
+}
+
+function decodeBranches(value: unknown): GitHubBranch[] {
+  return expectArray(value, 'branches').map(decodeBranch);
+}
+
+function decodeRef(value: unknown): GitHubRef {
+  const ref = expectRecord(value, 'ref');
+  expectString(ref.ref, 'ref.ref');
+  const object = expectRecord(ref.object, 'ref.object');
+  expectString(object.sha, 'ref.object.sha');
+  expectString(object.type, 'ref.object.type');
+  return value as GitHubRef;
+}
+
+function decodeRefs(value: unknown): GitHubRef[] {
+  return expectArray(value, 'refs').map(decodeRef);
+}
+
+function decodeTagObject(value: unknown): GitHubTagObject {
+  const tag = expectRecord(value, 'tag object');
+  const object = expectRecord(tag.object, 'tag object.object');
+  expectString(object.sha, 'tag object.object.sha');
+  expectString(object.type, 'tag object.object.type');
+  return value as GitHubTagObject;
+}
+
+function decodeHook(value: unknown): GitHubHook {
+  const hook = expectRecord(value, 'webhook');
+  expectNumber(hook.id, 'webhook.id');
+  expectBoolean(hook.active, 'webhook.active');
+  return value as GitHubHook;
+}
+
+function decodeHooks(value: unknown): GitHubHook[] {
+  return expectArray(value, 'webhooks').map(decodeHook);
+}
+
+function toAuthenticatedUser(user: GitHubUser): AuthenticatedUser {
+  return {
+    id: String(user.id),
+    username: user.login,
+    name: user.name ?? undefined,
+    email: user.email ?? undefined,
+    avatarUrl: user.avatar_url,
+    raw: user,
+  };
+}
+
+function toAppNamespacePage(repos: GitHubRepo[]): Page<Namespace> {
+  const owner = repos[0]?.owner;
+  if (!owner) return { data: [] };
+  const namespace: Namespace = {
+    id: owner.login,
+    slug: owner.login,
+    name: owner.login,
+    kind: owner.type === 'Organization' ? 'organization' : 'user',
+    avatarUrl: owner.avatar_url,
+    raw: owner,
+  };
+  return { data: [namespace] };
 }
 
 function toUserNamespace(user: GitHubUser): Namespace {
@@ -337,6 +483,33 @@ function toBranch(branch: GitHubBranch): Branch {
   return { name: branch.name, sha: branch.commit.sha, raw: branch };
 }
 
+function toTagRef(ref: GitHubRef) {
+  return {
+    name: ref.ref.replace(/^refs\/tags\//, ''),
+    type: ref.object.type,
+    sha: ref.object.sha,
+    raw: ref,
+  };
+}
+
+function toTagTarget(tag: GitHubTagObject) {
+  return {
+    type: tag.object.type,
+    sha: tag.object.sha,
+    message: tag.message ?? undefined,
+    date: tag.tagger?.date ? new Date(tag.tagger.date) : undefined,
+    raw: tag,
+  };
+}
+
+function toHookConfig(existing: GitHubHook, url: string | undefined): GitHubHookConfig {
+  return {
+    url: url ?? existing.config?.url,
+    content_type: existing.config?.content_type ?? 'json',
+    insecure_ssl: existing.config?.insecure_ssl ?? '0',
+  };
+}
+
 function toGitHubEvents(events: WebhookEventType[]): string[] {
   const result = new Set<string>();
   for (const event of events) {
@@ -359,7 +532,7 @@ function fromGitHubEvents(events: string[]): WebhookEventType[] {
   return [...result];
 }
 
-const parseWebhook = trusted(toWebhook);
+const parseWebhook = (body: unknown): Webhook => toWebhook(decodeHook(body));
 
 function toWebhook(hook: GitHubHook): Webhook {
   return {
@@ -383,7 +556,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
-  const parseRepositories = trusted((repos: GitHubRepo[]) => repos.map(mapRepository));
+  const parseRepositories = (body: unknown): Repository[] =>
+    decodeRepositories(body).map(mapRepository);
 
   const http = new HttpClient({
     provider: 'github',
@@ -407,9 +581,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     try {
       const { data } = await http.json(
         '/user/emails',
-        trusted(
-          (emails: GitHubEmail[]) => emails.find((entry) => entry.primary && entry.verified)?.email,
-        ),
+        (body) => decodeEmails(body).find((entry) => entry.primary && entry.verified)?.email,
         { signal },
       );
       return data;
@@ -430,11 +602,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       );
     }
     if (cachedLogin === undefined) {
-      const { data } = await http.json(
-        '/user',
-        trusted((user: GitHubUser) => user.login),
-        { signal },
-      );
+      const { data } = await http.json('/user', (body) => decodeUser(body).login, { signal });
       cachedLogin = data;
     }
     return cachedLogin;
@@ -451,19 +619,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   async function listAppNamespaces(signal?: AbortSignal): Promise<Page<Namespace>> {
     const { data } = await http.json(
       '/installation/repositories',
-      trusted((result: { repositories?: GitHubRepo[] }): Page<Namespace> => {
-        const owner = result.repositories?.[0]?.owner;
-        if (!owner) return { data: [] };
-        const namespace: Namespace = {
-          id: owner.login,
-          slug: owner.login,
-          name: owner.login,
-          kind: owner.type === 'Organization' ? 'organization' : 'user',
-          avatarUrl: owner.avatar_url,
-          raw: owner,
-        };
-        return { data: [namespace] };
-      }),
+      (body) => toAppNamespacePage(decodeInstallationRepositories(body)),
       { query: { per_page: 1 }, signal },
     );
     return data;
@@ -493,16 +649,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       }
       const { data: user } = await http.json(
         '/user',
-        trusted((data: GitHubUser): AuthenticatedUser => {
-          return {
-            id: String(data.id),
-            username: data.login,
-            name: data.name ?? undefined,
-            email: data.email ?? undefined,
-            avatarUrl: data.avatar_url,
-            raw: data,
-          };
-        }),
+        (body) => toAuthenticatedUser(decodeUser(body)),
         { signal: params.signal },
       );
       // `/user` hides the email for private-email accounts; `includeEmail`
@@ -535,17 +682,17 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          trusted((orgs: GitHubOrg[]) => orgs.map(toOrgNamespace)),
+          (body) => decodeOrgs(body).map(toOrgNamespace),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
-      const { data: user } = await http.json('/user', trusted(toUserNamespace), {
+      const { data: user } = await http.json('/user', (body) => toUserNamespace(decodeUser(body)), {
         signal: params.signal,
       });
       const { data: orgs, response } = await http.json(
         '/user/orgs',
-        trusted((orgs: GitHubOrg[]) => orgs.map(toOrgNamespace)),
+        (body) => decodeOrgs(body).map(toOrgNamespace),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return {
@@ -562,7 +709,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          (body) => reposFromBody(body).map(mapRepository),
+          (body) => decodeRepositoryPage(body).map(mapRepository),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
@@ -574,7 +721,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         else if (params.owned) q += ` user:${await getLogin(params.signal)}`;
         const { data, response } = await http.json(
           '/search/repositories',
-          trusted((result: { items: GitHubRepo[] }) => result.items.map(mapRepository)),
+          (body) => decodeSearchRepositories(body).map(mapRepository),
           {
             query: { q, per_page: perPage },
             signal: params.signal,
@@ -593,7 +740,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
           const { data, response } = await http.json(
             '/installation/repositories',
             (body) =>
-              reposFromBody(body)
+              decodeInstallationRepositories(body)
                 .filter((repo) => repo.owner.login.toLowerCase() === namespaceLower)
                 .map(mapRepository),
             { query: { per_page: perPage }, signal: params.signal },
@@ -631,7 +778,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (tokenSource.kind === 'app') {
         const { data, response } = await http.json(
           '/installation/repositories',
-          (body) => reposFromBody(body).map(mapRepository),
+          (body) => decodeInstallationRepositories(body).map(mapRepository),
           { query: { per_page: perPage }, signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
@@ -645,9 +792,13 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json(repoPath(params.repo), trusted(mapRepository), {
-        signal: params.signal,
-      });
+      const { data } = await http.json(
+        repoPath(params.repo),
+        (body) => mapRepository(decodeRepository(body)),
+        {
+          signal: params.signal,
+        },
+      );
       return data;
     },
 
@@ -657,14 +808,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          trusted((commits: GitHubCommit[]) => commits.map(toCommit)),
+          (body) => decodeCommits(body).map(toCommit),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/commits`,
-        trusted((commits: GitHubCommit[]) => commits.map(toCommit)),
+        (body) => decodeCommits(body).map(toCommit),
         {
           query: {
             sha: params.ref,
@@ -683,7 +834,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/commits/${encodeURIComponent(params.ref)}`,
-        trusted(toCommit),
+        (body) => toCommit(decodeCommit(body)),
         { signal: params.signal },
       );
       return data;
@@ -693,16 +844,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json(
-          url,
-          trusted((tags: GitHubTag[]) => tags.map(toTag)),
-          { signal: params.signal },
-        );
+        const { data, response } = await http.json(url, (body) => decodeTags(body).map(toTag), {
+          signal: params.signal,
+        });
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/tags`,
-        trusted((tags: GitHubTag[]) => tags.map(toTag)),
+        (body) => decodeTags(body).map(toTag),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };
@@ -714,14 +863,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          trusted((branches: GitHubBranch[]) => branches.map(toBranch)),
+          (body) => decodeBranches(body).map(toBranch),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/branches`,
-        trusted((branches: GitHubBranch[]) => branches.map(toBranch)),
+        (body) => decodeBranches(body).map(toBranch),
         {
           query: { per_page: clampPerPage(params.limit) },
           signal: params.signal,
@@ -733,7 +882,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getBranch(params: GetBranchParams): Promise<Branch> {
       const { data } = await http.json(
         `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
-        trusted(toBranch),
+        (body) => toBranch(decodeBranch(body)),
         { signal: params.signal },
       );
       return data;
@@ -742,14 +891,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     async getTag(params: GetTagParams): Promise<Tag> {
       const { data: ref } = await http.json(
         `${repoPath(params.repo)}/git/ref/tags/${encodeRefPath(params.name)}`,
-        trusted((ref: GitHubRef) => {
-          return {
-            name: ref.ref.replace(/^refs\/tags\//, ''),
-            type: ref.object.type,
-            sha: ref.object.sha,
-            raw: ref,
-          };
-        }),
+        (body) => toTagRef(decodeRef(body)),
         { signal: params.signal },
       );
       const name = ref.name;
@@ -761,15 +903,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       for (let hops = 0; hops < 5; hops++) {
         const { data } = await http.json(
           `${repoPath(params.repo)}/git/tags/${sha}`,
-          trusted((tag: GitHubTagObject) => {
-            return {
-              type: tag.object.type,
-              sha: tag.object.sha,
-              message: tag.message ?? undefined,
-              date: tag.tagger?.date ? new Date(tag.tagger.date) : undefined,
-              raw: tag,
-            };
-          }),
+          (body) => toTagTarget(decodeTagObject(body)),
           { signal: params.signal },
         );
         sha = data.sha;
@@ -800,14 +934,13 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
             const prefix = `refs/${namespaces[type]}/`;
             const { data } = await http.json(
               `${repoPath(params.repo)}/git/matching-refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
-              trusted((refs: GitHubRef[]) =>
-                refs.map((ref): ProviderRefMatch => ({
+              (body) =>
+                decodeRefs(body).map((ref): ProviderRefMatch => ({
                   type,
                   name: ref.ref.slice(prefix.length),
                   sha: ref.object.sha,
                   raw: ref,
                 })),
-              ),
               { signal: params.signal },
             );
             return data;
@@ -902,14 +1035,14 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         assertSameOriginUrl('github', baseUrl, url);
         const { data, response } = await http.json(
           url,
-          trusted((hooks: GitHubHook[]) => hooks.map(toWebhook)),
+          (body) => decodeHooks(body).map(toWebhook),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(response) };
       }
       const { data, response } = await http.json(
         `${repoPath(params.repo)}/hooks`,
-        trusted((hooks: GitHubHook[]) => hooks.map(toWebhook)),
+        (body) => decodeHooks(body).map(toWebhook),
         { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
       );
       return { data, cursor: nextCursor(response) };
@@ -936,13 +1069,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (needsConfig) {
         const { data: existingConfig } = await http.json(
           hookPath,
-          trusted((existing: GitHubHook): GitHubHookConfig => {
-            return {
-              url: params.url ?? existing.config?.url,
-              content_type: existing.config?.content_type ?? 'json',
-              insecure_ssl: existing.config?.insecure_ssl ?? '0',
-            };
-          }),
+          (body) => toHookConfig(decodeHook(body), params.url),
           { signal: params.signal },
         );
         config = existingConfig;

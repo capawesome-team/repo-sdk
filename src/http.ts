@@ -1,3 +1,4 @@
+import { DecodeError } from './decode.ts';
 import { codeFromStatus, parseRetryAfter, RepoError, type RepoErrorCode } from './errors.ts';
 import type { ProviderName } from './types.ts';
 
@@ -5,14 +6,6 @@ export type QueryValue = string | number | boolean | string[] | undefined;
 
 /** Turns a decoded JSON body into the endpoint's result; it is the endpoint's only view of the payload. */
 export type BodyParser<T> = (body: unknown) => T;
-
-/**
- * Maps a body of the shape the provider's API promises, without checking it. Each use is a
- * trust to be replaced by a validating decoder for that endpoint.
- */
-export function trusted<TBody, TResult>(map: (body: TBody) => TResult): BodyParser<TResult> {
-  return (body) => map(body as TBody);
-}
 
 export interface ReadJsonContext {
   provider: ProviderName;
@@ -42,7 +35,14 @@ export async function readJson<T>(
     return parse(body);
   } catch (error) {
     if (error instanceof RepoError) throw error;
-    throw invalidResponse('returned a response the SDK could not read', response, context, error);
+    const detail = error instanceof DecodeError ? `: ${error.message}` : '';
+    throw invalidResponse(
+      'returned a response the SDK could not read',
+      response,
+      context,
+      error,
+      detail,
+    );
   }
 }
 
@@ -51,9 +51,10 @@ function invalidResponse(
   response: Response,
   context: ReadJsonContext,
   cause: unknown,
+  detail = '',
 ): RepoError {
   return new RepoError(
-    `${context.provider} ${what} from ${context.url.origin}${context.url.pathname}`,
+    `${context.provider} ${what} from ${context.url.origin}${context.url.pathname}${detail}`,
     {
       code: 'invalid_response',
       provider: context.provider,

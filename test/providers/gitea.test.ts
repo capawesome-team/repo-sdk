@@ -127,7 +127,35 @@ describe('listNamespaces', () => {
       return { json: { message: 'this is not a Gitea server' } };
     });
 
-    await expectRepoError(provider.listNamespaces({ limit: 20 }), 'invalid_response');
+    await expect(provider.listNamespaces({ limit: 20 })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of organizations'),
+    });
+  });
+});
+
+describe('response decoding', () => {
+  it.each([
+    ['an array instead of a repository', [], 'expected an object for repository'],
+    [
+      'a repository without a name',
+      { id: 1, full_name: 'acme/app', private: false },
+      'expected a string for repository.name',
+    ],
+  ])('throws invalid_response for %s', async (_label, json, detail) => {
+    const { provider } = setup(() => ({ json }));
+    await expect(provider.getRepository({ repo: 'acme/app' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(`: ${detail}`),
+    });
+  });
+
+  it('throws invalid_response for a branch without a commit', async () => {
+    const { provider } = setup(() => ({ json: { name: 'main' } }));
+    await expect(provider.getBranch({ repo: 'acme/app', name: 'main' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an object for branch.commit'),
+    });
   });
 });
 

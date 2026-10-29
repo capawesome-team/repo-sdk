@@ -1,6 +1,7 @@
 import { createAppJwt } from './app-auth.ts';
 import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
-import { HttpClient, trusted } from '../../http.ts';
+import { expectArray, expectNumber, expectRecord, expectString } from '../../decode.ts';
+import { HttpClient, type BodyParser } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import { clampPerPage } from '../shared.ts';
 import type { Page } from '../../types.ts';
@@ -76,6 +77,29 @@ interface GitHubInstallationRequestPayload {
   requester?: GitHubAccountPayload | null;
 }
 
+function decodeInstallation(value: unknown): GitHubInstallationPayload {
+  const installation = expectRecord(value, 'installation');
+  expectNumber(installation.id, 'installation.id');
+  return value as GitHubInstallationPayload;
+}
+
+function decodeInstallations(value: unknown): GitHubInstallationPayload[] {
+  return expectArray(expectRecord(value, 'installations').installations, 'installations').map(
+    decodeInstallation,
+  );
+}
+
+function decodeInstallationRequest(value: unknown): GitHubInstallationRequestPayload {
+  const request = expectRecord(value, 'installation request');
+  expectNumber(request.id, 'installation request.id');
+  expectString(request.created_at, 'installation request.created_at');
+  return value as GitHubInstallationRequestPayload;
+}
+
+function decodeInstallationRequests(value: unknown): GitHubInstallationRequestPayload[] {
+  return expectArray(value, 'installation requests').map(decodeInstallationRequest);
+}
+
 function toAccount(payload?: GitHubAccountPayload | null): GitHubInstallationAccount | undefined {
   if (payload?.login === undefined) return undefined;
   return {
@@ -114,11 +138,11 @@ interface ListPageParams {
   signal?: AbortSignal;
 }
 
-async function listPage<TPayload, TItem>(
+async function listPage<TItem>(
   bearer: string,
   defaultPath: string,
   params: ListPageParams,
-  toItems: (payload: TPayload) => TItem[],
+  parseItems: BodyParser<TItem[]>,
 ): Promise<Page<TItem>> {
   const baseUrl = params.baseUrl ?? DEFAULT_BASE_URL;
   const http = new HttpClient({
@@ -143,7 +167,7 @@ async function listPage<TPayload, TItem>(
   } else {
     query = { per_page: clampPerPage(params.limit) };
   }
-  const { data, response } = await http.json(path, trusted(toItems), {
+  const { data, response } = await http.json(path, parseItems, {
     query,
     signal: params.signal,
   });
@@ -159,11 +183,8 @@ async function listPage<TPayload, TItem>(
 export async function listUserInstallations(
   params: ListUserInstallationsParams,
 ): Promise<Page<GitHubUserInstallation>> {
-  return listPage<{ installations?: GitHubInstallationPayload[] }, GitHubUserInstallation>(
-    params.token,
-    '/user/installations',
-    params,
-    (payload) => (payload.installations ?? []).map(toInstallation),
+  return listPage(params.token, '/user/installations', params, (body) =>
+    decodeInstallations(body).map(toInstallation),
   );
 }
 
@@ -178,10 +199,7 @@ export async function listInstallationRequests(
   params: ListInstallationRequestsParams,
 ): Promise<Page<GitHubInstallationRequest>> {
   const jwt = await createAppJwt({ appId: params.appId, privateKey: params.privateKey });
-  return listPage<GitHubInstallationRequestPayload[], GitHubInstallationRequest>(
-    jwt,
-    '/app/installation-requests',
-    params,
-    (payload) => payload.map(toInstallationRequest),
+  return listPage(jwt, '/app/installation-requests', params, (body) =>
+    decodeInstallationRequests(body).map(toInstallationRequest),
   );
 }

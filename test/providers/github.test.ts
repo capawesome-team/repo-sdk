@@ -89,6 +89,30 @@ describe('listNamespaces', () => {
 });
 
 describe('listRepositories', () => {
+  it.each([
+    ['a bare array', [repoPayload]],
+    ['a search envelope', { items: [repoPayload] }],
+    ['an installation envelope', { repositories: [repoPayload] }],
+  ])('reads a cursor page that is %s', async (_label, json) => {
+    const { provider } = setup(() => ({ json }));
+    const page = await provider.listRepositories({
+      cursor: encodeCursor('github', { url: 'https://api.github.com/user/repos?page=2' }),
+    });
+    expect(page.data).toHaveLength(1);
+  });
+
+  it('throws invalid_response for a cursor page without a list', async () => {
+    const { provider } = setup(() => ({ json: { total_count: 0 } }));
+    await expect(
+      provider.listRepositories({
+        cursor: encodeCursor('github', { url: 'https://api.github.com/user/repos?page=2' }),
+      }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of repositories'),
+    });
+  });
+
   it('returns validation for a cursor without page state', async () => {
     const { provider } = setup(() => ({ json: [] }));
     await expect(
@@ -198,6 +222,33 @@ describe('getRepository', () => {
     );
     const repo = await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
     expect(repo.urls.web).toBe('https://ghe.example.com/capawesome-team/repo-sdk');
+  });
+});
+
+describe('response decoding', () => {
+  it.each([
+    ['an array instead of a repository', [], 'expected an object for repository'],
+    [
+      'a repository without a full_name',
+      { ...repoPayload, full_name: undefined },
+      'expected a string for repository.full_name',
+    ],
+  ])('throws invalid_response for %s', async (_label, json, detail) => {
+    const { provider } = setup(() => ({ json }));
+    await expect(
+      provider.getRepository({ repo: 'capawesome-team/repo-sdk' }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(`: ${detail}`),
+    });
+  });
+
+  it('throws invalid_response for a tag list answered with an object', async () => {
+    const { provider } = setup(() => ({ json: { message: 'not a list' } }));
+    await expect(provider.listTags({ repo: 'capawesome-team/repo-sdk' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of tags'),
+    });
   });
 });
 
