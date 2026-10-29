@@ -208,7 +208,7 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
 
 ## About
 
-repo-sdk is developed and maintained by [Genz IT Solutions GmbH](http://genz-its.de/). It powers [Capawesome](https://capawesome.io/), a cloud platform for mobile apps.
+repo-sdk is developed and maintained by [Genz IT Solutions GmbH](https://genz-its.com/). It powers [Capawesome](https://capawesome.io/), a cloud platform for mobile apps.
 
 ## License
 
