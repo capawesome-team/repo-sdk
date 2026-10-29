@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.7](https://github.com/capawesome-team/repo-sdk/compare/v0.3.6...v0.3.7) (2026-10-29)
+
+
+### Bug Fixes
+
+* **gitlab:** download archives from Node by sending the request in same-origin mode ([#31](https://github.com/capawesome-team/repo-sdk/issues/31)) ([fa32d49](https://github.com/capawesome-team/repo-sdk/commit/fa32d49879d23378ec96a3a01b4f3c5700e5f3a4))
+
 ## [0.3.6](https://github.com/capawesome-team/repo-sdk/compare/v0.3.5...v0.3.6) (2026-10-29)
 
 
