@@ -9,9 +9,10 @@ A complete reference of the `RepoErrorCode` union — `unauthorized`, `forbidden
 `rate_limited`, `validation`, `unsupported`, `provider_error`, `invalid_response`, and `network_error` —
 with typical causes and retry semantics.
 
-Every failure throws a single type — **`RepoError`** — with a normalized `code`, so you branch on the
-failure without parsing provider-specific statuses or messages. The one exception is an error thrown
-by your own `tokenProvider`, which passes through untouched. For the conceptual overview see
+Every failure the SDK produces is a single type — **`RepoError`** — with a normalized `code`, so you
+branch on the failure without parsing provider-specific statuses or messages. Errors thrown by your
+own code, such as a `tokenProvider` or a provider you implement, pass through untouched. For the
+conceptual overview see
 [Errors](/docs/concepts/errors); this page is the exhaustive reference.
 
 ## The RepoError model

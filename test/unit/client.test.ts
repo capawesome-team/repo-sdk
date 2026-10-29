@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createClient } from '../../src/client.ts';
 import { RepoError } from '../../src/errors.ts';
-import { TokenProviderError } from '../../src/token-provider.ts';
 import type { Branch, Commit, Page, RefMatch, RepoProvider, Tag } from '../../src/types.ts';
 
 function fakeCommit(sha: string): Commit {
@@ -670,32 +669,14 @@ describe('rate-limit retry', () => {
 });
 
 describe('unexpected provider failures', () => {
-  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+  it('rethrows an error that is not a RepoError untouched', async () => {
     const cause = new Error('refresh failed');
-    const provider = fakeProvider({
-      listNamespaces: async () => {
-        throw new TokenProviderError(cause);
-      },
-    });
-    const client = createClient({ provider });
-    await expect(client.namespaces.list()).rejects.toBe(cause);
-  });
-
-  it('wraps an error that is not a RepoError into invalid_response', async () => {
-    const cause = new TypeError('orgs.map is not a function');
     const provider = fakeProvider({
       listNamespaces: async () => {
         throw cause;
       },
     });
     const client = createClient({ provider });
-    try {
-      await client.namespaces.list();
-      expect.unreachable('expected RepoError');
-    } catch (error) {
-      expect(error).toBeInstanceOf(RepoError);
-      expect((error as RepoError).code).toBe('invalid_response');
-      expect((error as RepoError).cause).toBe(cause);
-    }
+    await expect(client.namespaces.list()).rejects.toBe(cause);
   });
 });

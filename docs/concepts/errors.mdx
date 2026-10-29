@@ -5,8 +5,10 @@ sidebar:
   label: Errors
 ---
 
-Every failure in `repo-sdk` throws a single error type — **`RepoError`** — with a normalized `code` so
-you can branch on the failure without parsing provider-specific status codes or message strings.
+Every failure `repo-sdk` produces is a single error type — **`RepoError`** — with a normalized `code`
+so you can branch on the failure without parsing provider-specific status codes or message strings.
+Errors thrown by your own code, such as a `tokenProvider` or a provider you implement, pass through
+untouched.
 
 ## RepoError
 

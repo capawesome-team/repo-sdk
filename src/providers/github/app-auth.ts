@@ -1,5 +1,6 @@
 import { bytesToBase64Url } from '../../base64.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
+import { readJson, trusted, type BodyParser } from '../../http.ts';
 
 /**
  * Indirection over the credential used for every request. Token auth resolves a
@@ -247,13 +248,15 @@ export class AppTokenSource implements TokenSource {
     const installationId = await this.resolveInstallationId(jwt);
     // The repository restriction is fixed for the lifetime of this instance and
     // the cache is per instance, so every cached token already matches it.
-    const data = await this.appRequest<AccessTokenResponse>(
+    const token = await this.appRequest(
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
+      trusted((data: AccessTokenResponse): InstallationToken => {
+        return { token: data.token, expiresAt: new Date(data.expires_at) };
+      }),
       this.tokenScope(),
     );
-    const token: InstallationToken = { token: data.token, expiresAt: new Date(data.expires_at) };
     this.cached = token;
     return token;
   }
@@ -284,8 +287,12 @@ export class AppTokenSource implements TokenSource {
     const encoded = encodeURIComponent(owner);
     for (const path of [`/orgs/${encoded}/installation`, `/users/${encoded}/installation`]) {
       try {
-        const installation = await this.appRequest<Installation>(path, 'GET', jwt);
-        return String(installation.id);
+        return await this.appRequest(
+          path,
+          'GET',
+          jwt,
+          trusted((installation: Installation) => String(installation.id)),
+        );
       } catch (error) {
         if (!(error instanceof RepoError) || error.code !== 'not_found') throw error;
       }
@@ -297,7 +304,12 @@ export class AppTokenSource implements TokenSource {
   }
 
   private async lookupSingleInstallation(jwt: string): Promise<string> {
-    const installations = await this.appRequest<Installation[]>('/app/installations', 'GET', jwt);
+    const installations = await this.appRequest(
+      '/app/installations',
+      'GET',
+      jwt,
+      trusted((found: Installation[]) => found.map((installation) => String(installation.id))),
+    );
     if (installations.length === 0) {
       throw new RepoError('GitHub App is not installed anywhere', {
         code: 'unauthorized',
@@ -310,13 +322,14 @@ export class AppTokenSource implements TokenSource {
         { code: 'validation', provider: 'github' },
       );
     }
-    return String(installations[0]!.id);
+    return installations[0]!;
   }
 
   private async appRequest<T>(
     path: string,
     method: string,
     jwt: string,
+    parse: BodyParser<T>,
     body?: unknown,
   ): Promise<T> {
     const url = joinUrl(this.baseUrl, path);
@@ -348,7 +361,11 @@ export class AppTokenSource implements TokenSource {
     if (!response.ok) {
       throw await this.toError(response);
     }
-    return (await response.json()) as T;
+    return readJson(response, parse, {
+      provider: 'github',
+      secrets: this.getSecrets(),
+      url: new URL(url),
+    });
   }
 
   private async toError(response: Response): Promise<RepoError> {

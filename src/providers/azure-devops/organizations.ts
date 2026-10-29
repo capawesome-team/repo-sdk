@@ -1,4 +1,4 @@
-import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
+import { HttpClient, type ProviderErrorInfo, trusted } from '../../http.ts';
 import { isRecord } from '../shared.ts';
 import { API_VERSION, authHeader, authSecrets, type AzureDevOpsAuth } from './auth.ts';
 
@@ -48,15 +48,21 @@ export async function listOrganizations(
     secrets: () => authSecrets(options),
   });
 
-  const { data: profile } = await http.json<AzureProfile>('/_apis/profile/profiles/me', {
-    query: { 'api-version': API_VERSION },
-  });
-  const { data: accounts } = await http.json<AzureAccountList>('/_apis/accounts', {
-    query: { memberId: profile.id, 'api-version': API_VERSION },
-  });
-  return accounts.value.map((account) => ({
-    id: account.accountId,
-    name: account.accountName,
-    url: account.accountUri,
-  }));
+  const { data: memberId } = await http.json(
+    '/_apis/profile/profiles/me',
+    trusted((profile: AzureProfile) => profile.id),
+    { query: { 'api-version': API_VERSION } },
+  );
+  const { data } = await http.json(
+    '/_apis/accounts',
+    trusted((accounts: AzureAccountList) =>
+      accounts.value.map((account): Organization => ({
+        id: account.accountId,
+        name: account.accountName,
+        url: account.accountUri,
+      })),
+    ),
+    { query: { memberId, 'api-version': API_VERSION } },
+  );
+  return data;
 }

@@ -811,6 +811,11 @@ describe('webhooks', () => {
 });
 
 describe('error mapping', () => {
+  it('throws invalid_response when a successful response is not JSON', async () => {
+    const { provider } = setup(() => ({ body: '<!DOCTYPE html><html></html>' }));
+    await expectRepoError(provider.getRepository({ repo: 'core/repo-sdk' }), 'invalid_response');
+  });
+
   it('maps a 203 HTML response to unauthorized', async () => {
     const { provider } = setup(() => ({
       status: 203,

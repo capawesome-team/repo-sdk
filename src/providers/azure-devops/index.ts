@@ -1,7 +1,12 @@
 import { RepoError } from '../../errors.ts';
-import { HttpClient, type HttpRequestOptions, type ProviderErrorInfo } from '../../http.ts';
+import {
+  type BodyParser,
+  HttpClient,
+  type HttpRequestOptions,
+  type ProviderErrorInfo,
+  trusted,
+} from '../../http.ts';
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import type {
   Archive,
   AuthenticatedUser,
@@ -232,6 +237,8 @@ function toWebhook(subscription: AzureSubscription): Webhook {
   };
 }
 
+const parseWebhook = trusted(toWebhook);
+
 function mapError(status: number, body: unknown): ProviderErrorInfo {
   const message = isRecord(body) && typeof body.message === 'string' ? body.message : undefined;
   return { message };
@@ -303,11 +310,11 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
 
   async function jsonApi<T>(
     path: string,
+    parse: BodyParser<T>,
     request: HttpRequestOptions = {},
   ): Promise<{ data: T; response: Response }> {
     const response = await rawApi(path, request);
-    const data = response.status === 204 ? (undefined as T) : ((await response.json()) as T);
-    return { data, response };
+    return http.read(response, parse, http.buildUrl(path, versioned(request).query));
   }
 
   const repoCache = new Map<string, Promise<ResolvedRepo>>();
@@ -315,13 +322,17 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     let cached = repoCache.get(repo);
     if (!cached) {
       cached = (async () => {
-        const { data } = await jsonApi<AzureRepo>(repoBasePath(repo), { signal });
-        return {
-          repoId: data.id,
-          projectId: data.project.id,
-          projectName: data.project.name,
-          repoName: data.name,
-        };
+        const { data } = await jsonApi(
+          repoBasePath(repo),
+          trusted((azureRepo: AzureRepo): ResolvedRepo => ({
+            repoId: azureRepo.id,
+            projectId: azureRepo.project.id,
+            projectName: azureRepo.project.name,
+            repoName: azureRepo.name,
+          })),
+          { signal },
+        );
+        return data;
       })().catch((error) => {
         repoCache.delete(repo);
         throw error;
@@ -340,11 +351,16 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     peelTags: boolean,
     signal?: AbortSignal,
   ): Promise<AzureRef> {
-    const { data } = await jsonApi<AzureList<AzureRef>>(`${repoBasePath(repo)}/refs`, {
-      query: { filter: fullName, ...(peelTags ? { peelTags: true } : {}), $top: 100 },
-      signal,
-    });
-    const ref = data.value.find((candidate) => candidate.name === `refs/${fullName}`);
+    const { data: ref } = await jsonApi(
+      `${repoBasePath(repo)}/refs`,
+      trusted((refs: AzureList<AzureRef>) =>
+        refs.value.find((candidate) => candidate.name === `refs/${fullName}`),
+      ),
+      {
+        query: { filter: fullName, ...(peelTags ? { peelTags: true } : {}), $top: 100 },
+        signal,
+      },
+    );
     if (!ref) {
       throw new RepoError(`Ref "refs/${fullName}" not found`, {
         code: 'not_found',
@@ -360,7 +376,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     const url = `https://${host}/${enc(options.organization)}/${enc(project)}/_git/${enc(repository)}`;
     if ('pat' in auth) return { password: auth.pat, url, username: 'pat' };
     if ('accessToken' in auth) return { password: auth.accessToken, url, username: 'oauth2' };
-    const token = await mintToken(auth, { forceRefresh: false });
+    const token = await auth.tokenProvider({ forceRefresh: false });
     return { password: token, url, username: 'oauth2' };
   }
 
@@ -372,18 +388,22 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     // org-scoped connectionData endpoint instead. The `Account` property carries
     // the sign-in address (UPN) when the identity provider exposes one.
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
-      const { data } = await jsonApi<AzureConnectionData>('/_apis/connectionData', {
-        signal: params.signal,
-      });
-      const user = data.authenticatedUser;
-      const account = user?.properties?.Account?.$value;
-      return {
-        id: user?.id ?? '',
-        username: account ?? user?.providerDisplayName ?? '',
-        name: user?.customDisplayName ?? user?.providerDisplayName,
-        email: account?.includes('@') ? account : undefined,
-        raw: data,
-      };
+      const { data } = await jsonApi(
+        '/_apis/connectionData',
+        trusted((connection: AzureConnectionData): AuthenticatedUser => {
+          const user = connection.authenticatedUser;
+          const account = user?.properties?.Account?.$value;
+          return {
+            id: user?.id ?? '',
+            username: account ?? user?.providerDisplayName ?? '',
+            name: user?.customDisplayName ?? user?.providerDisplayName,
+            email: account?.includes('@') ? account : undefined,
+            raw: connection,
+          };
+        }),
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
@@ -394,13 +414,14 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           params.cursor,
         ).token;
       }
-      const { data, response } = await jsonApi<AzureList<AzureProjectRef>>('/_apis/projects', {
-        query,
-        signal: params.signal,
-      });
+      const { data, response } = await jsonApi(
+        '/_apis/projects',
+        trusted((projects: AzureList<AzureProjectRef>) => projects.value.map(toNamespace)),
+        { query, signal: params.signal },
+      );
       const token = response.headers.get('x-ms-continuationtoken');
       return {
-        data: data.value.map(toNamespace),
+        data,
         cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
       };
     },
@@ -409,18 +430,24 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
       const path = params.namespace
         ? `/${enc(params.namespace)}/_apis/git/repositories`
         : '/_apis/git/repositories';
-      const { data } = await jsonApi<AzureList<AzureRepo>>(path, { signal: params.signal });
-      // The Azure DevOps repositories endpoint returns all repos in one response (no server
-      // cursor), so `limit` can only be honored client-side.
-      const repos = params.limit !== undefined ? data.value.slice(0, params.limit) : data.value;
-      return { data: repos.map(mapRepository) };
+      const { data } = await jsonApi(
+        path,
+        trusted(({ value }: AzureList<AzureRepo>) => {
+          // The Azure DevOps repositories endpoint returns all repos in one response (no server
+          // cursor), so `limit` can only be honored client-side.
+          const repos = params.limit !== undefined ? value.slice(0, params.limit) : value;
+          return repos.map(mapRepository);
+        }),
+        { signal: params.signal },
+      );
+      return { data };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await jsonApi<AzureRepo>(repoBasePath(params.repo), {
+      const { data } = await jsonApi(repoBasePath(params.repo), trusted(mapRepository), {
         signal: params.signal,
       });
-      return mapRepository(data);
+      return data;
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {
@@ -440,36 +467,42 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         query['searchCriteria.itemVersion.version'] = params.ref;
         query['searchCriteria.itemVersion.versionType'] = is40Hex(params.ref) ? 'commit' : 'branch';
       }
-      const { data } = await jsonApi<AzureList<AzureCommit>>(
+      const { data } = await jsonApi(
         `${repoBasePath(params.repo)}/commits`,
+        trusted((commits: AzureList<AzureCommit>) => commits.value.map(toCommit)),
         { query, signal: params.signal },
       );
       const cursor =
-        data.value.length === top
-          ? encodeCursor('azure-devops', { skip: (skip ?? 0) + top })
-          : undefined;
-      return { data: data.value.map(toCommit), cursor };
+        data.length === top ? encodeCursor('azure-devops', { skip: (skip ?? 0) + top }) : undefined;
+      return { data, cursor };
     },
 
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const base = repoBasePath(params.repo);
       if (is40Hex(params.ref)) {
-        const { data } = await jsonApi<AzureCommit>(`${base}/commits/${enc(params.ref)}`, {
+        const { data } = await jsonApi(`${base}/commits/${enc(params.ref)}`, trusted(toCommit), {
           signal: params.signal,
         });
-        return toCommit(data);
+        return data;
       }
-      const tip = async (versionType: 'branch' | 'tag'): Promise<AzureCommit | undefined> => {
+      const tip = async (versionType: 'branch' | 'tag'): Promise<Commit | undefined> => {
         try {
-          const { data } = await jsonApi<AzureList<AzureCommit>>(`${base}/commits`, {
-            query: {
-              'searchCriteria.itemVersion.version': params.ref,
-              'searchCriteria.itemVersion.versionType': versionType,
-              'searchCriteria.$top': 1,
+          const { data } = await jsonApi(
+            `${base}/commits`,
+            trusted((commits: AzureList<AzureCommit>) => {
+              const [commit] = commits.value;
+              return commit ? toCommit(commit) : undefined;
+            }),
+            {
+              query: {
+                'searchCriteria.itemVersion.version': params.ref,
+                'searchCriteria.itemVersion.versionType': versionType,
+                'searchCriteria.$top': 1,
+              },
+              signal: params.signal,
             },
-            signal: params.signal,
-          });
-          return data.value[0];
+          );
+          return data;
         } catch (error) {
           // Only a genuine "ref absent" outcome should fall through branch→tag. Any other
           // RepoError (unauthorized/forbidden/rate_limited/network_error/provider_error) is a
@@ -485,7 +518,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           provider: 'azure-devops',
         });
       }
-      return toCommit(commit);
+      return commit;
     },
 
     async listTags(params: ListTagsParams): Promise<Page<Tag>> {
@@ -500,13 +533,14 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           params.cursor,
         ).token;
       }
-      const { data, response } = await jsonApi<AzureList<AzureRef>>(
+      const { data, response } = await jsonApi(
         `${repoBasePath(params.repo)}/refs`,
+        trusted((refs: AzureList<AzureRef>) => refs.value.map(toTag)),
         { query, signal: params.signal },
       );
       const token = response.headers.get('x-ms-continuationtoken');
       return {
-        data: data.value.map(toTag),
+        data,
         cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
       };
     },
@@ -519,13 +553,14 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           params.cursor,
         ).token;
       }
-      const { data, response } = await jsonApi<AzureList<AzureRef>>(
+      const { data, response } = await jsonApi(
         `${repoBasePath(params.repo)}/refs`,
+        trusted((refs: AzureList<AzureRef>) => refs.value.map(toBranch)),
         { query, signal: params.signal },
       );
       const token = response.headers.get('x-ms-continuationtoken');
       return {
-        data: data.value.map(toBranch),
+        data,
         cursor: token ? encodeCursor('azure-devops', { token }) : undefined,
       };
     },
@@ -547,21 +582,27 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
           .filter((type) => params.types.includes(type))
           .map(async (type) => {
             const isTag = type === 'tag';
-            const { data } = await jsonApi<AzureList<AzureRef>>(refsPath, {
-              query: {
-                filter: `${isTag ? 'tags/' : 'heads/'}${params.query}`,
-                ...(isTag ? { peelTags: true } : {}),
-                $top: params.limit,
-              },
-              signal: params.signal,
-            });
             const prefix = isTag ? 'refs/tags/' : 'refs/heads/';
-            return data.value.map((ref): ProviderRefMatch => ({
-              type,
-              name: stripPrefix(ref.name, prefix),
-              sha: isTag ? (ref.peeledObjectId ?? ref.objectId) : ref.objectId,
-              raw: ref,
-            }));
+            const { data } = await jsonApi(
+              refsPath,
+              trusted((refs: AzureList<AzureRef>) =>
+                refs.value.map((ref): ProviderRefMatch => ({
+                  type,
+                  name: stripPrefix(ref.name, prefix),
+                  sha: isTag ? (ref.peeledObjectId ?? ref.objectId) : ref.objectId,
+                  raw: ref,
+                })),
+              ),
+              {
+                query: {
+                  filter: `${isTag ? 'tags/' : 'heads/'}${params.query}`,
+                  ...(isTag ? { peelTags: true } : {}),
+                  $top: params.limit,
+                },
+                signal: params.signal,
+              },
+            );
+            return data;
           }),
       );
       return matches.flat().slice(0, params.limit);
@@ -619,7 +660,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         );
       }
       const { repoId, projectId } = await resolveRepo(params.repo, params.signal);
-      const { data } = await jsonApi<AzureSubscription>('/_apis/hooks/subscriptions', {
+      const { data } = await jsonApi('/_apis/hooks/subscriptions', parseWebhook, {
         method: 'POST',
         body: {
           publisherId: 'tfs',
@@ -636,57 +677,64 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
         },
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async listWebhooks(params: ListWebhooksParams): Promise<Page<Webhook>> {
       const { repoId } = await resolveRepo(params.repo, params.signal);
-      const { data } = await jsonApi<AzureList<AzureSubscription>>('/_apis/hooks/subscriptions', {
-        query: { consumerId: 'webHooks' },
-        signal: params.signal,
-      });
-      const filtered = data.value.filter((sub) => sub.publisherInputs?.repository === repoId);
-      return { data: filtered.map(toWebhook) };
+      const { data } = await jsonApi(
+        '/_apis/hooks/subscriptions',
+        trusted((subscriptions: AzureList<AzureSubscription>) =>
+          subscriptions.value
+            .filter((sub) => sub.publisherInputs?.repository === repoId)
+            .map(toWebhook),
+        ),
+        { query: { consumerId: 'webHooks' }, signal: params.signal },
+      );
+      return { data };
     },
 
     async getWebhook(params: GetWebhookParams): Promise<Webhook> {
-      const { data } = await jsonApi<AzureSubscription>(
-        `/_apis/hooks/subscriptions/${enc(params.id)}`,
-        { signal: params.signal },
-      );
-      return toWebhook(data);
+      const { data } = await jsonApi(`/_apis/hooks/subscriptions/${enc(params.id)}`, parseWebhook, {
+        signal: params.signal,
+      });
+      return data;
     },
 
     async updateWebhook(params: UpdateWebhookParams): Promise<Webhook> {
-      const { data: existing } = await jsonApi<AzureSubscription>(
+      const { data: body } = await jsonApi(
         `/_apis/hooks/subscriptions/${enc(params.id)}`,
+        trusted((existing: AzureSubscription): AzureSubscription => {
+          const consumerInputs = { ...existing.consumerInputs };
+          if (params.url !== undefined) consumerInputs.url = params.url;
+          if (params.secret !== undefined) {
+            Object.assign(consumerInputs, secretConsumerInputs(params.secret));
+          } else if (
+            existing.consumerInputs?.basicAuthUsername &&
+            !existing.consumerInputs.basicAuthPassword
+          ) {
+            // Azure DevOps never returns `basicAuthPassword` on read, so round-tripping the
+            // subscription would PUT it back empty and silently wipe the secret. Refuse instead.
+            throw new RepoError(
+              'This webhook uses Basic auth, but Azure DevOps does not return the secret on read; ' +
+                'pass `secret` again on update so it is not cleared',
+              { code: 'validation', provider: 'azure-devops' },
+            );
+          }
+          const subscription: AzureSubscription = { ...existing, consumerInputs };
+          if (params.active === false) subscription.status = 'disabledByUser';
+          else if (params.active === true) subscription.status = 'enabled';
+          return subscription;
+        }),
         { signal: params.signal },
       );
-      const consumerInputs = { ...existing.consumerInputs };
-      if (params.url !== undefined) consumerInputs.url = params.url;
-      if (params.secret !== undefined) {
-        Object.assign(consumerInputs, secretConsumerInputs(params.secret));
-      } else if (
-        existing.consumerInputs?.basicAuthUsername &&
-        !existing.consumerInputs.basicAuthPassword
-      ) {
-        // Azure DevOps never returns `basicAuthPassword` on read, so round-tripping the
-        // subscription would PUT it back empty and silently wipe the secret. Refuse instead.
-        throw new RepoError(
-          'This webhook uses Basic auth, but Azure DevOps does not return the secret on read; ' +
-            'pass `secret` again on update so it is not cleared',
-          { code: 'validation', provider: 'azure-devops' },
-        );
-      }
-      const body: AzureSubscription = { ...existing, consumerInputs };
-      if (params.active === false) body.status = 'disabledByUser';
-      else if (params.active === true) body.status = 'enabled';
 
-      const { data } = await jsonApi<AzureSubscription>(
-        `/_apis/hooks/subscriptions/${enc(params.id)}`,
-        { method: 'PUT', body, signal: params.signal },
-      );
-      return toWebhook(data);
+      const { data } = await jsonApi(`/_apis/hooks/subscriptions/${enc(params.id)}`, parseWebhook, {
+        method: 'PUT',
+        body,
+        signal: params.signal,
+      });
+      return data;
     },
 
     async deleteWebhook(params: DeleteWebhookParams): Promise<void> {
