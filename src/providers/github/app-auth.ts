@@ -1,6 +1,7 @@
 import { bytesToBase64Url } from '../../base64.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
-import { readJson, trusted, type BodyParser } from '../../http.ts';
+import { expectArray, expectNumber, expectRecord, expectString } from '../../decode.ts';
+import { readJson, type BodyParser } from '../../http.ts';
 
 /**
  * Indirection over the credential used for every request. Token auth resolves a
@@ -67,6 +68,27 @@ interface AccessTokenResponse {
 
 interface Installation {
   id: number;
+}
+
+function decodeAccessToken(value: unknown): AccessTokenResponse {
+  const token = expectRecord(value, 'access token');
+  expectString(token.token, 'access token.token');
+  expectString(token.expires_at, 'access token.expires_at');
+  return value as AccessTokenResponse;
+}
+
+function decodeInstallation(value: unknown): Installation {
+  const installation = expectRecord(value, 'installation');
+  expectNumber(installation.id, 'installation.id');
+  return value as Installation;
+}
+
+function decodeInstallations(value: unknown): Installation[] {
+  return expectArray(value, 'installations').map(decodeInstallation);
+}
+
+function toInstallationToken(data: AccessTokenResponse): InstallationToken {
+  return { token: data.token, expiresAt: new Date(data.expires_at) };
 }
 
 // rsaEncryption AlgorithmIdentifier: SEQUENCE { OID 1.2.840.113549.1.1.1, NULL }.
@@ -252,9 +274,7 @@ export class AppTokenSource implements TokenSource {
       `/app/installations/${installationId}/access_tokens`,
       'POST',
       jwt,
-      trusted((data: AccessTokenResponse): InstallationToken => {
-        return { token: data.token, expiresAt: new Date(data.expires_at) };
-      }),
+      (body) => toInstallationToken(decodeAccessToken(body)),
       this.tokenScope(),
     );
     this.cached = token;
@@ -287,11 +307,8 @@ export class AppTokenSource implements TokenSource {
     const encoded = encodeURIComponent(owner);
     for (const path of [`/orgs/${encoded}/installation`, `/users/${encoded}/installation`]) {
       try {
-        return await this.appRequest(
-          path,
-          'GET',
-          jwt,
-          trusted((installation: Installation) => String(installation.id)),
+        return await this.appRequest(path, 'GET', jwt, (body) =>
+          String(decodeInstallation(body).id),
         );
       } catch (error) {
         if (!(error instanceof RepoError) || error.code !== 'not_found') throw error;
@@ -304,11 +321,8 @@ export class AppTokenSource implements TokenSource {
   }
 
   private async lookupSingleInstallation(jwt: string): Promise<string> {
-    const installations = await this.appRequest(
-      '/app/installations',
-      'GET',
-      jwt,
-      trusted((found: Installation[]) => found.map((installation) => String(installation.id))),
+    const installations = await this.appRequest('/app/installations', 'GET', jwt, (body) =>
+      decodeInstallations(body).map((installation) => String(installation.id)),
     );
     if (installations.length === 0) {
       throw new RepoError('GitHub App is not installed anywhere', {

@@ -58,6 +58,35 @@ describe('project id encoding', () => {
   });
 });
 
+describe('response decoding', () => {
+  it.each([
+    ['an array instead of a project', [], 'expected an object for project'],
+    [
+      'a project without a clone URL',
+      { ...projectPayload, http_url_to_repo: undefined },
+      'expected a string for project.http_url_to_repo',
+    ],
+  ])('throws invalid_response for %s', async (_label, json, detail) => {
+    const { provider } = setup(() => ({ json }));
+    await expect(
+      provider.getRepository({ repo: 'capawesome-team/repo-sdk' }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(`: ${detail}`),
+    });
+  });
+
+  it('throws invalid_response for a list endpoint answering with an object', async () => {
+    const { provider } = setup(() => ({ json: { message: 'ok' } }));
+    await expect(
+      provider.listBranches({ repo: 'capawesome-team/repo-sdk', limit: 20 }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of branches'),
+    });
+  });
+});
+
 describe('listNamespaces', () => {
   it('returns the personal namespace plus groups and derives subgroup parents', async () => {
     const { provider } = setup((request) => {

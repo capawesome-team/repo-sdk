@@ -201,6 +201,33 @@ describe('getRepository', () => {
   });
 });
 
+describe('response decoding', () => {
+  it.each([
+    ['an array instead of a repository', [], 'expected an object for repository'],
+    [
+      'a repository without a full_name',
+      { ...repoPayload, full_name: undefined },
+      'expected a string for repository.full_name',
+    ],
+  ])('throws invalid_response for %s', async (_label, json, detail) => {
+    const { provider } = setup(() => ({ json }));
+    await expect(
+      provider.getRepository({ repo: 'capawesome-team/repo-sdk' }),
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(`: ${detail}`),
+    });
+  });
+
+  it('throws invalid_response for a tag list answered with an object', async () => {
+    const { provider } = setup(() => ({ json: { message: 'not a list' } }));
+    await expect(provider.listTags({ repo: 'capawesome-team/repo-sdk' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining(': expected an array of tags'),
+    });
+  });
+});
+
 describe('getAuthenticatedUser', () => {
   it('maps the /user payload and reports the userProfile capability', async () => {
     const { provider, stub } = setup(() => ({

@@ -1,5 +1,6 @@
 import { RepoError } from '../../errors.ts';
-import { HttpClient, type ProviderErrorInfo, type QueryValue, trusted } from '../../http.ts';
+import { expectArray, expectNumber, expectRecord, expectString } from '../../decode.ts';
+import { HttpClient, type ProviderErrorInfo, type QueryValue } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
@@ -162,6 +163,84 @@ interface GitLabHook {
   releases_events?: boolean;
 }
 
+function decodeUser(value: unknown): GitLabUser {
+  const user = expectRecord(value, 'user');
+  expectNumber(user.id, 'user.id');
+  expectString(user.username, 'user.username');
+  return value as GitLabUser;
+}
+
+function decodeGroup(value: unknown): GitLabGroup {
+  const group = expectRecord(value, 'group');
+  expectNumber(group.id, 'group.id');
+  expectString(group.name, 'group.name');
+  expectString(group.full_path, 'group.full_path');
+  return value as GitLabGroup;
+}
+
+function decodeGroups(value: unknown): GitLabGroup[] {
+  return expectArray(value, 'groups').map(decodeGroup);
+}
+
+function decodeProject(value: unknown): GitLabProject {
+  const project = expectRecord(value, 'project');
+  expectNumber(project.id, 'project.id');
+  expectString(project.name, 'project.name');
+  expectString(project.path_with_namespace, 'project.path_with_namespace');
+  expectString(
+    expectRecord(project.namespace, 'project.namespace').full_path,
+    'project.namespace.full_path',
+  );
+  expectString(project.http_url_to_repo, 'project.http_url_to_repo');
+  return value as GitLabProject;
+}
+
+function decodeProjects(value: unknown): GitLabProject[] {
+  return expectArray(value, 'projects').map(decodeProject);
+}
+
+function decodeCommit(value: unknown): GitLabCommit {
+  const commit = expectRecord(value, 'commit');
+  expectString(commit.id, 'commit.id');
+  return value as GitLabCommit;
+}
+
+function decodeCommits(value: unknown): GitLabCommit[] {
+  return expectArray(value, 'commits').map(decodeCommit);
+}
+
+function decodeTag(value: unknown): GitLabTag {
+  const tag = expectRecord(value, 'tag');
+  expectString(tag.name, 'tag.name');
+  return value as GitLabTag;
+}
+
+function decodeTags(value: unknown): GitLabTag[] {
+  return expectArray(value, 'tags').map(decodeTag);
+}
+
+function decodeBranch(value: unknown): GitLabBranch {
+  const branch = expectRecord(value, 'branch');
+  expectString(branch.name, 'branch.name');
+  expectString(expectRecord(branch.commit, 'branch.commit').id, 'branch.commit.id');
+  return value as GitLabBranch;
+}
+
+function decodeBranches(value: unknown): GitLabBranch[] {
+  return expectArray(value, 'branches').map(decodeBranch);
+}
+
+function decodeHook(value: unknown): GitLabHook {
+  const hook = expectRecord(value, 'webhook');
+  expectNumber(hook.id, 'webhook.id');
+  expectString(hook.url, 'webhook.url');
+  return value as GitLabHook;
+}
+
+function decodeHooks(value: unknown): GitLabHook[] {
+  return expectArray(value, 'webhooks').map(decodeHook);
+}
+
 /**
  * Cursor for the next page: prefer the absolute `Link: rel="next"` URL; when the
  * endpoint omits the Link header, fall back to the `x-next-page` header by
@@ -186,6 +265,17 @@ function projectId(repo: string): string {
 
 function isNumericId(repo: string): boolean {
   return /^\d+$/.test(repo);
+}
+
+function toAuthenticatedUser(user: GitLabUser): AuthenticatedUser {
+  return {
+    id: String(user.id),
+    username: user.username,
+    name: user.name,
+    email: user.email ?? user.public_email ?? undefined,
+    avatarUrl: user.avatar_url ?? undefined,
+    raw: user,
+  };
 }
 
 function toUserNamespace(user: GitLabUser): Namespace {
@@ -291,7 +381,7 @@ function toWebhook(hook: GitLabHook): Webhook {
   };
 }
 
-const parseWebhook = trusted(toWebhook);
+const parseWebhook = (body: unknown): Webhook => toWebhook(decodeHook(body));
 
 /**
  * GitLab's project hooks API has no field to create or set a hook as inactive
@@ -341,7 +431,8 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
   const tokenSource = createTokenSource(options.auth);
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (project: GitLabProject): Repository => toRepository(project, webBase);
-  const parseRepositories = trusted((projects: GitLabProject[]) => projects.map(mapRepository));
+  const parseRepositories = (body: unknown): Repository[] =>
+    decodeProjects(body).map(mapRepository);
 
   const http = new HttpClient({
     provider: 'gitlab',
@@ -369,7 +460,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     if (isNumericId(params.repo)) {
       const { data: url } = await http.json(
         `/projects/${params.repo}`,
-        trusted((project: GitLabProject) => project.http_url_to_repo),
+        (body) => decodeProject(body).http_url_to_repo,
         { signal: params.signal },
       );
       return { password, url, username: 'oauth2' };
@@ -383,20 +474,9 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     capabilities: CAPABILITIES,
 
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
-      const { data } = await http.json(
-        '/user',
-        trusted((user: GitLabUser) => {
-          return {
-            id: String(user.id),
-            username: user.username,
-            name: user.name,
-            email: user.email ?? user.public_email ?? undefined,
-            avatarUrl: user.avatar_url ?? undefined,
-            raw: user,
-          };
-        }),
-        { signal: params.signal },
-      );
+      const { data } = await http.json('/user', (body) => toAuthenticatedUser(decodeUser(body)), {
+        signal: params.signal,
+      });
       return data;
     },
 
@@ -406,18 +486,18 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
         const { data, response } = await http.json(
           url,
-          trusted((groups: GitLabGroup[]) => groups.map(toGroupNamespace)),
+          (body) => decodeGroups(body).map(toGroupNamespace),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(url, response) };
       }
-      const { data: user } = await http.json('/user', trusted(toUserNamespace), {
+      const { data: user } = await http.json('/user', (body) => toUserNamespace(decodeUser(body)), {
         signal: params.signal,
       });
       const query = { per_page: clampPerPage(params.limit) };
       const { data: groups, response } = await http.json(
         '/groups',
-        trusted((groups: GitLabGroup[]) => groups.map(toGroupNamespace)),
+        (body) => decodeGroups(body).map(toGroupNamespace),
         { query, signal: params.signal },
       );
       return {
@@ -489,7 +569,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
       const { data } = await http.json(
         `/projects/${projectId(params.repo)}`,
-        trusted(mapRepository),
+        (body) => mapRepository(decodeProject(body)),
         { signal: params.signal },
       );
       return data;
@@ -501,7 +581,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
         const { data, response } = await http.json(
           url,
-          trusted((commits: GitLabCommit[]) => commits.map(toCommit)),
+          (body) => decodeCommits(body).map(toCommit),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(url, response) };
@@ -517,7 +597,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       };
       const { data, response } = await http.json(
         path,
-        trusted((commits: GitLabCommit[]) => commits.map(toCommit)),
+        (body) => decodeCommits(body).map(toCommit),
         { query, signal: params.signal },
       );
       return { data, cursor: nextCursor(reqUrl(path, query), response) };
@@ -526,7 +606,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     async getCommit(params: GetCommitParams): Promise<Commit> {
       const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/commits/${encodeURIComponent(params.ref)}`,
-        trusted(toCommit),
+        (body) => toCommit(decodeCommit(body)),
         { signal: params.signal },
       );
       return data;
@@ -536,20 +616,17 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json(
-          url,
-          trusted((tags: GitLabTag[]) => tags.map(toTag)),
-          { signal: params.signal },
-        );
+        const { data, response } = await http.json(url, (body) => decodeTags(body).map(toTag), {
+          signal: params.signal,
+        });
         return { data, cursor: nextCursor(url, response) };
       }
       const path = `/projects/${projectId(params.repo)}/repository/tags`;
       const query = { per_page: clampPerPage(params.limit) };
-      const { data, response } = await http.json(
-        path,
-        trusted((tags: GitLabTag[]) => tags.map(toTag)),
-        { query, signal: params.signal },
-      );
+      const { data, response } = await http.json(path, (body) => decodeTags(body).map(toTag), {
+        query,
+        signal: params.signal,
+      });
       return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
@@ -559,7 +636,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
         const { data, response } = await http.json(
           url,
-          trusted((branches: GitLabBranch[]) => branches.map(toBranch)),
+          (body) => decodeBranches(body).map(toBranch),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(url, response) };
@@ -568,7 +645,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       const query = { per_page: clampPerPage(params.limit) };
       const { data, response } = await http.json(
         path,
-        trusted((branches: GitLabBranch[]) => branches.map(toBranch)),
+        (body) => decodeBranches(body).map(toBranch),
         { query, signal: params.signal },
       );
       return { data, cursor: nextCursor(reqUrl(path, query), response) };
@@ -577,7 +654,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     async getBranch(params: GetBranchParams): Promise<Branch> {
       const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/branches/${encodeURIComponent(params.name)}`,
-        trusted(toBranch),
+        (body) => toBranch(decodeBranch(body)),
         { signal: params.signal },
       );
       return data;
@@ -586,7 +663,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     async getTag(params: GetTagParams): Promise<Tag> {
       const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/tags/${encodeURIComponent(params.name)}`,
-        trusted(toTag),
+        (body) => toTag(decodeTag(body)),
         { signal: params.signal },
       );
       return data;
@@ -604,28 +681,26 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
             if (type === 'branch') {
               const { data } = await http.json(
                 `${base}/branches`,
-                trusted((branches: GitLabBranch[]) =>
-                  branches.map((branch) => ({
+                (body) =>
+                  decodeBranches(body).map((branch) => ({
                     type,
                     name: branch.name,
                     sha: branch.commit.id,
                     raw: branch,
                   })),
-                ),
                 { query, signal: params.signal },
               );
               return data;
             }
             const { data } = await http.json(
               `${base}/tags`,
-              trusted((tags: GitLabTag[]) =>
-                tags.map((tag) => ({
+              (body) =>
+                decodeTags(body).map((tag) => ({
                   type,
                   name: tag.name,
                   sha: tag.commit?.id ?? tag.target ?? '',
                   raw: tag,
                 })),
-              ),
               { query, signal: params.signal },
             );
             return data;
@@ -685,18 +760,17 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
         const { data, response } = await http.json(
           url,
-          trusted((hooks: GitLabHook[]) => hooks.map(toWebhook)),
+          (body) => decodeHooks(body).map(toWebhook),
           { signal: params.signal },
         );
         return { data, cursor: nextCursor(url, response) };
       }
       const path = hooksPath(params.repo);
       const query = { per_page: clampPerPage(params.limit) };
-      const { data, response } = await http.json(
-        path,
-        trusted((hooks: GitLabHook[]) => hooks.map(toWebhook)),
-        { query, signal: params.signal },
-      );
+      const { data, response } = await http.json(path, (body) => decodeHooks(body).map(toWebhook), {
+        query,
+        signal: params.signal,
+      });
       return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
@@ -714,13 +788,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       // hook and merge so unspecified fields are preserved.
       const existing =
         params.url === undefined || params.events === undefined
-          ? (
-              await http.json(
-                path,
-                trusted((hook: GitLabHook) => hook),
-                { signal: params.signal },
-              )
-            ).data
+          ? (await http.json(path, decodeHook, { signal: params.signal })).data
           : undefined;
       const events = params.events;
       const body: Record<string, unknown> = {
