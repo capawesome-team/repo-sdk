@@ -92,7 +92,7 @@ function createTokenSource(auth: GitLabProviderOptions['auth']): TokenSource {
   let lastToken: string | undefined;
   return {
     getToken: async (forceRefresh = false) => {
-      lastToken = await mintToken(auth.tokenProvider, { forceRefresh });
+      lastToken = await mintToken(auth, { forceRefresh });
       return lastToken;
     },
     getSecrets: () => (lastToken === undefined ? [] : [lastToken]),

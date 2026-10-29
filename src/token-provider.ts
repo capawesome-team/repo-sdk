@@ -12,11 +12,11 @@ export class TokenProviderError extends Error {
 }
 
 export async function mintToken(
-  tokenProvider: TokenProvider,
+  auth: { tokenProvider: TokenProvider },
   context: { forceRefresh: boolean },
 ): Promise<string> {
   try {
-    return await tokenProvider(context);
+    return await auth.tokenProvider(context);
   } catch (error) {
     throw new TokenProviderError(error);
   }

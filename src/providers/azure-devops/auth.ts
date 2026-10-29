@@ -30,7 +30,7 @@ export function authHeader(
   if ('accessToken' in auth) {
     return Promise.resolve(`Bearer ${auth.accessToken}`);
   }
-  return mintToken(auth.tokenProvider, context).then((token) => `Bearer ${token}`);
+  return mintToken(auth, context).then((token) => `Bearer ${token}`);
 }
 
 export function authSecrets(auth: AzureDevOpsAuth): string[] {

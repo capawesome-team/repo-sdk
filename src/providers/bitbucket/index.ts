@@ -298,7 +298,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   async function currentToken(forceRefresh: boolean): Promise<string> {
     if (isApiTokenAuth(auth)) return auth.apiToken;
     if ('accessToken' in auth) return auth.accessToken;
-    lastToken = await mintToken(auth.tokenProvider, { forceRefresh });
+    lastToken = await mintToken(auth, { forceRefresh });
     return lastToken;
   }
   async function authorizationHeader(forceRefresh: boolean): Promise<string> {

@@ -122,7 +122,7 @@ function createStaticTokenSource(auth: GitHubTokenAuth): TokenSource {
 function createProviderTokenSource(auth: GitHubTokenProviderAuth): TokenSource {
   let lastToken: string | undefined;
   const fetchToken = async (forceRefresh: boolean): Promise<string> => {
-    lastToken = await mintToken(auth.tokenProvider, { forceRefresh });
+    lastToken = await mintToken(auth, { forceRefresh });
     return lastToken;
   };
   return {

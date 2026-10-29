@@ -360,7 +360,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     const url = `https://${host}/${enc(options.organization)}/${enc(project)}/_git/${enc(repository)}`;
     if ('pat' in auth) return { password: auth.pat, url, username: 'pat' };
     if ('accessToken' in auth) return { password: auth.accessToken, url, username: 'oauth2' };
-    const token = await mintToken(auth.tokenProvider, { forceRefresh: false });
+    const token = await mintToken(auth, { forceRefresh: false });
     return { password: token, url, username: 'oauth2' };
   }
 

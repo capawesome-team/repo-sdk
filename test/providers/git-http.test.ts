@@ -132,6 +132,14 @@ describe('authentication', () => {
     expect(calls).toEqual([false]);
   });
 
+  it('rethrows an error thrown by the tokenProvider untouched', async () => {
+    const cause = new Error('refresh failed');
+    const { provider } = setup(undefined, { auth: { tokenProvider: () => Promise.reject(cause) } });
+    await expect(createClient({ provider }).repos.getCloneCredentials({ repo: REPO })).rejects.toBe(
+      cause,
+    );
+  });
+
   it('fails with unauthorized when the remote requires auth and none is configured', async () => {
     const { provider, stub } = setup(requireAuth);
     await expectRepoError(provider.listBranches({ repo: REPO }), 'unauthorized');
