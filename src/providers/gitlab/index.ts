@@ -1,7 +1,6 @@
 import { RepoError } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo, type QueryValue } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -92,7 +91,7 @@ function createTokenSource(auth: GitLabProviderOptions['auth']): TokenSource {
   let lastToken: string | undefined;
   return {
     getToken: async (forceRefresh = false) => {
-      lastToken = await mintToken(auth, { forceRefresh });
+      lastToken = await auth.tokenProvider({ forceRefresh });
       return lastToken;
     },
     getSecrets: () => (lastToken === undefined ? [] : [lastToken]),
@@ -292,6 +291,10 @@ function toWebhook(hook: GitLabHook): Webhook {
   };
 }
 
+function parseWebhook(body: unknown): Webhook {
+  return toWebhook(body as GitLabHook);
+}
+
 /**
  * GitLab's project hooks API has no field to create or set a hook as inactive
  * (hooks are always active; GitLab only auto-disables them after repeated
@@ -340,6 +343,8 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
   const tokenSource = createTokenSource(options.auth);
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (project: GitLabProject): Repository => toRepository(project, webBase);
+  const parseRepositories = (body: unknown): Repository[] =>
+    (body as GitLabProject[]).map(mapRepository);
 
   const http = new HttpClient({
     provider: 'gitlab',
@@ -365,10 +370,12 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     const password = await tokenSource.getToken();
     // A numeric id carries no path to build the URL from, so ask the API for it.
     if (isNumericId(params.repo)) {
-      const { data } = await http.json<GitLabProject>(`/projects/${params.repo}`, {
-        signal: params.signal,
-      });
-      return { password, url: data.http_url_to_repo, username: 'oauth2' };
+      const { data: url } = await http.json(
+        `/projects/${params.repo}`,
+        (body) => (body as GitLabProject).http_url_to_repo,
+        { signal: params.signal },
+      );
+      return { password, url, username: 'oauth2' };
     }
     const host = gitHostFromBaseUrl(baseUrl);
     return { password, url: `https://${host}/${params.repo}.git`, username: 'oauth2' };
@@ -379,32 +386,48 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     capabilities: CAPABILITIES,
 
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
-      const { data } = await http.json<GitLabUser>('/user', { signal: params.signal });
-      return {
-        id: String(data.id),
-        username: data.username,
-        name: data.name,
-        email: data.email ?? data.public_email ?? undefined,
-        avatarUrl: data.avatar_url ?? undefined,
-        raw: data,
-      };
+      const { data } = await http.json(
+        '/user',
+        (body) => {
+          const user = body as GitLabUser;
+          return {
+            id: String(user.id),
+            username: user.username,
+            name: user.name,
+            email: user.email ?? user.public_email ?? undefined,
+            avatarUrl: user.avatar_url ?? undefined,
+            raw: user,
+          };
+        },
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async listNamespaces(params: ListNamespacesParams): Promise<Page<Namespace>> {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabGroup[]>(url, { signal: params.signal });
-        return { data: data.map(toGroupNamespace), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitLabGroup[]).map(toGroupNamespace),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(url, response) };
       }
-      const { data: user } = await http.json<GitLabUser>('/user', { signal: params.signal });
+      const { data: user } = await http.json(
+        '/user',
+        (body) => toUserNamespace(body as GitLabUser),
+        { signal: params.signal },
+      );
       const query = { per_page: clampPerPage(params.limit) };
-      const { data: groups, response } = await http.json<GitLabGroup[]>('/groups', {
-        query,
-        signal: params.signal,
-      });
+      const { data: groups, response } = await http.json(
+        '/groups',
+        (body) => (body as GitLabGroup[]).map(toGroupNamespace),
+        { query, signal: params.signal },
+      );
       return {
-        data: [toUserNamespace(user), ...groups.map(toGroupNamespace)],
+        data: [user, ...groups],
         cursor: nextCursor(reqUrl('/groups', query), response),
       };
     },
@@ -415,8 +438,10 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabProject[]>(url, { signal: params.signal });
-        return { data: data.map(mapRepository), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(url, parseRepositories, {
+          signal: params.signal,
+        });
+        return { data, cursor: nextCursor(url, response) };
       }
 
       if (params.namespace) {
@@ -428,12 +453,12 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
           owned: params.owned ? true : undefined,
         };
         try {
-          const { data, response } = await http.json<GitLabProject[]>(groupPath, {
+          const { data, response } = await http.json(groupPath, parseRepositories, {
             query: groupQuery,
             signal: params.signal,
           });
           return {
-            data: data.map(mapRepository),
+            data,
             cursor: nextCursor(reqUrl(groupPath, groupQuery), response),
           };
         } catch (error) {
@@ -441,12 +466,12 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         }
         const userPath = `/users/${encodeURIComponent(params.namespace)}/projects`;
         const userQuery = { per_page: perPage, search: params.query };
-        const { data, response } = await http.json<GitLabProject[]>(userPath, {
+        const { data, response } = await http.json(userPath, parseRepositories, {
           query: userQuery,
           signal: params.signal,
         });
         return {
-          data: data.map(mapRepository),
+          data,
           cursor: nextCursor(reqUrl(userPath, userQuery), response),
         };
       }
@@ -457,29 +482,35 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         search: params.query,
         per_page: perPage,
       };
-      const { data, response } = await http.json<GitLabProject[]>('/projects', {
+      const { data, response } = await http.json('/projects', parseRepositories, {
         query,
         signal: params.signal,
       });
       return {
-        data: data.map(mapRepository),
+        data,
         cursor: nextCursor(reqUrl('/projects', query), response),
       };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json<GitLabProject>(`/projects/${projectId(params.repo)}`, {
-        signal: params.signal,
-      });
-      return mapRepository(data);
+      const { data } = await http.json(
+        `/projects/${projectId(params.repo)}`,
+        (body) => mapRepository(body as GitLabProject),
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabCommit[]>(url, { signal: params.signal });
-        return { data: data.map(toCommit), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitLabCommit[]).map(toCommit),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(url, response) };
       }
       const path = `/projects/${projectId(params.repo)}/repository/commits`;
       const query = {
@@ -490,67 +521,80 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         author: params.author,
         per_page: clampPerPage(params.limit),
       };
-      const { data, response } = await http.json<GitLabCommit[]>(path, {
-        query,
-        signal: params.signal,
-      });
-      return { data: data.map(toCommit), cursor: nextCursor(reqUrl(path, query), response) };
+      const { data, response } = await http.json(
+        path,
+        (body) => (body as GitLabCommit[]).map(toCommit),
+        { query, signal: params.signal },
+      );
+      return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
     async getCommit(params: GetCommitParams): Promise<Commit> {
-      const { data } = await http.json<GitLabCommit>(
+      const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/commits/${encodeURIComponent(params.ref)}`,
+        (body) => toCommit(body as GitLabCommit),
         { signal: params.signal },
       );
-      return toCommit(data);
+      return data;
     },
 
     async listTags(params: ListTagsParams): Promise<Page<Tag>> {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabTag[]>(url, { signal: params.signal });
-        return { data: data.map(toTag), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitLabTag[]).map(toTag),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(url, response) };
       }
       const path = `/projects/${projectId(params.repo)}/repository/tags`;
       const query = { per_page: clampPerPage(params.limit) };
-      const { data, response } = await http.json<GitLabTag[]>(path, {
+      const { data, response } = await http.json(path, (body) => (body as GitLabTag[]).map(toTag), {
         query,
         signal: params.signal,
       });
-      return { data: data.map(toTag), cursor: nextCursor(reqUrl(path, query), response) };
+      return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
     async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabBranch[]>(url, { signal: params.signal });
-        return { data: data.map(toBranch), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitLabBranch[]).map(toBranch),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(url, response) };
       }
       const path = `/projects/${projectId(params.repo)}/repository/branches`;
       const query = { per_page: clampPerPage(params.limit) };
-      const { data, response } = await http.json<GitLabBranch[]>(path, {
-        query,
-        signal: params.signal,
-      });
-      return { data: data.map(toBranch), cursor: nextCursor(reqUrl(path, query), response) };
+      const { data, response } = await http.json(
+        path,
+        (body) => (body as GitLabBranch[]).map(toBranch),
+        { query, signal: params.signal },
+      );
+      return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
     async getBranch(params: GetBranchParams): Promise<Branch> {
-      const { data } = await http.json<GitLabBranch>(
+      const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/branches/${encodeURIComponent(params.name)}`,
+        (body) => toBranch(body as GitLabBranch),
         { signal: params.signal },
       );
-      return toBranch(data);
+      return data;
     },
 
     async getTag(params: GetTagParams): Promise<Tag> {
-      const { data } = await http.json<GitLabTag>(
+      const { data } = await http.json(
         `/projects/${projectId(params.repo)}/repository/tags/${encodeURIComponent(params.name)}`,
+        (body) => toTag(body as GitLabTag),
         { signal: params.signal },
       );
-      return toTag(data);
+      return data;
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
@@ -563,27 +607,31 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
           .filter((type) => params.types.includes(type))
           .map(async (type): Promise<ProviderRefMatch[]> => {
             if (type === 'branch') {
-              const { data } = await http.json<GitLabBranch[]>(`${base}/branches`, {
-                query,
-                signal: params.signal,
-              });
-              return data.map((branch) => ({
-                type,
-                name: branch.name,
-                sha: branch.commit.id,
-                raw: branch,
-              }));
+              const { data } = await http.json(
+                `${base}/branches`,
+                (body) =>
+                  (body as GitLabBranch[]).map((branch) => ({
+                    type,
+                    name: branch.name,
+                    sha: branch.commit.id,
+                    raw: branch,
+                  })),
+                { query, signal: params.signal },
+              );
+              return data;
             }
-            const { data } = await http.json<GitLabTag[]>(`${base}/tags`, {
-              query,
-              signal: params.signal,
-            });
-            return data.map((tag) => ({
-              type,
-              name: tag.name,
-              sha: tag.commit?.id ?? tag.target ?? '',
-              raw: tag,
-            }));
+            const { data } = await http.json(
+              `${base}/tags`,
+              (body) =>
+                (body as GitLabTag[]).map((tag) => ({
+                  type,
+                  name: tag.name,
+                  sha: tag.commit?.id ?? tag.target ?? '',
+                  raw: tag,
+                })),
+              { query, signal: params.signal },
+            );
+            return data;
           }),
       );
       return matches.flat().slice(0, params.limit);
@@ -617,7 +665,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {
       assertActiveSupported(params.active);
-      const { data } = await http.json<GitLabHook>(hooksPath(params.repo), {
+      const { data } = await http.json(hooksPath(params.repo), parseWebhook, {
         method: 'POST',
         body: {
           url: params.url,
@@ -631,30 +679,35 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         },
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async listWebhooks(params: ListWebhooksParams): Promise<Page<Webhook>> {
       if (params.cursor) {
         const decoded = decodeCursor<{ url: string }>('gitlab', params.cursor);
         const url = assertSameOriginUrl('gitlab', baseUrl, decoded.url);
-        const { data, response } = await http.json<GitLabHook[]>(url, { signal: params.signal });
-        return { data: data.map(toWebhook), cursor: nextCursor(url, response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitLabHook[]).map(toWebhook),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(url, response) };
       }
       const path = hooksPath(params.repo);
       const query = { per_page: clampPerPage(params.limit) };
-      const { data, response } = await http.json<GitLabHook[]>(path, {
-        query,
-        signal: params.signal,
-      });
-      return { data: data.map(toWebhook), cursor: nextCursor(reqUrl(path, query), response) };
+      const { data, response } = await http.json(
+        path,
+        (body) => (body as GitLabHook[]).map(toWebhook),
+        { query, signal: params.signal },
+      );
+      return { data, cursor: nextCursor(reqUrl(path, query), response) };
     },
 
     async getWebhook(params: GetWebhookParams): Promise<Webhook> {
-      const { data } = await http.json<GitLabHook>(`${hooksPath(params.repo)}/${params.id}`, {
+      const { data } = await http.json(`${hooksPath(params.repo)}/${params.id}`, parseWebhook, {
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async updateWebhook(params: UpdateWebhookParams): Promise<Webhook> {
@@ -664,7 +717,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
       // hook and merge so unspecified fields are preserved.
       const existing =
         params.url === undefined || params.events === undefined
-          ? (await http.json<GitLabHook>(path, { signal: params.signal })).data
+          ? (await http.json(path, (body) => body as GitLabHook, { signal: params.signal })).data
           : undefined;
       const events = params.events;
       const body: Record<string, unknown> = {
@@ -677,12 +730,12 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
         releases_events: events ? events.includes('release') : (existing?.releases_events ?? false),
       };
       if (params.secret !== undefined) body.token = params.secret;
-      const { data } = await http.json<GitLabHook>(path, {
+      const { data } = await http.json(path, parseWebhook, {
         method: 'PUT',
         body,
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async deleteWebhook(params: DeleteWebhookParams): Promise<void> {

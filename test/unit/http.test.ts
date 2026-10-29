@@ -4,16 +4,26 @@ import { HttpClient } from '../../src/http.ts';
 import { createFetchStub } from '../helpers/fetch-stub.ts';
 
 describe('HttpClient.json', () => {
-  it('throws invalid_response when a successful response is not JSON', async () => {
-    const stub = createFetchStub(() => ({ body: '<!DOCTYPE html><html></html>' }));
-    const http = new HttpClient({
+  function setup(body: string) {
+    const stub = createFetchStub(() => ({ body }));
+    return new HttpClient({
       provider: 'gitea',
       baseUrl: 'https://git.example.com/acme/app.git/api/v1',
       fetchImpl: stub.fetch,
       authHeaders: () => ({}),
     });
+  }
 
-    const error = await http.json('user').catch((error: unknown) => error);
+  it('hands the decoded body to parse', async () => {
+    const http = setup('{"login":"robin"}');
+    const { data } = await http.json('user', (body) => (body as { login: string }).login);
+    expect(data).toBe('robin');
+  });
+
+  it('throws invalid_response when a successful response is not JSON', async () => {
+    const http = setup('<!DOCTYPE html><html></html>');
+
+    const error = await http.json('user', (body) => body).catch((error: unknown) => error);
 
     expect(error).toBeInstanceOf(RepoError);
     expect(error).toMatchObject({
@@ -24,6 +34,44 @@ describe('HttpClient.json', () => {
       retryable: false,
       status: 200,
     });
+  });
+
+  it('throws invalid_response when parse cannot read the body', async () => {
+    const http = setup('{"orgs":{}}');
+    const cause = new TypeError('orgs.map is not a function');
+
+    const error = await http
+      .json('user/orgs', () => {
+        throw cause;
+      })
+      .catch((error: unknown) => error);
+
+    expect(error).toBeInstanceOf(RepoError);
+    expect(error).toMatchObject({
+      cause,
+      code: 'invalid_response',
+      message:
+        'gitea returned a response the SDK could not read from https://git.example.com/acme/app.git/api/v1/user/orgs',
+      provider: 'gitea',
+      status: 200,
+    });
+  });
+
+  it('passes a RepoError thrown by parse through', async () => {
+    const http = setup('{}');
+    const verdict = new RepoError(
+      'gitea returned an unexpected response for the organizations list',
+      {
+        code: 'invalid_response',
+        provider: 'gitea',
+      },
+    );
+
+    await expect(
+      http.json('user/orgs', () => {
+        throw verdict;
+      }),
+    ).rejects.toBe(verdict);
   });
 });
 

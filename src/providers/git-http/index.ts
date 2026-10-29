@@ -2,7 +2,6 @@ import { stringToBase64 } from '../../base64.ts';
 import { RepoError } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { decodeCursor, encodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import { clampPerPage, toCloneUrl } from '../shared.ts';
 import type {
   Branch,
@@ -230,7 +229,7 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
   let lastSecret: string | undefined = auth && 'password' in auth ? auth.password : undefined;
   async function currentSecret(forceRefresh: boolean): Promise<string> {
     if (auth === undefined || 'password' in auth) return lastSecret ?? '';
-    lastSecret = await mintToken(auth, { forceRefresh });
+    lastSecret = await auth.tokenProvider({ forceRefresh });
     return lastSecret;
   }
 

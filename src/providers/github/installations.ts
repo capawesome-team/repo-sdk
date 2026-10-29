@@ -143,8 +143,11 @@ async function listPage<TPayload, TItem>(
   } else {
     query = { per_page: clampPerPage(params.limit) };
   }
-  const { data, response } = await http.json<TPayload>(path, { query, signal: params.signal });
-  return { data: toItems(data), cursor: nextCursor(response) };
+  const { data, response } = await http.json(path, (body) => toItems(body as TPayload), {
+    query,
+    signal: params.signal,
+  });
+  return { data, cursor: nextCursor(response) };
 }
 
 /**

@@ -48,15 +48,20 @@ export async function listOrganizations(
     secrets: () => authSecrets(options),
   });
 
-  const { data: profile } = await http.json<AzureProfile>('/_apis/profile/profiles/me', {
-    query: { 'api-version': API_VERSION },
-  });
-  const { data: accounts } = await http.json<AzureAccountList>('/_apis/accounts', {
-    query: { memberId: profile.id, 'api-version': API_VERSION },
-  });
-  return accounts.value.map((account) => ({
-    id: account.accountId,
-    name: account.accountName,
-    url: account.accountUri,
-  }));
+  const { data: memberId } = await http.json(
+    '/_apis/profile/profiles/me',
+    (body) => (body as AzureProfile).id,
+    { query: { 'api-version': API_VERSION } },
+  );
+  const { data } = await http.json(
+    '/_apis/accounts',
+    (body) =>
+      (body as AzureAccountList).value.map((account): Organization => ({
+        id: account.accountId,
+        name: account.accountName,
+        url: account.accountUri,
+      })),
+    { query: { memberId, 'api-version': API_VERSION } },
+  );
+  return data;
 }

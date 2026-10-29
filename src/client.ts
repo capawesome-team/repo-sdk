@@ -1,5 +1,4 @@
 import { RepoError } from './errors.ts';
-import { TokenProviderError } from './token-provider.ts';
 import type {
   Archive,
   AuthenticatedUser,
@@ -135,36 +134,19 @@ export function createClient(options: CreateClientOptions): RepoClient {
   const retryRateLimit = options.retry?.rateLimit ?? true;
   const maxRetryAfterSeconds = options.retry?.maxRetryAfterSeconds ?? 10;
 
-  // A provider trusts the shape of a JSON body; a body of another shape fails inside its mapping
-  // code with a bare TypeError. Every failure leaves the client as a RepoError, except an error
-  // thrown by the caller's own `tokenProvider`: that one is the caller's and passes through untouched.
-  function toRepoError(error: unknown): RepoError {
-    if (error instanceof RepoError) return error;
-    if (error instanceof TokenProviderError) throw error.cause;
-    return new RepoError(`${provider.name} returned a response the SDK could not read`, {
-      code: 'invalid_response',
-      provider: provider.name,
-      cause: error,
-    });
-  }
-
   async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
-    } catch (caught) {
-      const error = toRepoError(caught);
+    } catch (error) {
       if (
         retryRateLimit &&
+        error instanceof RepoError &&
         error.code === 'rate_limited' &&
         error.retryAfter !== undefined &&
         error.retryAfter <= maxRetryAfterSeconds
       ) {
         await delay(error.retryAfter * 1000);
-        try {
-          return await operation();
-        } catch (retried) {
-          throw toRepoError(retried);
-        }
+        return operation();
       }
       throw error;
     }

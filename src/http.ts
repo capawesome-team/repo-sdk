@@ -3,6 +3,58 @@ import type { ProviderName } from './types.ts';
 
 export type QueryValue = string | number | boolean | string[] | undefined;
 
+/** Turns a decoded JSON body into the endpoint's result; it is the endpoint's only view of the payload. */
+export type BodyParser<T> = (body: unknown) => T;
+
+export interface ReadJsonContext {
+  provider: ProviderName;
+  secrets: readonly string[];
+  url: URL;
+}
+
+/**
+ * Reads the body of a successful response through `parse`. This is the one place that decides a
+ * response could not be read: a body that is not JSON, or one `parse` trips over, fails as
+ * `invalid_response` here. A `RepoError` thrown by `parse` is the endpoint's own verdict and
+ * passes through. A 204 hands `parse` an `undefined` body.
+ */
+export async function readJson<T>(
+  response: Response,
+  parse: BodyParser<T>,
+  context: ReadJsonContext,
+): Promise<T> {
+  let body: unknown;
+  try {
+    body = response.status === 204 ? undefined : JSON.parse(await response.text());
+  } catch (error) {
+    throw invalidResponse('returned a non-JSON response', response, context, error);
+  }
+  try {
+    return parse(body);
+  } catch (error) {
+    if (error instanceof RepoError) throw error;
+    throw invalidResponse('returned a response the SDK could not read', response, context, error);
+  }
+}
+
+function invalidResponse(
+  what: string,
+  response: Response,
+  context: ReadJsonContext,
+  cause: unknown,
+): RepoError {
+  return new RepoError(
+    `${context.provider} ${what} from ${context.url.origin}${context.url.pathname}`,
+    {
+      code: 'invalid_response',
+      provider: context.provider,
+      status: response.status,
+      cause,
+      secrets: context.secrets,
+    },
+  );
+}
+
 const USER_AGENT = 'repo-sdk';
 
 // Dot segments (literal or percent-encoded) would be collapsed by `new URL()`,
@@ -128,28 +180,25 @@ export class HttpClient {
 
   async json<T>(
     path: string,
+    parse: BodyParser<T>,
     options: HttpRequestOptions = {},
   ): Promise<{ data: T; response: Response }> {
     const response = await this.raw(path, options);
-    if (response.status === 204) {
-      return { data: undefined as T, response };
-    }
-    const text = await response.text();
-    try {
-      return { data: JSON.parse(text) as T, response };
-    } catch (error) {
-      const url = this.buildUrl(path, options.query);
-      throw new RepoError(
-        `${this.options.provider} returned a non-JSON response from ${url.origin}${url.pathname}`,
-        {
-          code: 'invalid_response',
-          provider: this.options.provider,
-          status: response.status,
-          cause: error,
-          secrets: this.options.secrets?.() ?? [],
-        },
-      );
-    }
+    return this.read(response, parse, this.buildUrl(path, options.query));
+  }
+
+  /** Reads a response obtained outside `json` (see `readJson`) with this client's provider and secrets. */
+  async read<T>(
+    response: Response,
+    parse: BodyParser<T>,
+    url: URL,
+  ): Promise<{ data: T; response: Response }> {
+    const data = await readJson(response, parse, {
+      provider: this.options.provider,
+      secrets: this.options.secrets?.() ?? [],
+      url,
+    });
+    return { data, response };
   }
 
   private async toError(response: Response): Promise<RepoError> {

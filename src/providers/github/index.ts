@@ -3,7 +3,6 @@ import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from 
 import { codeFromStatus, RepoError } from '../../errors.ts';
 import { HttpClient } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -122,7 +121,7 @@ function createStaticTokenSource(auth: GitHubTokenAuth): TokenSource {
 function createProviderTokenSource(auth: GitHubTokenProviderAuth): TokenSource {
   let lastToken: string | undefined;
   const fetchToken = async (forceRefresh: boolean): Promise<string> => {
-    lastToken = await mintToken(auth, { forceRefresh });
+    lastToken = await auth.tokenProvider({ forceRefresh });
     return lastToken;
   };
   return {
@@ -360,6 +359,10 @@ function fromGitHubEvents(events: string[]): WebhookEventType[] {
   return [...result];
 }
 
+function parseWebhook(body: unknown): Webhook {
+  return toWebhook(body as GitHubHook);
+}
+
 function toWebhook(hook: GitHubHook): Webhook {
   return {
     id: String(hook.id),
@@ -382,6 +385,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
+  const parseRepositories = (body: unknown): Repository[] =>
+    (body as GitHubRepo[]).map(mapRepository);
 
   const http = new HttpClient({
     provider: 'github',
@@ -403,8 +408,12 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
 
   async function fetchPrimaryEmail(signal?: AbortSignal): Promise<string | undefined> {
     try {
-      const { data } = await http.json<GitHubEmail[]>('/user/emails', { signal });
-      return data.find((entry) => entry.primary && entry.verified)?.email;
+      const { data } = await http.json(
+        '/user/emails',
+        (body) => (body as GitHubEmail[]).find((entry) => entry.primary && entry.verified)?.email,
+        { signal },
+      );
+      return data;
     } catch (error) {
       if (error instanceof RepoError && error.code === 'forbidden') return undefined;
       throw error;
@@ -422,8 +431,8 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       );
     }
     if (cachedLogin === undefined) {
-      const { data } = await http.json<GitHubUser>('/user', { signal });
-      cachedLogin = data.login;
+      const { data } = await http.json('/user', (body) => (body as GitHubUser).login, { signal });
+      cachedLogin = data;
     }
     return cachedLogin;
   }
@@ -437,21 +446,24 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   // than resolve the installation account separately, we derive it from the first
   // accessible repository's owner. Zero repositories → empty page.
   async function listAppNamespaces(signal?: AbortSignal): Promise<Page<Namespace>> {
-    const { data } = await http.json<{ repositories?: GitHubRepo[] }>(
+    const { data } = await http.json(
       '/installation/repositories',
+      (body): Page<Namespace> => {
+        const owner = (body as { repositories?: GitHubRepo[] }).repositories?.[0]?.owner;
+        if (!owner) return { data: [] };
+        const namespace: Namespace = {
+          id: owner.login,
+          slug: owner.login,
+          name: owner.login,
+          kind: owner.type === 'Organization' ? 'organization' : 'user',
+          avatarUrl: owner.avatar_url,
+          raw: owner,
+        };
+        return { data: [namespace] };
+      },
       { query: { per_page: 1 }, signal },
     );
-    const owner = data.repositories?.[0]?.owner;
-    if (!owner) return { data: [] };
-    const namespace: Namespace = {
-      id: owner.login,
-      slug: owner.login,
-      name: owner.login,
-      kind: owner.type === 'Organization' ? 'organization' : 'user',
-      avatarUrl: owner.avatar_url,
-      raw: owner,
-    };
-    return { data: [namespace] };
+    return data;
   }
 
   function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
@@ -476,22 +488,28 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
           { code: 'unsupported', provider: 'github' },
         );
       }
-      const { data } = await http.json<GitHubUser>('/user', { signal: params.signal });
-      let email = data.email ?? undefined;
+      const { data: user } = await http.json(
+        '/user',
+        (body): AuthenticatedUser => {
+          const data = body as GitHubUser;
+          return {
+            id: String(data.id),
+            username: data.login,
+            name: data.name ?? undefined,
+            email: data.email ?? undefined,
+            avatarUrl: data.avatar_url,
+            raw: data,
+          };
+        },
+        { signal: params.signal },
+      );
       // `/user` hides the email for private-email accounts; `includeEmail`
       // resolves it via `/user/emails` (user:email scope) with the missing
       // scope leaving the email unset rather than failing the whole call.
-      if (email === undefined && params.includeEmail) {
-        email = await fetchPrimaryEmail(params.signal);
+      if (user.email === undefined && params.includeEmail) {
+        user.email = await fetchPrimaryEmail(params.signal);
       }
-      return {
-        id: String(data.id),
-        username: data.login,
-        name: data.name ?? undefined,
-        email,
-        avatarUrl: data.avatar_url,
-        raw: data,
-      };
+      return user;
     },
 
     getInstallationToken(): Promise<GitHubInstallationToken> {
@@ -513,16 +531,25 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<GitHubOrg[]>(url, { signal: params.signal });
-        return { data: data.map(toOrgNamespace), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitHubOrg[]).map(toOrgNamespace),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
-      const { data: user } = await http.json<GitHubUser>('/user', { signal: params.signal });
-      const { data: orgs, response } = await http.json<GitHubOrg[]>('/user/orgs', {
-        query: { per_page: clampPerPage(params.limit) },
-        signal: params.signal,
-      });
+      const { data: user } = await http.json(
+        '/user',
+        (body) => toUserNamespace(body as GitHubUser),
+        { signal: params.signal },
+      );
+      const { data: orgs, response } = await http.json(
+        '/user/orgs',
+        (body) => (body as GitHubOrg[]).map(toOrgNamespace),
+        { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
+      );
       return {
-        data: [toUserNamespace(user), ...orgs.map(toOrgNamespace)],
+        data: [user, ...orgs],
         cursor: nextCursor(response),
       };
     },
@@ -533,22 +560,27 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<unknown>(url, { signal: params.signal });
-        return { data: reposFromBody(data).map(mapRepository), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => reposFromBody(body).map(mapRepository),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
 
       if (params.query !== undefined) {
         let q = params.query;
         if (params.namespace) q += ` user:${params.namespace}`;
         else if (params.owned) q += ` user:${await getLogin(params.signal)}`;
-        const { data, response } = await http.json<{ items: GitHubRepo[] }>(
+        const { data, response } = await http.json(
           '/search/repositories',
+          (body) => (body as { items: GitHubRepo[] }).items.map(mapRepository),
           {
             query: { q, per_page: perPage },
             signal: params.signal,
           },
         );
-        return { data: data.items.map(mapRepository), cursor: nextCursor(response) };
+        return { data, cursor: nextCursor(response) };
       }
 
       if (params.namespace) {
@@ -558,77 +590,83 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         // filter is a guard: an installation belongs to exactly one account.
         if (tokenSource.kind === 'app') {
           const namespaceLower = params.namespace.toLowerCase();
-          const { data, response } = await http.json<{ repositories?: GitHubRepo[] }>(
+          const { data, response } = await http.json(
             '/installation/repositories',
+            (body) =>
+              reposFromBody(body)
+                .filter((repo) => repo.owner.login.toLowerCase() === namespaceLower)
+                .map(mapRepository),
             { query: { per_page: perPage }, signal: params.signal },
           );
-          return {
-            data: reposFromBody(data)
-              .filter((repo) => repo.owner.login.toLowerCase() === namespaceLower)
-              .map(mapRepository),
-            cursor: nextCursor(response),
-          };
+          return { data, cursor: nextCursor(response) };
         }
         try {
-          const { data, response } = await http.json<GitHubRepo[]>(
+          const { data, response } = await http.json(
             `/orgs/${encodeURIComponent(params.namespace)}/repos`,
+            parseRepositories,
             { query: { per_page: perPage }, signal: params.signal },
           );
-          return { data: data.map(mapRepository), cursor: nextCursor(response) };
+          return { data, cursor: nextCursor(response) };
         } catch (error) {
           if (!(error instanceof RepoError && error.code === 'not_found')) throw error;
         }
         const login = await getLogin(params.signal);
         if (login.toLowerCase() === params.namespace.toLowerCase()) {
-          const { data, response } = await http.json<GitHubRepo[]>('/user/repos', {
+          const { data, response } = await http.json('/user/repos', parseRepositories, {
             query: { affiliation: 'owner', per_page: perPage },
             signal: params.signal,
           });
-          return { data: data.map(mapRepository), cursor: nextCursor(response) };
+          return { data, cursor: nextCursor(response) };
         }
-        const { data, response } = await http.json<GitHubRepo[]>(
+        const { data, response } = await http.json(
           `/users/${encodeURIComponent(params.namespace)}/repos`,
+          parseRepositories,
           { query: { per_page: perPage }, signal: params.signal },
         );
-        return { data: data.map(mapRepository), cursor: nextCursor(response) };
+        return { data, cursor: nextCursor(response) };
       }
 
       // Default (and owned) listing. Under app auth `/user/repos` 403s; the
       // installation's accessible repositories are the correct equivalent.
       if (tokenSource.kind === 'app') {
-        const { data, response } = await http.json<{ repositories?: GitHubRepo[] }>(
+        const { data, response } = await http.json(
           '/installation/repositories',
+          (body) => reposFromBody(body).map(mapRepository),
           { query: { per_page: perPage }, signal: params.signal },
         );
-        return {
-          data: reposFromBody(data).map(mapRepository),
-          cursor: nextCursor(response),
-        };
+        return { data, cursor: nextCursor(response) };
       }
 
-      const { data, response } = await http.json<GitHubRepo[]>('/user/repos', {
+      const { data, response } = await http.json('/user/repos', parseRepositories, {
         query: { affiliation: params.owned ? 'owner' : undefined, per_page: perPage },
         signal: params.signal,
       });
-      return { data: data.map(mapRepository), cursor: nextCursor(response) };
+      return { data, cursor: nextCursor(response) };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json<GitHubRepo>(repoPath(params.repo), {
-        signal: params.signal,
-      });
-      return mapRepository(data);
+      const { data } = await http.json(
+        repoPath(params.repo),
+        (body) => mapRepository(body as GitHubRepo),
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<GitHubCommit[]>(url, { signal: params.signal });
-        return { data: data.map(toCommit), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitHubCommit[]).map(toCommit),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
-      const { data, response } = await http.json<GitHubCommit[]>(
+      const { data, response } = await http.json(
         `${repoPath(params.repo)}/commits`,
+        (body) => (body as GitHubCommit[]).map(toCommit),
         {
           query: {
             sha: params.ref,
@@ -641,81 +679,112 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
           signal: params.signal,
         },
       );
-      return { data: data.map(toCommit), cursor: nextCursor(response) };
+      return { data, cursor: nextCursor(response) };
     },
 
     async getCommit(params: GetCommitParams): Promise<Commit> {
-      const { data } = await http.json<GitHubCommit>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/commits/${encodeURIComponent(params.ref)}`,
+        (body) => toCommit(body as GitHubCommit),
         { signal: params.signal },
       );
-      return toCommit(data);
+      return data;
     },
 
     async listTags(params: ListTagsParams): Promise<Page<Tag>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<GitHubTag[]>(url, { signal: params.signal });
-        return { data: data.map(toTag), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitHubTag[]).map(toTag),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
-      const { data, response } = await http.json<GitHubTag[]>(`${repoPath(params.repo)}/tags`, {
-        query: { per_page: clampPerPage(params.limit) },
-        signal: params.signal,
-      });
-      return { data: data.map(toTag), cursor: nextCursor(response) };
+      const { data, response } = await http.json(
+        `${repoPath(params.repo)}/tags`,
+        (body) => (body as GitHubTag[]).map(toTag),
+        { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
+      );
+      return { data, cursor: nextCursor(response) };
     },
 
     async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<GitHubBranch[]>(url, { signal: params.signal });
-        return { data: data.map(toBranch), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitHubBranch[]).map(toBranch),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
-      const { data, response } = await http.json<GitHubBranch[]>(
+      const { data, response } = await http.json(
         `${repoPath(params.repo)}/branches`,
+        (body) => (body as GitHubBranch[]).map(toBranch),
         {
           query: { per_page: clampPerPage(params.limit) },
           signal: params.signal,
         },
       );
-      return { data: data.map(toBranch), cursor: nextCursor(response) };
+      return { data, cursor: nextCursor(response) };
     },
 
     async getBranch(params: GetBranchParams): Promise<Branch> {
-      const { data } = await http.json<GitHubBranch>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/branches/${encodeRefPath(params.name)}`,
+        (body) => toBranch(body as GitHubBranch),
         { signal: params.signal },
       );
-      return toBranch(data);
+      return data;
     },
 
     async getTag(params: GetTagParams): Promise<Tag> {
-      const { data: ref } = await http.json<GitHubRef>(
+      const { data: ref } = await http.json(
         `${repoPath(params.repo)}/git/ref/tags/${encodeRefPath(params.name)}`,
+        (body) => {
+          const ref = body as GitHubRef;
+          return {
+            name: ref.ref.replace(/^refs\/tags\//, ''),
+            type: ref.object.type,
+            sha: ref.object.sha,
+            raw: ref,
+          };
+        },
         { signal: params.signal },
       );
-      const name = ref.ref.replace(/^refs\/tags\//, '');
-      if (ref.object.type !== 'tag') {
-        return { name, sha: ref.object.sha, isAnnotated: false, raw: ref };
+      const name = ref.name;
+      if (ref.type !== 'tag') {
+        return { name, sha: ref.sha, isAnnotated: false, raw: ref.raw };
       }
       // Annotated tags may point at further tag objects; peel a bounded chain.
-      let sha = ref.object.sha;
+      let sha = ref.sha;
       for (let hops = 0; hops < 5; hops++) {
-        const { data } = await http.json<GitHubTagObject>(
+        const { data } = await http.json(
           `${repoPath(params.repo)}/git/tags/${sha}`,
+          (body) => {
+            const tag = body as GitHubTagObject;
+            return {
+              type: tag.object.type,
+              sha: tag.object.sha,
+              message: tag.message ?? undefined,
+              date: tag.tagger?.date ? new Date(tag.tagger.date) : undefined,
+              raw: tag,
+            };
+          },
           { signal: params.signal },
         );
-        sha = data.object.sha;
-        if (data.object.type !== 'tag') {
+        sha = data.sha;
+        if (data.type !== 'tag') {
           return {
             name,
             sha,
-            message: data.message ?? undefined,
-            date: data.tagger?.date ? new Date(data.tagger.date) : undefined,
+            message: data.message,
+            date: data.date,
             isAnnotated: true,
-            raw: data,
+            raw: data.raw,
           };
         }
       }
@@ -732,17 +801,19 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         (['branch', 'tag'] as const)
           .filter((type) => params.types.includes(type))
           .map(async (type) => {
-            const { data } = await http.json<GitHubRef[]>(
+            const prefix = `refs/${namespaces[type]}/`;
+            const { data } = await http.json(
               `${repoPath(params.repo)}/git/matching-refs/${namespaces[type]}/${encodeRefPath(params.query)}`,
+              (body) =>
+                (body as GitHubRef[]).map((ref): ProviderRefMatch => ({
+                  type,
+                  name: ref.ref.slice(prefix.length),
+                  sha: ref.object.sha,
+                  raw: ref,
+                })),
               { signal: params.signal },
             );
-            const prefix = `refs/${namespaces[type]}/`;
-            return data.map((ref): ProviderRefMatch => ({
-              type,
-              name: ref.ref.slice(prefix.length),
-              sha: ref.object.sha,
-              raw: ref,
-            }));
+            return data;
           }),
       );
       return matches.flat().slice(0, params.limit);
@@ -810,7 +881,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {
-      const { data } = await http.json<GitHubHook>(`${repoPath(params.repo)}/hooks`, {
+      const { data } = await http.json(`${repoPath(params.repo)}/hooks`, parseWebhook, {
         method: 'POST',
         body: {
           name: 'web',
@@ -825,28 +896,35 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         },
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async listWebhooks(params: ListWebhooksParams): Promise<Page<Webhook>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('github', params.cursor);
         assertSameOriginUrl('github', baseUrl, url);
-        const { data, response } = await http.json<GitHubHook[]>(url, { signal: params.signal });
-        return { data: data.map(toWebhook), cursor: nextCursor(response) };
+        const { data, response } = await http.json(
+          url,
+          (body) => (body as GitHubHook[]).map(toWebhook),
+          { signal: params.signal },
+        );
+        return { data, cursor: nextCursor(response) };
       }
-      const { data, response } = await http.json<GitHubHook[]>(`${repoPath(params.repo)}/hooks`, {
-        query: { per_page: clampPerPage(params.limit) },
-        signal: params.signal,
-      });
-      return { data: data.map(toWebhook), cursor: nextCursor(response) };
+      const { data, response } = await http.json(
+        `${repoPath(params.repo)}/hooks`,
+        (body) => (body as GitHubHook[]).map(toWebhook),
+        { query: { per_page: clampPerPage(params.limit) }, signal: params.signal },
+      );
+      return { data, cursor: nextCursor(response) };
     },
 
     async getWebhook(params: GetWebhookParams): Promise<Webhook> {
-      const { data } = await http.json<GitHubHook>(`${repoPath(params.repo)}/hooks/${params.id}`, {
-        signal: params.signal,
-      });
-      return toWebhook(data);
+      const { data } = await http.json(
+        `${repoPath(params.repo)}/hooks/${params.id}`,
+        parseWebhook,
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async updateWebhook(params: UpdateWebhookParams): Promise<Webhook> {
@@ -859,18 +937,25 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
       const needsConfig = params.url !== undefined || params.secret !== undefined;
       let config: GitHubHookConfig | undefined;
       if (needsConfig) {
-        const { data: existing } = await http.json<GitHubHook>(hookPath, { signal: params.signal });
-        config = {
-          url: params.url ?? existing.config?.url,
-          content_type: existing.config?.content_type ?? 'json',
-          insecure_ssl: existing.config?.insecure_ssl ?? '0',
-        };
+        const { data: existingConfig } = await http.json(
+          hookPath,
+          (body): GitHubHookConfig => {
+            const existing = body as GitHubHook;
+            return {
+              url: params.url ?? existing.config?.url,
+              content_type: existing.config?.content_type ?? 'json',
+              insecure_ssl: existing.config?.insecure_ssl ?? '0',
+            };
+          },
+          { signal: params.signal },
+        );
+        config = existingConfig;
         // Omit the secret key entirely to preserve the stored secret; only send
         // it when the caller explicitly provides a new one. GitHub keeps the
         // existing secret when the key is absent from the config object.
         if (params.secret !== undefined) config.secret = params.secret;
       }
-      const { data } = await http.json<GitHubHook>(hookPath, {
+      const { data } = await http.json(hookPath, parseWebhook, {
         method: 'PATCH',
         body: {
           active: params.active,
@@ -879,7 +964,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         },
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async deleteWebhook(params: DeleteWebhookParams): Promise<void> {

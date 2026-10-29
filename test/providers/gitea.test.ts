@@ -57,7 +57,7 @@ describe('request headers', () => {
       fetchImpl: overriddenStub.fetch,
       authHeaders: () => ({ 'User-Agent': 'custom-agent' }),
     });
-    await http.json('user');
+    await http.json('user', (body) => body);
     expect(overriddenStub.requests[0]!.headers['user-agent']).toBe('custom-agent');
   });
 });

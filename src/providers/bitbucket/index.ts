@@ -1,7 +1,6 @@
 import { RepoError, type RepoErrorCode } from '../../errors.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -259,6 +258,10 @@ function toWebhook(hook: BitbucketHook): Webhook {
   };
 }
 
+function parseWebhook(body: unknown): Webhook {
+  return toWebhook(body as BitbucketHook);
+}
+
 function mapError(status: number, body: unknown): ProviderErrorInfo {
   let message: string | undefined;
   if (
@@ -298,7 +301,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
   async function currentToken(forceRefresh: boolean): Promise<string> {
     if (isApiTokenAuth(auth)) return auth.apiToken;
     if ('accessToken' in auth) return auth.accessToken;
-    lastToken = await mintToken(auth, { forceRefresh });
+    lastToken = await auth.tokenProvider({ forceRefresh });
     return lastToken;
   }
   async function authorizationHeader(forceRefresh: boolean): Promise<string> {
@@ -322,8 +325,15 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
 
   async function fetchPrimaryEmail(signal?: AbortSignal): Promise<string | undefined> {
     try {
-      const { data } = await http.json<BitbucketList<BitbucketEmail>>('/user/emails', { signal });
-      return (data.values ?? []).find((entry) => entry.is_primary && entry.is_confirmed)?.email;
+      const { data } = await http.json(
+        '/user/emails',
+        (body) =>
+          ((body as BitbucketList<BitbucketEmail>).values ?? []).find(
+            (entry) => entry.is_primary && entry.is_confirmed,
+          )?.email,
+        { signal },
+      );
+      return data;
     } catch (error) {
       if (error instanceof RepoError && error.code === 'forbidden') return undefined;
       throw error;
@@ -353,14 +363,23 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     // The profile call never carries an email; `includeEmail` resolves it via
     // /user/emails (email scope), with a missing scope leaving it unset.
     async getAuthenticatedUser(params: GetAuthenticatedUserParams): Promise<AuthenticatedUser> {
-      const { data } = await http.json<BitbucketUser>('/user', { signal: params.signal });
+      const { data } = await http.json(
+        '/user',
+        (body) => {
+          const user = body as BitbucketUser;
+          return {
+            id: user.uuid,
+            username: user.username ?? user.nickname ?? '',
+            name: user.display_name,
+            avatarUrl: user.links?.avatar?.href,
+            raw: user,
+          };
+        },
+        { signal: params.signal },
+      );
       return {
-        id: data.uuid,
-        username: data.username ?? data.nickname ?? '',
-        name: data.display_name,
+        ...data,
         email: params.includeEmail ? await fetchPrimaryEmail(params.signal) : undefined,
-        avatarUrl: data.links?.avatar?.href,
-        raw: data,
       };
     },
 
@@ -377,10 +396,15 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
         assertSameOriginUrl('bitbucket', BASE_URL, url);
-        const { data } = await http.json<BitbucketList<BitbucketRepo>>(url, {
-          signal: params.signal,
-        });
-        return { data: (data.values ?? []).map(toRepository), cursor: nextCursor(data) };
+        const { data } = await http.json(
+          url,
+          (body) => {
+            const page = body as BitbucketList<BitbucketRepo>;
+            return { items: (page.values ?? []).map(toRepository), next: page.next };
+          },
+          { signal: params.signal },
+        );
+        return { data: data.items, cursor: nextCursor(data) };
       }
       // Atlassian removed cross-workspace repository listing (CHANGE-2770), so a
       // namespace is now required — the bare `/repositories` endpoint returns 410.
@@ -390,8 +414,12 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
           { code: 'unsupported', provider: 'bitbucket' },
         );
       }
-      const { data } = await http.json<BitbucketList<BitbucketRepo>>(
+      const { data } = await http.json(
         `/repositories/${encodeURIComponent(params.namespace)}`,
+        (body) => {
+          const page = body as BitbucketList<BitbucketRepo>;
+          return { items: (page.values ?? []).map(toRepository), next: page.next };
+        },
         {
           query: {
             role: params.owned ? 'owner' : 'member',
@@ -401,105 +429,131 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
           signal: params.signal,
         },
       );
-      return { data: (data.values ?? []).map(toRepository), cursor: nextCursor(data) };
+      return { data: data.items, cursor: nextCursor(data) };
     },
 
     async getRepository(params: GetRepositoryParams): Promise<Repository> {
-      const { data } = await http.json<BitbucketRepo>(repoPath(params.repo), {
-        signal: params.signal,
-      });
-      return toRepository(data);
+      const { data } = await http.json(
+        repoPath(params.repo),
+        (body) => toRepository(body as BitbucketRepo),
+        { signal: params.signal },
+      );
+      return data;
     },
 
     async listCommits(params: ListCommitsParams): Promise<Page<Commit>> {
-      let body: BitbucketList<BitbucketCommit>;
+      const parsePage = (body: unknown) => {
+        const page = body as BitbucketList<BitbucketCommit>;
+        // Bitbucket has no server-side since/until/author filters — filter the returned page locally.
+        const filtered = (page.values ?? []).filter((commit) => {
+          if (params.since && new Date(commit.date ?? 0) < params.since) return false;
+          if (params.until && new Date(commit.date ?? 0) > params.until) return false;
+          if (params.author && !(commit.author?.raw ?? '').includes(params.author)) return false;
+          return true;
+        });
+        return { items: filtered.map(toCommit), next: page.next };
+      };
+      let data: { items: Commit[]; next?: string };
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
         assertSameOriginUrl('bitbucket', BASE_URL, url);
-        body = (await http.json<BitbucketList<BitbucketCommit>>(url, { signal: params.signal }))
-          .data;
+        data = (await http.json(url, parsePage, { signal: params.signal })).data;
       } else {
         const path =
           params.ref === undefined
             ? `${repoPath(params.repo)}/commits`
             : `${repoPath(params.repo)}/commits/${encodeURIComponent(params.ref)}`;
-        body = (
-          await http.json<BitbucketList<BitbucketCommit>>(path, {
+        data = (
+          await http.json(path, parsePage, {
             query: { path: params.path, pagelen: clampPerPage(params.limit) },
             signal: params.signal,
           })
         ).data;
       }
-      // Bitbucket has no server-side since/until/author filters — filter the returned page locally.
-      const filtered = (body.values ?? []).filter((commit) => {
-        if (params.since && new Date(commit.date ?? 0) < params.since) return false;
-        if (params.until && new Date(commit.date ?? 0) > params.until) return false;
-        if (params.author && !(commit.author?.raw ?? '').includes(params.author)) return false;
-        return true;
-      });
-      return { data: filtered.map(toCommit), cursor: nextCursor(body) };
+      return { data: data.items, cursor: nextCursor(data) };
     },
 
     async getCommit(params: GetCommitParams): Promise<Commit> {
-      const { data } = await http.json<BitbucketCommit>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/commit/${encodeURIComponent(params.ref)}`,
+        (body) => toCommit(body as BitbucketCommit),
         { signal: params.signal },
       );
-      return toCommit(data);
+      return data;
     },
 
     async listTags(params: ListTagsParams): Promise<Page<Tag>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
         assertSameOriginUrl('bitbucket', BASE_URL, url);
-        const { data } = await http.json<BitbucketList<BitbucketTag>>(url, {
-          signal: params.signal,
-        });
-        return { data: (data.values ?? []).map(toTag), cursor: nextCursor(data) };
+        const { data } = await http.json(
+          url,
+          (body) => {
+            const page = body as BitbucketList<BitbucketTag>;
+            return { items: (page.values ?? []).map(toTag), next: page.next };
+          },
+          { signal: params.signal },
+        );
+        return { data: data.items, cursor: nextCursor(data) };
       }
-      const { data } = await http.json<BitbucketList<BitbucketTag>>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/refs/tags`,
+        (body) => {
+          const page = body as BitbucketList<BitbucketTag>;
+          return { items: (page.values ?? []).map(toTag), next: page.next };
+        },
         {
           query: { sort: '-target.date', pagelen: clampPerPage(params.limit) },
           signal: params.signal,
         },
       );
-      return { data: (data.values ?? []).map(toTag), cursor: nextCursor(data) };
+      return { data: data.items, cursor: nextCursor(data) };
     },
 
     async listBranches(params: ListBranchesParams): Promise<Page<Branch>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
         assertSameOriginUrl('bitbucket', BASE_URL, url);
-        const { data } = await http.json<BitbucketList<BitbucketBranch>>(url, {
-          signal: params.signal,
-        });
-        return { data: (data.values ?? []).map(toBranch), cursor: nextCursor(data) };
+        const { data } = await http.json(
+          url,
+          (body) => {
+            const page = body as BitbucketList<BitbucketBranch>;
+            return { items: (page.values ?? []).map(toBranch), next: page.next };
+          },
+          { signal: params.signal },
+        );
+        return { data: data.items, cursor: nextCursor(data) };
       }
-      const { data } = await http.json<BitbucketList<BitbucketBranch>>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/refs/branches`,
+        (body) => {
+          const page = body as BitbucketList<BitbucketBranch>;
+          return { items: (page.values ?? []).map(toBranch), next: page.next };
+        },
         {
           query: { pagelen: clampPerPage(params.limit) },
           signal: params.signal,
         },
       );
-      return { data: (data.values ?? []).map(toBranch), cursor: nextCursor(data) };
+      return { data: data.items, cursor: nextCursor(data) };
     },
 
     async getBranch(params: GetBranchParams): Promise<Branch> {
-      const { data } = await http.json<BitbucketBranch>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/refs/branches/${encodeURIComponent(params.name)}`,
+        (body) => toBranch(body as BitbucketBranch),
         { signal: params.signal },
       );
-      return toBranch(data);
+      return data;
     },
 
     async getTag(params: GetTagParams): Promise<Tag> {
-      const { data } = await http.json<BitbucketTag>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/refs/tags/${encodeURIComponent(params.name)}`,
+        (body) => toTag(body as BitbucketTag),
         { signal: params.signal },
       );
-      return toTag(data);
+      return data;
     },
 
     async searchRefs(params: ProviderSearchRefsParams): Promise<ProviderRefMatch[]> {
@@ -513,18 +567,20 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         (['branch', 'tag'] as const)
           .filter((type) => params.types.includes(type))
           .map(async (type) => {
-            const { data } = await http.json<BitbucketList<BitbucketBranch>>(
+            const { data } = await http.json(
               `${repoPath(params.repo)}/refs/${endpoints[type]}`,
+              (body) =>
+                ((body as BitbucketList<BitbucketBranch>).values ?? [])
+                  .filter((ref) => ref.name.toLowerCase().startsWith(prefix))
+                  .map((ref): ProviderRefMatch => ({
+                    type,
+                    name: ref.name,
+                    sha: ref.target.hash,
+                    raw: ref,
+                  })),
               { query: { q, pagelen: params.limit }, signal: params.signal },
             );
-            return (data.values ?? [])
-              .filter((ref) => ref.name.toLowerCase().startsWith(prefix))
-              .map((ref): ProviderRefMatch => ({
-                type,
-                name: ref.name,
-                sha: ref.target.hash,
-                raw: ref,
-              }));
+            return data;
           }),
       );
       return matches.flat().slice(0, params.limit);
@@ -560,7 +616,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     },
 
     async createWebhook(params: CreateWebhookParams): Promise<Webhook> {
-      const { data } = await http.json<BitbucketHook>(`${repoPath(params.repo)}/hooks`, {
+      const { data } = await http.json(`${repoPath(params.repo)}/hooks`, parseWebhook, {
         method: 'POST',
         body: {
           url: params.url,
@@ -571,33 +627,42 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         },
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async listWebhooks(params: ListWebhooksParams): Promise<Page<Webhook>> {
       if (params.cursor) {
         const { url } = decodeCursor<{ url: string }>('bitbucket', params.cursor);
         assertSameOriginUrl('bitbucket', BASE_URL, url);
-        const { data } = await http.json<BitbucketList<BitbucketHook>>(url, {
-          signal: params.signal,
-        });
-        return { data: (data.values ?? []).map(toWebhook), cursor: nextCursor(data) };
+        const { data } = await http.json(
+          url,
+          (body) => {
+            const page = body as BitbucketList<BitbucketHook>;
+            return { items: (page.values ?? []).map(toWebhook), next: page.next };
+          },
+          { signal: params.signal },
+        );
+        return { data: data.items, cursor: nextCursor(data) };
       }
-      const { data } = await http.json<BitbucketList<BitbucketHook>>(
+      const { data } = await http.json(
         `${repoPath(params.repo)}/hooks`,
+        (body) => {
+          const page = body as BitbucketList<BitbucketHook>;
+          return { items: (page.values ?? []).map(toWebhook), next: page.next };
+        },
         {
           query: { pagelen: clampPerPage(params.limit) },
           signal: params.signal,
         },
       );
-      return { data: (data.values ?? []).map(toWebhook), cursor: nextCursor(data) };
+      return { data: data.items, cursor: nextCursor(data) };
     },
 
     async getWebhook(params: GetWebhookParams): Promise<Webhook> {
-      const { data } = await http.json<BitbucketHook>(hookPath(params.repo, params.id), {
+      const { data } = await http.json(hookPath(params.repo, params.id), parseWebhook, {
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async updateWebhook(params: UpdateWebhookParams): Promise<Webhook> {
@@ -606,7 +671,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         params.url === undefined || params.events === undefined || params.active === undefined;
       const existing = needsExisting
         ? (
-            await http.json<BitbucketHook>(hookPath(params.repo, params.id), {
+            await http.json(hookPath(params.repo, params.id), (body) => body as BitbucketHook, {
               signal: params.signal,
             })
           ).data
@@ -618,12 +683,12 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
         events: params.events ? toBitbucketEvents(params.events) : (existing?.events ?? []),
       };
       if (params.secret !== undefined) body.secret = params.secret;
-      const { data } = await http.json<BitbucketHook>(hookPath(params.repo, params.id), {
+      const { data } = await http.json(hookPath(params.repo, params.id), parseWebhook, {
         method: 'PUT',
         body,
         signal: params.signal,
       });
-      return toWebhook(data);
+      return data;
     },
 
     async deleteWebhook(params: DeleteWebhookParams): Promise<void> {
