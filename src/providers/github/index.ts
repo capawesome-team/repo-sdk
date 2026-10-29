@@ -3,7 +3,6 @@ import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from 
 import { codeFromStatus, RepoError } from '../../errors.ts';
 import { HttpClient, trusted } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -122,7 +121,7 @@ function createStaticTokenSource(auth: GitHubTokenAuth): TokenSource {
 function createProviderTokenSource(auth: GitHubTokenProviderAuth): TokenSource {
   let lastToken: string | undefined;
   const fetchToken = async (forceRefresh: boolean): Promise<string> => {
-    lastToken = await mintToken(auth, { forceRefresh });
+    lastToken = await auth.tokenProvider({ forceRefresh });
     return lastToken;
   };
   return {

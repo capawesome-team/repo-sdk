@@ -1,7 +1,6 @@
 import { RepoError } from '../../errors.ts';
 import { HttpClient, trusted, type ProviderErrorInfo } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor, encodeCursor } from '../../pagination.ts';
-import { mintToken } from '../../token-provider.ts';
 import {
   clampPerPage,
   commitWebUrlBuilder,
@@ -330,7 +329,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
   let lastToken: string | undefined = 'token' in auth ? auth.token : undefined;
   async function currentToken(forceRefresh: boolean): Promise<string> {
     if ('token' in auth) return auth.token;
-    lastToken = await mintToken(auth, { forceRefresh });
+    lastToken = await auth.tokenProvider({ forceRefresh });
     return lastToken;
   }
 
