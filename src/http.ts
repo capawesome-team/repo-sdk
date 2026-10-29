@@ -1,3 +1,4 @@
+import { DecodeError } from './decode.ts';
 import { codeFromStatus, parseRetryAfter, RepoError, type RepoErrorCode } from './errors.ts';
 import type { ProviderName } from './types.ts';
 
@@ -42,7 +43,14 @@ export async function readJson<T>(
     return parse(body);
   } catch (error) {
     if (error instanceof RepoError) throw error;
-    throw invalidResponse('returned a response the SDK could not read', response, context, error);
+    const detail = error instanceof DecodeError ? `: ${error.message}` : '';
+    throw invalidResponse(
+      'returned a response the SDK could not read',
+      response,
+      context,
+      error,
+      detail,
+    );
   }
 }
 
@@ -51,9 +59,10 @@ function invalidResponse(
   response: Response,
   context: ReadJsonContext,
   cause: unknown,
+  detail = '',
 ): RepoError {
   return new RepoError(
-    `${context.provider} ${what} from ${context.url.origin}${context.url.pathname}`,
+    `${context.provider} ${what} from ${context.url.origin}${context.url.pathname}${detail}`,
     {
       code: 'invalid_response',
       provider: context.provider,
