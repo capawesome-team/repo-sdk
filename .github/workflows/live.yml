@@ -31,3 +31,6 @@ jobs:
           LIVE_GITEA_TOKEN: ${{ secrets.LIVE_GITEA_TOKEN }}
           LIVE_GITEA_REPO: ${{ secrets.LIVE_GITEA_REPO }}
           LIVE_GITEA_BASE_URL: ${{ secrets.LIVE_GITEA_BASE_URL }}
+          LIVE_GIT_HTTP_URL: ${{ secrets.LIVE_GIT_HTTP_URL }}
+          LIVE_GIT_HTTP_USERNAME: ${{ secrets.LIVE_GIT_HTTP_USERNAME }}
+          LIVE_GIT_HTTP_PASSWORD: ${{ secrets.LIVE_GIT_HTTP_PASSWORD }}
