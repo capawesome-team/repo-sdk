@@ -4,6 +4,7 @@ export interface CapturedRequest {
   headers: Record<string, string>;
   body?: string;
   redirect?: RequestRedirect;
+  mode?: RequestMode;
 }
 
 export interface StubResponseInit {
@@ -43,6 +44,7 @@ export function createFetchStub(handler: StubHandler): FetchStub {
       headers,
       body: typeof init?.body === 'string' ? init.body : undefined,
       redirect: init?.redirect,
+      mode: init?.mode,
     };
     requests.push(captured);
 
