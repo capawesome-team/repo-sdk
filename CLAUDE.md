@@ -19,7 +19,7 @@ npm run build                             # tsdown → dist/
 npm run docs:dev / docs:build / docs:check
 ```
 
-Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip themselves unless `REPO_SDK_LIVE_<PROVIDER>_*` env vars are set (e.g. `REPO_SDK_LIVE_GITHUB_TOKEN` + `REPO_SDK_LIVE_GITHUB_REPO`).
+Live tests (`test/live/*.live.test.ts`, separate `vitest.live.config.ts`) skip themselves unless `LIVE_<PROVIDER>_*` env vars are set (e.g. `LIVE_GITHUB_TOKEN` + `LIVE_GITHUB_REPO`).
 
 **Gotcha:** `docs:build` runs Blume into `dist/` (clobbering the package build output) and then copies it to `.blume-dist`. Don't assume `dist/` holds the package build after a docs build.
 

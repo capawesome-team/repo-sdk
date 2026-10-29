@@ -4,9 +4,9 @@ import { bitbucket } from '../../src/bitbucket.ts';
 import { RepoError } from '../../src/errors.ts';
 import { createClient } from '../../src/index.ts';
 
-const email = process.env.REPO_SDK_LIVE_BITBUCKET_EMAIL;
-const apiToken = process.env.REPO_SDK_LIVE_BITBUCKET_API_TOKEN;
-const repo = process.env.REPO_SDK_LIVE_BITBUCKET_REPO;
+const email = process.env.LIVE_BITBUCKET_EMAIL;
+const apiToken = process.env.LIVE_BITBUCKET_API_TOKEN;
+const repo = process.env.LIVE_BITBUCKET_REPO;
 
 describe.skipIf(!email || !apiToken || !repo)('Bitbucket live (read-only)', () => {
   const client = createClient({

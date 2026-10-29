@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { github } from '../../src/github.ts';
 import { createClient } from '../../src/index.ts';
 
-const token = process.env.REPO_SDK_LIVE_GITHUB_TOKEN;
-const repo = process.env.REPO_SDK_LIVE_GITHUB_REPO;
+const token = process.env.LIVE_GITHUB_TOKEN;
+const repo = process.env.LIVE_GITHUB_REPO;
 
 describe.skipIf(!token || !repo)('GitHub live (read-only)', () => {
   const client = createClient({ provider: github({ auth: { token: token! } }) });
