@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/capawesome-team/repo-sdk/compare/v0.3.7...v0.4.0) (2026-11-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* **github:** request read-only contents permission for clone tokens ([#33](https://github.com/capawesome-team/repo-sdk/issues/33))
+
+### Bug Fixes
+
+* **github:** request read-only contents permission for clone tokens ([#33](https://github.com/capawesome-team/repo-sdk/issues/33)) ([31df03a](https://github.com/capawesome-team/repo-sdk/commit/31df03a147d014782bc5e21b326529761ef17a0e))
+
 ## [0.3.7](https://github.com/capawesome-team/repo-sdk/compare/v0.3.6...v0.3.7) (2026-10-29)
 
 
