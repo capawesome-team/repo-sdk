@@ -462,6 +462,24 @@ describe('GitHub App auth', () => {
     expect(credentials.expiresAt!.toISOString()).toBe(expiresAt);
   });
 
+  it('mints a separate read-only contents token for clone credentials', async () => {
+    const { provider, stub } = setup(appHandler(), {
+      privateKey: pkcs8Pem,
+      installationId: 99,
+      repositoryIds: [42],
+    });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    await provider.getCloneCredentials({ repo: 'capawesome-team/repo-sdk' });
+
+    const mintBodies = stub.requests
+      .filter((r) => r.url.endsWith('/access_tokens'))
+      .map((r) => JSON.parse(r.body!) as unknown);
+    expect(mintBodies).toEqual([
+      { repository_ids: [42] },
+      { repository_ids: [42], permissions: { contents: 'read' } },
+    ]);
+  });
+
   it('invokes fetch detached from the AppTokenSource instance', async () => {
     function strictFetch(this: unknown, ...args: Parameters<typeof fetch>): Promise<Response> {
       if (this !== undefined && this !== globalThis) {
