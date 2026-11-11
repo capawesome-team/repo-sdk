@@ -38,6 +38,8 @@ export interface AppTokenSourceOptions {
   owner?: string;
   repositories?: string[];
   repositoryIds?: Array<string | number>;
+  /** Permission levels by GitHub permission name. Omitted: every permission the installation has. */
+  permissions?: Record<string, 'read' | 'write'>;
   baseUrl: string;
   fetchImpl: typeof fetch;
   apiVersion: string;
@@ -202,6 +204,7 @@ export class AppTokenSource implements TokenSource {
   private readonly owner?: string;
   private readonly repositories?: string[];
   private readonly repositoryIds?: number[];
+  private readonly permissions?: Record<string, 'read' | 'write'>;
   private cached?: InstallationToken;
   private refresh?: Promise<InstallationToken>;
 
@@ -232,6 +235,7 @@ export class AppTokenSource implements TokenSource {
     this.owner = options.owner;
     this.repositories = options.repositories;
     this.repositoryIds = options.repositoryIds?.map(toRepositoryId);
+    this.permissions = options.permissions;
   }
 
   async getToken(): Promise<string> {
@@ -268,8 +272,8 @@ export class AppTokenSource implements TokenSource {
   private async mintInstallationToken(): Promise<InstallationToken> {
     const jwt = await createAppJwt({ appId: this.appId, privateKey: this.privateKey });
     const installationId = await this.resolveInstallationId(jwt);
-    // The repository restriction is fixed for the lifetime of this instance and
-    // the cache is per instance, so every cached token already matches it.
+    // The token scope is fixed for the lifetime of this instance and the cache
+    // is per instance, so every cached token already matches it.
     const token = await this.appRequest(
       `/app/installations/${installationId}/access_tokens`,
       'POST',
@@ -283,9 +287,11 @@ export class AppTokenSource implements TokenSource {
 
   /** Body of the access-token request; `undefined` mints an unrestricted token. */
   private tokenScope(): Record<string, unknown> | undefined {
-    if (this.repositoryIds !== undefined) return { repository_ids: this.repositoryIds };
-    if (this.repositories !== undefined) return { repositories: this.repositories };
-    return undefined;
+    const scope: Record<string, unknown> = {};
+    if (this.repositoryIds !== undefined) scope.repository_ids = this.repositoryIds;
+    if (this.repositories !== undefined) scope.repositories = this.repositories;
+    if (this.permissions !== undefined) scope.permissions = this.permissions;
+    return Object.keys(scope).length === 0 ? undefined : scope;
   }
 
   private async resolveInstallationId(jwt: string): Promise<string> {

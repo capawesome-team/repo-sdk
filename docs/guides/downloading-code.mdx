@@ -82,6 +82,8 @@ Unlike error messages, this value is a credential by design and is not redacted.
 
 `expiresAt` is set when the embedded token has a lifetime — most notably GitHub App installation tokens
 (~1 hour). Re-fetch the clone URL once it's past `expiresAt` rather than caching it indefinitely.
+Under GitHub App auth the clone token can only read repository contents. See
+[Clone credentials](/docs/authentication/github#clone-credentials).
 
 ### Azure DevOps with Entra auth
 

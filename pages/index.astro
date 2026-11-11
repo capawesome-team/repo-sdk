@@ -202,7 +202,7 @@ const faqs = [
   {
     question: 'Does repo-sdk support GitHub App authentication?',
     answer:
-      'Yes. Pass an appId and privateKey and the SDK mints installation tokens itself, signing RS256 JWTs with pure Web Crypto. Both PKCS#1 and PKCS#8 keys are accepted, and getInstallationToken() exposes the current token for use outside the SDK — in a git clone URL, for example.',
+      'Yes. Pass an appId and privateKey and the SDK mints installation tokens itself, signing RS256 JWTs with pure Web Crypto. Both PKCS#1 and PKCS#8 keys are accepted, and getInstallationToken() exposes the current token for API calls outside the SDK. For cloning, repos.getCloneUrl and repos.getCloneCredentials return a separate read-only token.',
     link: { href: '/docs/authentication/github', label: 'GitHub authentication' },
   },
   {

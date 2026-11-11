@@ -127,16 +127,26 @@ ids are stable across renames. The id is the `id` of the repository returned by 
 
 `getInstallationToken()` on the GitHub provider returns the current installation token (minting or
 refreshing it on demand) together with its expiry, so the SDK can act as your single GitHub App token
-manager — hand the token to the `git` CLI, Octokit, or any other tool:
+manager. Hand the token to Octokit or any other tool that calls the GitHub API:
 
 ```ts
 const provider = github({ auth: { appId, privateKey, owner: 'capawesome-team' } });
 const { token, expiresAt } = await provider.getInstallationToken();
-// e.g. git clone https://x-access-token:<token>@github.com/owner/repo.git
+const response = await fetch('https://api.github.com/installation/repositories', {
+  headers: { Authorization: `Bearer ${token}` },
+});
 ```
 
 The token is the same cached one the SDK uses for its own API calls. Under token auth the method
-throws `RepoError` with `code: 'unsupported'`.
+throws `RepoError` with `code: 'unsupported'`. To clone a repository, use `repos.getCloneUrl` or
+`repos.getCloneCredentials` instead (see [Clone credentials](#clone-credentials)).
+
+### Clone credentials
+
+Under App auth, `repos.getCloneCredentials` and `repos.getCloneUrl` use a separate installation token.
+It covers the same repositories but can only read repository contents (`contents: read`), which is all
+`git clone` and `git fetch` need. The installation must have the Contents (read) permission. Use
+`getInstallationToken()` if a tool needs every permission of the installation.
 
 ### Listing a user's installations
 

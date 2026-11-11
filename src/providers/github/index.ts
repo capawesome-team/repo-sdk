@@ -1,4 +1,9 @@
-import { AppTokenSource, type InstallationToken, type TokenSource } from './app-auth.ts';
+import {
+  AppTokenSource,
+  type AppTokenSourceOptions,
+  type InstallationToken,
+  type TokenSource,
+} from './app-auth.ts';
 import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
 import {
@@ -149,6 +154,37 @@ function createTokenSource(
   if ('tokenProvider' in auth) {
     return createProviderTokenSource(auth);
   }
+  return createAppTokenSource(auth, { baseUrl, fetchImpl });
+}
+
+// Clone credentials leave the SDK, so under App auth they get their own token
+// that can only read repository contents.
+function createCloneTokenSource(
+  auth: GitHubAuth,
+  {
+    tokenSource,
+    baseUrl,
+    fetchImpl,
+  }: { tokenSource: TokenSource; baseUrl: string; fetchImpl: typeof fetch },
+): TokenSource {
+  if ('appId' in auth) {
+    return createAppTokenSource(auth, { baseUrl, fetchImpl, permissions: { contents: 'read' } });
+  }
+  return tokenSource;
+}
+
+function createAppTokenSource(
+  auth: GitHubAppAuth,
+  {
+    baseUrl,
+    fetchImpl,
+    permissions,
+  }: {
+    baseUrl: string;
+    fetchImpl: typeof fetch;
+    permissions?: AppTokenSourceOptions['permissions'];
+  },
+): AppTokenSource {
   return new AppTokenSource({
     appId: auth.appId,
     privateKey: auth.privateKey,
@@ -156,6 +192,7 @@ function createTokenSource(
     owner: auth.owner,
     repositories: auth.repositories,
     repositoryIds: auth.repositoryIds,
+    permissions,
     baseUrl,
     fetchImpl,
     apiVersion: API_VERSION,
@@ -554,6 +591,11 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
   const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
+  const cloneTokenSource = createCloneTokenSource(options.auth, {
+    tokenSource,
+    baseUrl,
+    fetchImpl,
+  });
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
   const parseRepositories = (body: unknown): Repository[] =>
@@ -627,7 +669,7 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
 
   function getCloneCredentials(params: GetCloneCredentialsParams): Promise<CloneCredentials> {
     const host = gitHostFromBaseUrl(baseUrl);
-    return tokenSource.getTokenWithExpiry().then(({ token, expiresAt }) => ({
+    return cloneTokenSource.getTokenWithExpiry().then(({ token, expiresAt }) => ({
       expiresAt,
       password: token,
       url: `https://${host}/${params.repo}.git`,
