@@ -15,7 +15,7 @@ env:
 jobs:
   deploy:
     name: Deploy
-    if: github.repository == 'capawesome-team/repo-sdk'
+    if: github.repository == 'capawesome-team/repo-sdk' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
