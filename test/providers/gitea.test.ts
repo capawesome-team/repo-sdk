@@ -56,6 +56,7 @@ describe('request headers', () => {
       baseUrl: 'https://gitea.example.com/api/v1',
       fetchImpl: overriddenStub.fetch,
       authHeaders: () => ({ 'User-Agent': 'custom-agent' }),
+      userAgent: undefined,
     });
     await http.json('user', (body) => body);
     expect(overriddenStub.requests[0]!.headers['user-agent']).toBe('custom-agent');

@@ -95,7 +95,7 @@ export interface HttpClientOptions {
   provider: ProviderName;
   baseUrl: string;
   fetchImpl?: typeof fetch;
-  userAgent?: string;
+  userAgent: string | undefined;
   authHeaders: (context: AuthContext) => Record<string, string> | Promise<Record<string, string>>;
   mapError?: (status: number, body: unknown, response: Response) => ProviderErrorInfo;
   secrets?: () => readonly string[];
