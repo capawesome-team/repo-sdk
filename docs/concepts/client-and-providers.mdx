@@ -109,6 +109,18 @@ For integration tests that don't target a specific provider's wire format, prefe
 provider from `repo-sdk/testing` — see [Testing](/docs/testing).
 :::
 
+## User agent
+
+Every request sends a `User-Agent` header. It is `repo-sdk` by default. Pass `userAgent` to name your
+app instead. Every factory and helper that sends requests accepts it:
+
+```ts
+const provider = github({
+  auth: { token: process.env.GITHUB_TOKEN! },
+  userAgent: 'my-app',
+});
+```
+
 ## Cancellation
 
 Every request method accepts an optional `signal` — a standard `AbortSignal` threaded through to

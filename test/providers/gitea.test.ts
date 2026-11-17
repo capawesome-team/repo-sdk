@@ -60,6 +60,13 @@ describe('request headers', () => {
     await http.json('user', (body) => body);
     expect(overriddenStub.requests[0]!.headers['user-agent']).toBe('custom-agent');
   });
+
+  it('sends the userAgent option as the User-Agent', async () => {
+    const stub = createFetchStub(() => ({ json: repoPayload }));
+    const provider = gitea({ auth: { token: TOKEN }, fetch: stub.fetch, userAgent: 'my-app' });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+    expect(stub.requests[0]!.headers['user-agent']).toBe('my-app');
+  });
 });
 
 describe('listNamespaces', () => {

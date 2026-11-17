@@ -4,7 +4,7 @@ import {
   type InstallationToken,
   type TokenSource,
 } from './app-auth.ts';
-import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
+import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor } from './common.ts';
 import { codeFromStatus, RepoError } from '../../errors.ts';
 import {
   expectArray,
@@ -13,7 +13,7 @@ import {
   expectRecord,
   expectString,
 } from '../../decode.ts';
-import { HttpClient } from '../../http.ts';
+import { DEFAULT_USER_AGENT, HttpClient } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import {
   clampPerPage,
@@ -54,6 +54,7 @@ import type {
   Repository,
   Tag,
   TokenProvider,
+  TransportOptions,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -91,10 +92,9 @@ export interface GitHubTokenProviderAuth {
 
 export type GitHubAuth = GitHubTokenAuth | GitHubAppAuth | GitHubTokenProviderAuth;
 
-export interface GitHubProviderOptions {
+export interface GitHubProviderOptions extends TransportOptions {
   auth: GitHubAuth;
   baseUrl?: string;
-  fetch?: typeof fetch;
 }
 
 export type GitHubInstallationToken = InstallationToken;
@@ -143,47 +143,33 @@ function createProviderTokenSource(auth: GitHubTokenProviderAuth): TokenSource {
   };
 }
 
-function createTokenSource(
-  auth: GitHubAuth,
-  baseUrl: string,
-  fetchImpl: typeof fetch,
-): TokenSource {
+type AppTokenRequestOptions = Pick<AppTokenSourceOptions, 'baseUrl' | 'fetchImpl' | 'userAgent'>;
+
+function createTokenSource(auth: GitHubAuth, requestOptions: AppTokenRequestOptions): TokenSource {
   if ('token' in auth) {
     return createStaticTokenSource(auth);
   }
   if ('tokenProvider' in auth) {
     return createProviderTokenSource(auth);
   }
-  return createAppTokenSource(auth, { baseUrl, fetchImpl });
+  return createAppTokenSource(auth, requestOptions);
 }
 
 // Clone credentials leave the SDK, so under App auth they get their own token
 // that can only read repository contents.
 function createCloneTokenSource(
   auth: GitHubAuth,
-  {
-    tokenSource,
-    baseUrl,
-    fetchImpl,
-  }: { tokenSource: TokenSource; baseUrl: string; fetchImpl: typeof fetch },
+  { tokenSource, ...requestOptions }: AppTokenRequestOptions & { tokenSource: TokenSource },
 ): TokenSource {
   if ('appId' in auth) {
-    return createAppTokenSource(auth, { baseUrl, fetchImpl, permissions: { contents: 'read' } });
+    return createAppTokenSource(auth, { ...requestOptions, permissions: { contents: 'read' } });
   }
   return tokenSource;
 }
 
 function createAppTokenSource(
   auth: GitHubAppAuth,
-  {
-    baseUrl,
-    fetchImpl,
-    permissions,
-  }: {
-    baseUrl: string;
-    fetchImpl: typeof fetch;
-    permissions?: AppTokenSourceOptions['permissions'];
-  },
+  options: AppTokenRequestOptions & Pick<AppTokenSourceOptions, 'permissions'>,
 ): AppTokenSource {
   return new AppTokenSource({
     appId: auth.appId,
@@ -192,11 +178,8 @@ function createAppTokenSource(
     owner: auth.owner,
     repositories: auth.repositories,
     repositoryIds: auth.repositoryIds,
-    permissions,
-    baseUrl,
-    fetchImpl,
+    ...options,
     apiVersion: API_VERSION,
-    userAgent: USER_AGENT,
   });
 }
 
@@ -590,11 +573,13 @@ export const commitWebUrl = commitWebUrlBuilder('commit');
 export function github(options: GitHubProviderOptions): GitHubRepoProvider {
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const fetchImpl = options.fetch ?? fetch;
-  const tokenSource = createTokenSource(options.auth, baseUrl, fetchImpl);
+  const userAgent = options.userAgent ?? DEFAULT_USER_AGENT;
+  const tokenSource = createTokenSource(options.auth, { baseUrl, fetchImpl, userAgent });
   const cloneTokenSource = createCloneTokenSource(options.auth, {
     tokenSource,
     baseUrl,
     fetchImpl,
+    userAgent,
   });
   const webBase = `https://${gitHostFromBaseUrl(baseUrl)}`;
   const mapRepository = (repo: GitHubRepo): Repository => toRepository(repo, webBase);
@@ -605,13 +590,13 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
     provider: 'github',
     baseUrl,
     fetchImpl,
+    userAgent,
     authHeaders: async ({ forceRefresh }) => {
       const token = await tokenSource.getToken(forceRefresh);
       return {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': API_VERSION,
-        'User-Agent': USER_AGENT,
       };
     },
     mapError,
@@ -1010,7 +995,10 @@ export function github(options: GitHubProviderOptions): GitHubRepoProvider {
         }
         // Signed codeload URL — never forward the Authorization header to it.
         try {
-          archiveResponse = await fetchImpl(location, { signal: params.signal });
+          archiveResponse = await fetchImpl(location, {
+            headers: { 'User-Agent': userAgent },
+            signal: params.signal,
+          });
         } catch (error) {
           throw new RepoError('GitHub archive download request failed', {
             code: 'network_error',

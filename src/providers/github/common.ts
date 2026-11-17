@@ -5,7 +5,6 @@ import { isRecord, parseLinkNext } from '../shared.ts';
 
 export const DEFAULT_BASE_URL = 'https://api.github.com';
 export const API_VERSION = '2022-11-28';
-export const USER_AGENT = 'repo-sdk';
 
 export function mapError(status: number, body: unknown, response: Response): ProviderErrorInfo {
   const message = isRecord(body) && typeof body.message === 'string' ? body.message : undefined;

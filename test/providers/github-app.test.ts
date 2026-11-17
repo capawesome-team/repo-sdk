@@ -166,6 +166,19 @@ describe('GitHub App auth', () => {
     expect(apiRequest.headers.authorization).toBe(`Bearer ${INSTALLATION_TOKEN}`);
   });
 
+  it('sends the userAgent option on the token request and the API request', async () => {
+    const stub = createFetchStub(appHandler());
+    const provider = github({
+      auth: { appId: APP_ID, privateKey: pkcs8Pem, installationId: 99 },
+      fetch: stub.fetch,
+      userAgent: 'my-app',
+    });
+    await provider.getRepository({ repo: 'capawesome-team/repo-sdk' });
+
+    const userAgents = stub.requests.map((request) => request.headers['user-agent']);
+    expect(userAgents).toEqual(['my-app', 'my-app']);
+  });
+
   it('restricts the minted token to the configured repositories', async () => {
     const { provider, stub } = setup(appHandler(), {
       privateKey: pkcs8Pem,

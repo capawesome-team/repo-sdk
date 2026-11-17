@@ -40,6 +40,7 @@ import type {
   Repository,
   Tag,
   TokenProvider,
+  TransportOptions,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -51,13 +52,12 @@ const BASE_URL = 'https://api.bitbucket.org/2.0';
 const GIT_HOST = 'bitbucket.org';
 const HOOK_DESCRIPTION = 'repo-sdk';
 
-export interface BitbucketProviderOptions {
+export interface BitbucketProviderOptions extends TransportOptions {
   /** Atlassian API token, a static access token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
   auth:
     | { email: string; apiToken: string }
     | { accessToken: string }
     | { tokenProvider: TokenProvider };
-  fetch?: typeof fetch;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -381,6 +381,7 @@ export function bitbucket(options: BitbucketProviderOptions): RepoProvider {
     provider: 'bitbucket',
     baseUrl: BASE_URL,
     fetchImpl,
+    userAgent: options.userAgent,
     authHeaders: async ({ forceRefresh }) => ({
       Authorization: await authorizationHeader(forceRefresh),
       Accept: 'application/json',

@@ -15,6 +15,13 @@ export type WebhookVerificationMethod = 'hmac-sha256' | 'shared-token' | 'basic-
  */
 export type TokenProvider = (context: { forceRefresh: boolean }) => Promise<string>;
 
+/** How a provider sends its requests. */
+export interface TransportOptions {
+  fetch?: typeof fetch;
+  /** Sent as the `User-Agent` header of every request. Defaults to `repo-sdk`. */
+  userAgent?: string;
+}
+
 export interface Page<T> {
   data: T[];
   cursor?: string;

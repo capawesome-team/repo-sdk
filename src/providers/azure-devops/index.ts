@@ -38,6 +38,7 @@ import type {
   ProviderRefMatch,
   Repository,
   Tag,
+  TransportOptions,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -61,11 +62,10 @@ import {
 const DEFAULT_BASE_URL = 'https://dev.azure.com';
 const DEFAULT_COMMIT_PAGE_SIZE = 100;
 
-export interface AzureDevOpsProviderOptions {
+export interface AzureDevOpsProviderOptions extends TransportOptions {
   organization: string;
   auth: AzureDevOpsAuth;
   baseUrl?: string;
-  fetch?: typeof fetch;
   /**
    * When set, webhooks are registered to deliver the secret verbatim in this
    * custom HTTP header (via the service hook's `httpHeaders` consumer input)
@@ -361,6 +361,7 @@ export function azureDevOps(options: AzureDevOpsProviderOptions): RepoProvider {
     provider: 'azure-devops',
     baseUrl: orgBaseUrl,
     fetchImpl,
+    userAgent: options.userAgent,
     authHeaders: async (context) => ({ Authorization: await authHeader(auth, context) }),
     mapError,
     secrets: () => authSecrets(auth),
