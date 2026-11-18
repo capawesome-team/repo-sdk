@@ -20,11 +20,12 @@ import type {
   Repository,
   Tag,
   TokenProvider,
+  TransportOptions,
   RepoCapabilities,
   RepoProvider,
 } from '../../types.ts';
 
-export interface GitHttpProviderOptions {
+export interface GitHttpProviderOptions extends TransportOptions {
   /**
    * Basic-auth credentials sent only after the remote answers an anonymous
    * request with a 401 — the same flow the git CLI uses. `username` defaults
@@ -35,7 +36,6 @@ export interface GitHttpProviderOptions {
    */
   auth?:
     { username?: string; password: string } | { username?: string; tokenProvider: TokenProvider };
-  fetch?: typeof fetch;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -238,6 +238,7 @@ export function gitHttp(options: GitHttpProviderOptions = {}): RepoProvider {
       provider: 'git-http',
       baseUrl: repoUrl,
       fetchImpl,
+      userAgent: options.userAgent,
       // Anonymous-first, like the git CLI: credentials are attached only once
       // the remote has answered 401. `forceRefresh` marks the retry after a
       // 401 — an upgrade from anonymous, or a token refresh when the failed

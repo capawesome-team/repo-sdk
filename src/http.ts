@@ -65,7 +65,7 @@ function invalidResponse(
   );
 }
 
-const USER_AGENT = 'repo-sdk';
+export const DEFAULT_USER_AGENT = 'repo-sdk';
 
 // Dot segments (literal or percent-encoded) would be collapsed by `new URL()`,
 // and `?`, `#` or `\` would change the parsed path, so the request could leave
@@ -95,6 +95,7 @@ export interface HttpClientOptions {
   provider: ProviderName;
   baseUrl: string;
   fetchImpl?: typeof fetch;
+  userAgent: string | undefined;
   authHeaders: (context: AuthContext) => Record<string, string> | Promise<Record<string, string>>;
   mapError?: (status: number, body: unknown, response: Response) => ProviderErrorInfo;
   secrets?: () => readonly string[];
@@ -154,7 +155,7 @@ export class HttpClient {
         ...(await this.options.authHeaders({ forceRefresh })),
         ...options.headers,
       };
-      headers['User-Agent'] ??= USER_AGENT;
+      headers['User-Agent'] ??= this.options.userAgent ?? DEFAULT_USER_AGENT;
       if (body !== undefined) {
         headers['Content-Type'] ??= 'application/json';
       }

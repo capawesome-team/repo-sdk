@@ -45,6 +45,7 @@ export type {
   SearchRefsParams,
   Tag,
   TokenProvider,
+  TransportOptions,
   UpdateWebhookParams,
   UserRef,
   RepoCapabilities,

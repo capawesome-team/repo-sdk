@@ -96,7 +96,7 @@ Pick the PAT scope for what you'll do:
 
 Organizations live outside the org-pinned provider, so `listOrganizations` is a standalone helper. Pass
 the same auth shape (PAT, `accessToken`, or `tokenProvider`); an optional second argument accepts an
-injectable `fetch`.
+injectable `fetch` and a `userAgent`.
 
 ```ts
 import { listOrganizations } from 'repo-sdk/azure-devops';

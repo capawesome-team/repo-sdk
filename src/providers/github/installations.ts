@@ -1,12 +1,12 @@
 import { createAppJwt } from './app-auth.ts';
-import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor, USER_AGENT } from './common.ts';
+import { API_VERSION, DEFAULT_BASE_URL, mapError, nextCursor } from './common.ts';
 import { expectArray, expectNumber, expectRecord, expectString } from '../../decode.ts';
 import { HttpClient, type BodyParser } from '../../http.ts';
 import { assertSameOriginUrl, decodeCursor } from '../../pagination.ts';
 import { clampPerPage } from '../shared.ts';
-import type { Page } from '../../types.ts';
+import type { Page, TransportOptions } from '../../types.ts';
 
-export interface ListUserInstallationsParams {
+export interface ListUserInstallationsParams extends TransportOptions {
   /**
    * A user access token — e.g. the OAuth token minted by the GitHub App web
    * login flow. Installation tokens cannot call this endpoint.
@@ -14,20 +14,18 @@ export interface ListUserInstallationsParams {
   token: string;
   /** GHES API root (`/api/v3`); defaults to `https://api.github.com`. */
   baseUrl?: string;
-  fetch?: typeof fetch;
   limit?: number;
   cursor?: string;
   signal?: AbortSignal;
 }
 
-export interface ListInstallationRequestsParams {
+export interface ListInstallationRequestsParams extends TransportOptions {
   /** The GitHub App id the installation requests belong to. */
   appId: string | number;
   /** PEM-encoded private key of the app, used to sign the app JWT. */
   privateKey: string;
   /** GHES API root (`/api/v3`); defaults to `https://api.github.com`. */
   baseUrl?: string;
-  fetch?: typeof fetch;
   limit?: number;
   cursor?: string;
   signal?: AbortSignal;
@@ -130,9 +128,8 @@ function toInstallationRequest(
   };
 }
 
-interface ListPageParams {
+interface ListPageParams extends TransportOptions {
   baseUrl?: string;
-  fetch?: typeof fetch;
   limit?: number;
   cursor?: string;
   signal?: AbortSignal;
@@ -149,11 +146,11 @@ async function listPage<TItem>(
     provider: 'github',
     baseUrl,
     fetchImpl: params.fetch,
+    userAgent: params.userAgent,
     authHeaders: () => ({
       Authorization: `Bearer ${bearer}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': API_VERSION,
-      'User-Agent': USER_AGENT,
     }),
     mapError,
     secrets: () => [bearer],

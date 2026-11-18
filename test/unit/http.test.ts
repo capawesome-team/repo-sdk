@@ -12,6 +12,7 @@ describe('HttpClient.json', () => {
       baseUrl: 'https://git.example.com/acme/app.git/api/v1',
       fetchImpl: stub.fetch,
       authHeaders: () => ({}),
+      userAgent: undefined,
     });
   }
 
@@ -28,6 +29,7 @@ describe('HttpClient.json', () => {
       baseUrl: 'https://git.example.com/api/v1',
       fetchImpl: stub.fetch,
       authHeaders: () => ({}),
+      userAgent: undefined,
     });
     const { data } = await http.json('hooks/1', (body) => body);
     expect(data).toBeUndefined();
@@ -107,6 +109,7 @@ describe('HttpClient.buildUrl', () => {
     provider: 'github',
     baseUrl: 'https://api.github.com',
     authHeaders: () => ({}),
+    userAgent: undefined,
   });
 
   it.each([

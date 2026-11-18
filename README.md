@@ -125,7 +125,7 @@ Webhook payload helpers — `verifyWebhook` and `parseWebhookEvent` — are expo
 | Generic git  | `repo-sdk/git-http`     | Any git smart-HTTP remote. Ref discovery and clone URLs only.    |
 | Testing      | `repo-sdk/testing`      | Seedable in-memory provider for your test suite. No credentials. |
 
-Every factory accepts an injectable `fetch`, and every token can be a static string or a `tokenProvider` that mints one per request and is re-invoked once on a 401. Self-hosted deployments — GitHub Enterprise Server, GitLab self-managed, Azure DevOps Server, and Gitea/Forgejo — are supported via `baseUrl`. Providers do not support the same feature set — `client.capabilities` tells you what the active one can do, and the full breakdown lives in the [capability matrix](https://repo-sdk.dev/docs/reference/capability-matrix).
+Every factory accepts an injectable `fetch` and a `userAgent`, and every token can be a static string or a `tokenProvider` that mints one per request and is re-invoked once on a 401. Self-hosted deployments — GitHub Enterprise Server, GitLab self-managed, Azure DevOps Server, and Gitea/Forgejo — are supported via `baseUrl`. Providers do not support the same feature set — `client.capabilities` tells you what the active one can do, and the full breakdown lives in the [capability matrix](https://repo-sdk.dev/docs/reference/capability-matrix).
 
 ## Testing
 

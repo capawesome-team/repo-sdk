@@ -42,6 +42,7 @@ import type {
   Repository,
   Tag,
   TokenProvider,
+  TransportOptions,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -51,7 +52,7 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://gitlab.com/api/v4';
 
-export interface GitLabProviderOptions {
+export interface GitLabProviderOptions extends TransportOptions {
   /** A static token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
   auth: { token: string } | { tokenProvider: TokenProvider };
   /**
@@ -59,7 +60,6 @@ export interface GitLabProviderOptions {
    * instances pass the complete base including `/api/v4` (used verbatim).
    */
   baseUrl?: string;
-  fetch?: typeof fetch;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -438,6 +438,7 @@ export function gitlab(options: GitLabProviderOptions): RepoProvider {
     provider: 'gitlab',
     baseUrl,
     fetchImpl,
+    userAgent: options.userAgent,
     authHeaders: async ({ forceRefresh }) => {
       const token = await tokenSource.getToken(forceRefresh);
       return { Authorization: `Bearer ${token}` };

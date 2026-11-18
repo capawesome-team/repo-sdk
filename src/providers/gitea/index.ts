@@ -49,6 +49,7 @@ import type {
   Repository,
   Tag,
   TokenProvider,
+  TransportOptions,
   UpdateWebhookParams,
   RepoCapabilities,
   RepoProvider,
@@ -58,7 +59,7 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://gitea.com/api/v1';
 
-export interface GiteaProviderOptions {
+export interface GiteaProviderOptions extends TransportOptions {
   /** A static token, or a `tokenProvider` minting bearer tokens per request (retried once on a 401). */
   auth: { token: string } | { tokenProvider: TokenProvider };
   /**
@@ -67,7 +68,6 @@ export interface GiteaProviderOptions {
    * (used verbatim).
    */
   baseUrl?: string;
-  fetch?: typeof fetch;
 }
 
 const CAPABILITIES: RepoCapabilities = {
@@ -430,6 +430,7 @@ export function gitea(options: GiteaProviderOptions): RepoProvider {
     provider: 'gitea',
     baseUrl,
     fetchImpl,
+    userAgent: options.userAgent,
     // Gitea requires the literal `token` scheme for personal access tokens,
     // while `Bearer` is for OAuth2-issued tokens — which is what a
     // tokenProvider mints.

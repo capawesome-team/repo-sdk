@@ -5,7 +5,7 @@ description: Configure provider authentication for `repo-sdk` — GitHub token v
 
 # repo-sdk provider auth
 
-Each provider factory takes an `auth` object. The SDK **consumes tokens only** — it never refreshes or stores them. An expired/invalid credential surfaces as `RepoError` with `code: 'unauthorized'`; it's the caller's job to refresh and retry. Every factory also accepts an injectable `fetch` for testing.
+Each provider factory takes an `auth` object. The SDK **consumes tokens only** — it never refreshes or stores them. An expired/invalid credential surfaces as `RepoError` with `code: 'unauthorized'`; it's the caller's job to refresh and retry. Every factory also accepts an injectable `fetch` for testing and a `userAgent` that names the caller.
 
 ## GitHub — `repo-sdk/github`
 

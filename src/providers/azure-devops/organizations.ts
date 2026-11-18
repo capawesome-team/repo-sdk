@@ -1,6 +1,7 @@
 import { expectArray, expectRecord, expectString } from '../../decode.ts';
 import { HttpClient, type ProviderErrorInfo } from '../../http.ts';
 import { isRecord } from '../shared.ts';
+import type { TransportOptions } from '../../types.ts';
 import { API_VERSION, authHeader, authSecrets, type AzureDevOpsAuth } from './auth.ts';
 
 const VSSPS_BASE_URL = 'https://app.vssps.visualstudio.com';
@@ -58,12 +59,13 @@ function mapError(status: number, body: unknown): ProviderErrorInfo {
  */
 export async function listOrganizations(
   options: AzureDevOpsAuth,
-  init?: { fetch?: typeof fetch },
+  init?: TransportOptions,
 ): Promise<Organization[]> {
   const http = new HttpClient({
     provider: 'azure-devops',
     baseUrl: VSSPS_BASE_URL,
     fetchImpl: init?.fetch ?? fetch,
+    userAgent: init?.userAgent,
     authHeaders: async () => ({ Authorization: await authHeader(options) }),
     mapError,
     secrets: () => authSecrets(options),
