@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/capawesome-team/repo-sdk/compare/v0.4.0...v0.4.1) (2026-11-18)
+
+
+### Features
+
+* add a userAgent option ([#38](https://github.com/capawesome-team/repo-sdk/issues/38)) ([0a333c2](https://github.com/capawesome-team/repo-sdk/commit/0a333c246575cfac29e47ef754904096bce33b1a))
+
 ## [0.4.0](https://github.com/capawesome-team/repo-sdk/compare/v0.3.7...v0.4.0) (2026-11-11)
 
 
